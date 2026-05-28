@@ -1,0 +1,20 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "3adK0vIho7x3RnalFNBjO"
+uri = "file://DENTAL_FLOW_OVERVIEW.md"
+type = "text"
+title = "Dental Flow 解説書"
+
+[[outputs]]
+id = "EVrdoO1vSbWFxFZ5CEkCQ"
+uri = "file://arche-source.tar.gz"
+type = "unspecified"
+title = "Arche ソースコード一式"
+
+[[outputs]]
+id = "D4Ajwdh8Mw-O_jGelVdHR"
+uri = "file://arche-source.zip"
+type = "unspecified"
+title = "Arche ソースコード一式"

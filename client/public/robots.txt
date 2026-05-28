@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /super-admin
+Disallow: /setup
+Disallow: /api/
+
+Sitemap: https://dentalflow.sourirette.jp/sitemap.xml
