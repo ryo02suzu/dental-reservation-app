@@ -210,11 +210,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Helper: 指定リソースが現在の管理者のクリニックに属するか検証する。
   // 属さない／存在しない場合は 404 を返して false を返す（存在の有無を秘匿するため
   // 403 ではなく一律 404）。マルチテナント間の IDOR を防ぐ。
-  const assertClinicOwnership = (
+  const assertClinicOwnership = <T extends { clinicId?: string | null }>(
     req: any,
     res: any,
-    resource: { clinicId?: string | null } | null | undefined,
-  ): boolean => {
+    resource: T | null | undefined,
+  ): resource is T => {
     if (!resource || resource.clinicId !== getAdminClinicId(req)) {
       res.status(404).json({ message: "Not found" });
       return false;
@@ -1730,6 +1730,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Admin: update shift status (approve/reject/modify)
   app.put("/api/shifts/:id", async (req: any, res) => {
     try {
+      const existingShift = await storage.getShiftById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingShift)) return;
       const { status, startTime, endTime, notes } = req.body;
       const updated = await storage.updateShift(req.params.id, {
         status,
@@ -1747,6 +1749,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Admin: delete shift
   app.delete("/api/shifts/:id", async (req: any, res) => {
     try {
+      const existingShift = await storage.getShiftById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingShift)) return;
       await storage.deleteShift(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -1803,6 +1807,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/shift-patterns/:id", async (req: any, res) => {
     try {
+      const existingPattern = await storage.getShiftPatternById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingPattern)) return;
       const pattern = await storage.updateShiftPattern(req.params.id, req.body);
       if (!pattern) return res.status(404).json({ message: "Not found" });
       res.json(pattern);
@@ -1811,6 +1817,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/shift-patterns/:id", async (req: any, res) => {
     try {
+      const existingPattern = await storage.getShiftPatternById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingPattern)) return;
       await storage.deleteShiftPattern(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2235,6 +2243,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/patients/:id", async (req, res) => {
     try {
+      const existing = await storage.getPatientById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       const patient = await storage.updatePatient(req.params.id, sanitizePatientBody(req.body) as any);
       if (!patient) return res.status(404).json({ message: "Not found" });
       res.json(patient);
@@ -2243,6 +2253,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/patients/:id", async (req, res) => {
     try {
+      const existing = await storage.getPatientById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deletePatient(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2265,6 +2277,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/services/:id", async (req, res) => {
     try {
+      const existing = await storage.getServiceById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       const service = await storage.updateService(req.params.id, req.body);
       if (!service) return res.status(404).json({ message: "Not found" });
       res.json(service);
@@ -2273,6 +2287,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/services/:id", async (req, res) => {
     try {
+      const existing = await storage.getServiceById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deleteService(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2388,7 +2404,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/appointments/:id", async (req: any, res) => {
     try {
       const prevAppt = await storage.getAppointmentById(req.params.id);
-      if (!prevAppt) return res.status(404).json({ message: "Not found" });
+      if (!assertClinicOwnership(req, res, prevAppt)) return;
       // 楽観的ロック: クライアントが知っているupdatedAtと現在のDBの値を比較
       if (req.body._updatedAt && prevAppt.updatedAt) {
         const clientTs = new Date(req.body._updatedAt).getTime();
@@ -2417,6 +2433,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/appointments/:id", async (req, res) => {
     try {
+      const existing = await storage.getAppointmentById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deleteAppointment(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2482,6 +2500,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/holidays/:id", async (req, res) => {
     try {
+      const existing = await storage.getHolidayById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deleteHoliday(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2745,7 +2765,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { id } = req.params;
       const { lineUserId } = req.body;
-      const clinicId = getAdminClinicId(req);
+      const existing = await storage.getPatientById(id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       const updated = await storage.updatePatient(id, { lineUserId });
       res.json(updated);
     } catch (e: any) {
@@ -3091,6 +3112,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
       const q = await storage.getQuestionnaireByAppointment(req.params.appointmentId);
+      // 他院の問診票を返さない
+      if (q && (q as any).clinicId && (q as any).clinicId !== getAdminClinicId(req)) return res.json(null);
       res.json(q || null);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

@@ -66,9 +66,11 @@ export interface IStorage {
   createShiftPattern(data: InsertShiftPattern): Promise<ShiftPattern>;
   updateShiftPattern(id: string, data: Partial<InsertShiftPattern>): Promise<ShiftPattern | undefined>;
   deleteShiftPattern(id: string): Promise<void>;
+  getShiftPatternById(id: string): Promise<ShiftPattern | undefined>;
   // Services
   getServices(clinicId?: string): Promise<Service[]>;
   createService(data: InsertService): Promise<Service>;
+  getServiceById(id: string): Promise<Service | undefined>;
   updateService(id: string, data: Partial<InsertService>): Promise<Service | undefined>;
   deleteService(id: string): Promise<void>;
   // Appointments
@@ -88,6 +90,7 @@ export interface IStorage {
   upsertBusinessHours(data: schema.BusinessHours[], clinicId?: string): Promise<void>;
   // Holidays
   getHolidays(clinicId?: string): Promise<Holiday[]>;
+  getHolidayById(id: string): Promise<Holiday | undefined>;
   createHoliday(data: InsertHolidaySchemaType): Promise<Holiday>;
   createHolidayBatch(data: { date: string; name?: string | null; reason?: string | null }[], clinicId?: string): Promise<number>;
   deleteHoliday(id: string): Promise<void>;
@@ -445,6 +448,11 @@ class PgStorage implements IStorage {
     await db.delete(schema.shiftPatterns).where(eq(schema.shiftPatterns.id, id));
   }
 
+  async getShiftPatternById(id: string): Promise<ShiftPattern | undefined> {
+    const result = await db.select().from(schema.shiftPatterns).where(eq(schema.shiftPatterns.id, id)).limit(1);
+    return result[0];
+  }
+
   async getPatients(clinicId: string = DEFAULT_CLINIC_ID, search?: string): Promise<Patient[]> {
     if (search && search.trim()) {
       const q = `%${search.trim()}%`;
@@ -494,6 +502,11 @@ class PgStorage implements IStorage {
 
   async createService(data: InsertService): Promise<Service> {
     const result = await db.insert(schema.services).values({ ...data }).returning();
+    return result[0];
+  }
+
+  async getServiceById(id: string): Promise<Service | undefined> {
+    const result = await db.select().from(schema.services).where(eq(schema.services.id, id)).limit(1);
     return result[0];
   }
 
@@ -645,6 +658,11 @@ class PgStorage implements IStorage {
 
   async deleteHoliday(id: string): Promise<void> {
     await db.delete(schema.holidays).where(eq(schema.holidays.id, id));
+  }
+
+  async getHolidayById(id: string): Promise<Holiday | undefined> {
+    const result = await db.select().from(schema.holidays).where(eq(schema.holidays.id, id)).limit(1);
+    return result[0];
   }
 
   async getClinicSettings(clinicId: string = DEFAULT_CLINIC_ID): Promise<ClinicSettings | undefined> {
