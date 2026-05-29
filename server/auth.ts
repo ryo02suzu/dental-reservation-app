@@ -13,6 +13,24 @@ const scryptAsync = promisify(scrypt);
 const PostgresStore = connectPg(session);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+// セッション署名鍵を解決する。
+// 本番では SESSION_SECRET 必須（未設定なら起動失敗）。開発では未設定時に
+// 一時的なランダム鍵を生成する（再起動でセッションは失効するが、共有の
+// ハードコード鍵によるセッション偽造リスクを排除する）。
+function resolveSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (secret && secret.length >= 16) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SESSION_SECRET must be set to a value of at least 16 characters in production",
+    );
+  }
+  console.warn(
+    "[auth] SESSION_SECRET is not set — generating an ephemeral development secret. Sessions will not persist across restarts.",
+  );
+  return randomBytes(32).toString("hex");
+}
+
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -28,7 +46,7 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "default-secret-change-in-production",
+    secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
     name: "sid",

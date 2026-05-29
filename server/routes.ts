@@ -70,6 +70,52 @@ function pushAttendanceToClinic(clinicId: string, payload: object) {
   });
 }
 
+// ─── QR打刻PINの検証ヘルパー ──────────────────────────────────────────────
+// 定数時間比較でタイミング攻撃を防ぎ、クリニック+スタッフ単位の試行回数制限で
+// 総当たりを防ぐ。
+function pinMatches(supplied: string, stored: string): boolean {
+  const a = Buffer.from(String(supplied));
+  const b = Buffer.from(String(stored));
+  // 長さが異なる場合は timingSafeEqual が例外を投げるため事前に弾く
+  // （PINは固定桁数のため長さ漏洩の実害はない）
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_ATTEMPT_WINDOW_MS = 5 * 60 * 1000;
+const pinAttempts = new Map<string, { count: number; resetAt: number }>();
+function pinRateLimitOk(key: string): boolean {
+  const rec = pinAttempts.get(key);
+  if (!rec || Date.now() > rec.resetAt) return true;
+  return rec.count < PIN_MAX_ATTEMPTS;
+}
+function recordPinFailure(key: string): void {
+  const now = Date.now();
+  const rec = pinAttempts.get(key);
+  if (!rec || now > rec.resetAt) pinAttempts.set(key, { count: 1, resetAt: now + PIN_ATTEMPT_WINDOW_MS });
+  else rec.count++;
+}
+function clearPinAttempts(key: string): void { pinAttempts.delete(key); }
+// 期限切れエントリの定期クリーンアップ（メモリリーク防止）
+setInterval(() => {
+  const now = Date.now();
+  pinAttempts.forEach((v, k) => { if (now > v.resetAt) pinAttempts.delete(k); });
+}, PIN_ATTEMPT_WINDOW_MS).unref?.();
+
+// ─── シークレットのマスク処理 ─────────────────────────────────────────────
+// API応答では実際のシークレット（APIキー/トークン）を返さずマスク値を返す。
+// 保存時にマスク値（または未送信）が来た場合は既存値を保持し、フォームの
+// 動作を変えずに鍵の誤消去と漏洩の両方を防ぐ。
+const MASKED_SECRET = "********";
+const maskSecret = (v?: string | null): string => (v ? MASKED_SECRET : "");
+const resolveSecret = (incoming: unknown, prev: string | null | undefined): string | null => {
+  if (incoming === undefined || incoming === null) return prev ?? null; // 未送信 → 既存維持
+  if (incoming === MASKED_SECRET) return prev ?? null;                  // マスク値 → 既存維持
+  const s = String(incoming);
+  return s === "" ? null : s;                                           // 明示クリア or 新しい値
+};
+
 // Rate limiters for public endpoints
 const publicBookingLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -121,6 +167,14 @@ const publicCancelLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+// 電話番号による予約照会の総当たり（患者列挙）を防ぐ厳しめの制限
+const publicLookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { message: "照会の試行が多すぎます。しばらく経ってから再度お試しください。" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Max active (pending/confirmed) appointments allowed per patient
 const MAX_ACTIVE_APPOINTMENTS_PER_PATIENT = 3;
@@ -151,6 +205,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Helper: resolve clinicId for the current admin user (supports super-admin impersonation)
   const getAdminClinicId = (req: any): string => {
     return (req.session as any)?.impersonatedClinicId || req.user?.clinicId || DEFAULT_CLINIC_ID;
+  };
+
+  // Helper: 指定リソースが現在の管理者のクリニックに属するか検証する。
+  // 属さない／存在しない場合は 404 を返して false を返す（存在の有無を秘匿するため
+  // 403 ではなく一律 404）。マルチテナント間の IDOR を防ぐ。
+  const assertClinicOwnership = <T extends { clinicId?: string | null }>(
+    req: any,
+    res: any,
+    resource: T | null | undefined,
+  ): resource is T => {
+    if (!resource || resource.clinicId !== getAdminClinicId(req)) {
+      res.status(404).json({ message: "Not found" });
+      return false;
+    }
+    return true;
   };
 
   // Demo auto-login routes (no auth required)
@@ -249,14 +318,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
       (req.session as any).impersonatedClinicId = clinic.id;
       (req.session as any).impersonatedClinicName = clinic.name;
+      logSecurityEvent("super_admin_impersonate_start", getClientIp(req), {
+        superAdminId: (req as any).user?.id,
+        clinicId: clinic.id,
+      });
       res.json({ clinicId: clinic.id, clinicName: clinic.name });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   // なりすまし解除
   app.post("/api/super-admin/impersonate/exit", requireSuperAdmin, async (req, res) => {
+    const prevClinicId = (req.session as any).impersonatedClinicId || null;
     delete (req.session as any).impersonatedClinicId;
     delete (req.session as any).impersonatedClinicName;
+    logSecurityEvent("super_admin_impersonate_end", getClientIp(req), {
+      superAdminId: (req as any).user?.id,
+      clinicId: prevClinicId,
+    });
     res.json({ ok: true });
   });
 
@@ -387,15 +465,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/super-admin/clinics/:id/email-settings", requireSuperAdmin, async (req, res) => {
     try {
       const settings = await storage.getReminderSettings(req.params.id);
-      res.json({ resendApiKey: settings?.resendApiKey || "" });
+      // 実際のAPIキーは返さずマスクする
+      res.json({ resendApiKey: maskSecret(settings?.resendApiKey) });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   app.patch("/api/super-admin/clinics/:id/email-settings", requireSuperAdmin, async (req, res) => {
     try {
       const { resendApiKey } = req.body;
+      const prev = await storage.getReminderSettings(req.params.id);
       const settings = await storage.upsertReminderSettings(
-        { resendApiKey: resendApiKey || null },
+        { resendApiKey: resolveSecret(resendApiKey, prev?.resendApiKey) },
         req.params.id
       );
       res.json({ success: true, hasKey: !!settings.resendApiKey });
@@ -521,6 +601,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/patient/register", authRegisterLimiter);
   app.post("/api/patient/reset-password", authResetLimiter);
   app.post("/api/public/cancel/:id", publicCancelLimiter);
+  app.get("/api/public/my-appointments", publicLookupLimiter);
 
   // ─── 患者向け公開API（スラッグ別） ──────────────────────────────────────
 
@@ -1173,9 +1254,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(404).json({ message: "この電話番号のアカウントが見つかりません" });
       }
       if (!patient.password) return res.status(400).json({ message: "このアカウントはパスワードが設定されていません。新規登録してください。" });
-      const inputName = name.replace(/\s+/g, "");
-      const storedName = patient.name.trim().replace(/\s+/g, "");
-      if (!storedName.includes(inputName) && !inputName.includes(storedName)) {
+      // 本人確認は完全一致で行う（全角/半角・空白の差は正規化して吸収するが、
+      // 部分一致は認めない＝「山田」だけでのリセットを防ぐ）
+      const normalizeName = (s: string) => s.normalize("NFKC").replace(/\s+/g, "");
+      const inputName = normalizeName(name);
+      const storedName = normalizeName(patient.name);
+      if (inputName !== storedName) {
         logSecurityEvent("password_reset_name_mismatch", ip, { patientId: patient.id });
         return res.status(401).json({ message: "お名前が一致しません。登録時のお名前を入力してください。" });
       }
@@ -1500,6 +1584,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // トークン生成（管理者のみ）
   app.post("/api/staff/:id/generate-token", async (req: any, res) => {
     try {
+      const existing = await storage.getStaffById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       const token = crypto.randomBytes(24).toString("hex");
       const member = await storage.setStaffLoginToken(req.params.id, token);
       if (!member) return res.status(404).json({ message: "Not found" });
@@ -1510,6 +1596,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // トークン削除（リセット）
   app.delete("/api/staff/:id/token", async (req: any, res) => {
     try {
+      const existing = await storage.getStaffById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.setStaffLoginToken(req.params.id, null);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -1559,16 +1647,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.put("/api/staff/:id", async (req, res) => {
+  app.put("/api/staff/:id", async (req: any, res) => {
     try {
+      const existing = await storage.getStaffById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
+      // PIN を更新する場合は 4桁の数字のみ許可（空文字/null はPIN解除として許可）
+      if (req.body && req.body.pin != null && req.body.pin !== "" && !/^\d{4}$/.test(String(req.body.pin))) {
+        return res.status(400).json({ message: "PINは4桁の数字で入力してください" });
+      }
       const member = await storage.updateStaff(req.params.id, req.body);
       if (!member) return res.status(404).json({ message: "Not found" });
       res.json(member);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.delete("/api/staff/:id", async (req, res) => {
+  app.delete("/api/staff/:id", async (req: any, res) => {
     try {
+      const existing = await storage.getStaffById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deleteStaff(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -1634,6 +1730,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Admin: update shift status (approve/reject/modify)
   app.put("/api/shifts/:id", async (req: any, res) => {
     try {
+      const existingShift = await storage.getShiftById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingShift)) return;
       const { status, startTime, endTime, notes } = req.body;
       const updated = await storage.updateShift(req.params.id, {
         status,
@@ -1651,6 +1749,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Admin: delete shift
   app.delete("/api/shifts/:id", async (req: any, res) => {
     try {
+      const existingShift = await storage.getShiftById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingShift)) return;
       await storage.deleteShift(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -1707,6 +1807,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/shift-patterns/:id", async (req: any, res) => {
     try {
+      const existingPattern = await storage.getShiftPatternById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingPattern)) return;
       const pattern = await storage.updateShiftPattern(req.params.id, req.body);
       if (!pattern) return res.status(404).json({ message: "Not found" });
       res.json(pattern);
@@ -1715,6 +1817,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/shift-patterns/:id", async (req: any, res) => {
     try {
+      const existingPattern = await storage.getShiftPatternById(req.params.id);
+      if (!assertClinicOwnership(req, res, existingPattern)) return;
       await storage.deleteShiftPattern(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -1833,8 +1937,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const member = await storage.getStaffById(staffId);
       if (!member || member.clinicId !== clinicId) return res.status(400).json({ message: "スタッフが見つかりません" });
       if (member.pin) {
+        const rlKey = `${clinicId}:${staffId}`;
+        if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
         if (!pin) return res.status(400).json({ message: "PINを入力してください" });
-        if (member.pin !== pin) return res.status(400).json({ message: "PINが正しくありません" });
+        if (!pinMatches(pin, member.pin)) {
+          recordPinFailure(rlKey);
+          logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
+          return res.status(400).json({ message: "PINが正しくありません" });
+        }
+        clearPinAttempts(rlKey);
       }
       const today = new Date().toISOString().slice(0, 10);
       const existing = await storage.getAttendanceByStaff(staffId, today);
@@ -1854,8 +1965,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const member = await storage.getStaffById(staffId);
       if (!member || member.clinicId !== clinicId) return res.status(400).json({ message: "スタッフが見つかりません" });
       if (member.pin) {
+        const rlKey = `${clinicId}:${staffId}`;
+        if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
         if (!pin) return res.status(400).json({ message: "PINを入力してください" });
-        if (member.pin !== pin) return res.status(400).json({ message: "PINが正しくありません" });
+        if (!pinMatches(pin, member.pin)) {
+          recordPinFailure(rlKey);
+          logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
+          return res.status(400).json({ message: "PINが正しくありません" });
+        }
+        clearPinAttempts(rlKey);
       }
       const today = new Date().toISOString().slice(0, 10);
       const existing = await storage.getAttendanceByStaff(staffId, today);
@@ -2098,7 +2216,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/patients/:id", async (req, res) => {
     try {
       const patient = await storage.getPatientById(req.params.id);
-      if (!patient) return res.status(404).json({ message: "Not found" });
+      if (!assertClinicOwnership(req, res, patient)) return;
       res.json(patient);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2125,6 +2243,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/patients/:id", async (req, res) => {
     try {
+      const existing = await storage.getPatientById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       const patient = await storage.updatePatient(req.params.id, sanitizePatientBody(req.body) as any);
       if (!patient) return res.status(404).json({ message: "Not found" });
       res.json(patient);
@@ -2133,6 +2253,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/patients/:id", async (req, res) => {
     try {
+      const existing = await storage.getPatientById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deletePatient(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2155,6 +2277,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/services/:id", async (req, res) => {
     try {
+      const existing = await storage.getServiceById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       const service = await storage.updateService(req.params.id, req.body);
       if (!service) return res.status(404).json({ message: "Not found" });
       res.json(service);
@@ -2163,6 +2287,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/services/:id", async (req, res) => {
     try {
+      const existing = await storage.getServiceById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deleteService(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2253,10 +2379,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.get("/api/appointments/:id", async (req, res) => {
+  app.get("/api/appointments/:id", async (req: any, res) => {
     try {
       const appt = await storage.getAppointmentById(req.params.id);
-      if (!appt) return res.status(404).json({ message: "Not found" });
+      if (!assertClinicOwnership(req, res, appt)) return;
       res.json(appt);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2278,7 +2404,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/appointments/:id", async (req: any, res) => {
     try {
       const prevAppt = await storage.getAppointmentById(req.params.id);
-      if (!prevAppt) return res.status(404).json({ message: "Not found" });
+      if (!assertClinicOwnership(req, res, prevAppt)) return;
       // 楽観的ロック: クライアントが知っているupdatedAtと現在のDBの値を比較
       if (req.body._updatedAt && prevAppt.updatedAt) {
         const clientTs = new Date(req.body._updatedAt).getTime();
@@ -2307,6 +2433,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/appointments/:id", async (req, res) => {
     try {
+      const existing = await storage.getAppointmentById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deleteAppointment(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2330,8 +2458,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  app.delete("/api/medical-records/:id", requireAuth, async (req, res) => {
+  app.delete("/api/medical-records/:id", requireAuth, async (req: any, res) => {
     try {
+      const record = await storage.getMedicalRecordById(req.params.id);
+      if (!assertClinicOwnership(req, res, record)) return;
       await storage.deleteMedicalRecord(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2370,6 +2500,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.delete("/api/holidays/:id", async (req, res) => {
     try {
+      const existing = await storage.getHolidayById(req.params.id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       await storage.deleteHoliday(req.params.id);
       res.json({ success: true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -2501,21 +2633,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/reminder-settings", async (req: any, res) => {
     try {
       const settings = await storage.getReminderSettings(getAdminClinicId(req));
-      res.json(settings || null);
+      if (!settings) return res.json(null);
+      // シークレットは実値を返さずマスクする
+      res.json({
+        ...settings,
+        lineChannelAccessToken: maskSecret(settings.lineChannelAccessToken),
+        lineChannelSecret: maskSecret(settings.lineChannelSecret),
+        resendApiKey: maskSecret(settings.resendApiKey),
+      });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   app.put("/api/reminder-settings", async (req: any, res) => {
     try {
+      const clinicId = getAdminClinicId(req);
       const {
         enableEmail, enableSms, enableLine, reminderHoursBefore,
         lineChannelAccessToken, lineChannelSecret, resendApiKey, autoReminderEnabled, reminderSendTime,
       } = req.body;
+      // マスク値/未送信のシークレットは既存値を保持する
+      const prev = await storage.getReminderSettings(clinicId);
       const settings = await storage.upsertReminderSettings({
         enableEmail, enableSms, enableLine, reminderHoursBefore,
-        lineChannelAccessToken, lineChannelSecret, resendApiKey: resendApiKey || null, autoReminderEnabled, reminderSendTime,
-      }, getAdminClinicId(req));
-      res.json(settings);
+        lineChannelAccessToken: resolveSecret(lineChannelAccessToken, prev?.lineChannelAccessToken),
+        lineChannelSecret: resolveSecret(lineChannelSecret, prev?.lineChannelSecret),
+        resendApiKey: resolveSecret(resendApiKey, prev?.resendApiKey),
+        autoReminderEnabled, reminderSendTime,
+      }, clinicId);
+      // 応答でも実値を返さない
+      res.json({
+        ...settings,
+        lineChannelAccessToken: maskSecret(settings.lineChannelAccessToken),
+        lineChannelSecret: maskSecret(settings.lineChannelSecret),
+        resendApiKey: maskSecret(settings.resendApiKey),
+      });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -2614,7 +2765,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { id } = req.params;
       const { lineUserId } = req.body;
-      const clinicId = getAdminClinicId(req);
+      const existing = await storage.getPatientById(id);
+      if (!assertClinicOwnership(req, res, existing)) return;
       const updated = await storage.updatePatient(id, { lineUserId });
       res.json(updated);
     } catch (e: any) {
@@ -2960,6 +3112,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
       const q = await storage.getQuestionnaireByAppointment(req.params.appointmentId);
+      // 他院の問診票を返さない
+      if (q && (q as any).clinicId && (q as any).clinicId !== getAdminClinicId(req)) return res.json(null);
       res.json(q || null);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
