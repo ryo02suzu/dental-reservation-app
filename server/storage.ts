@@ -80,6 +80,7 @@ export interface IStorage {
   deleteAppointment(id: string): Promise<void>;
   // Medical Records
   getMedicalRecords(clinicId?: string): Promise<(MedicalRecord & { patient?: Patient; staff?: Staff })[]>;
+  getMedicalRecordById(id: string): Promise<MedicalRecord | undefined>;
   createMedicalRecord(data: InsertMedicalRecord): Promise<MedicalRecord>;
   deleteMedicalRecord(id: string): Promise<void>;
   // Business Hours
@@ -584,6 +585,11 @@ class PgStorage implements IStorage {
       orderBy: [desc(schema.medicalRecords.date)],
     });
     return rows as any;
+  }
+
+  async getMedicalRecordById(id: string): Promise<MedicalRecord | undefined> {
+    const result = await db.select().from(schema.medicalRecords).where(eq(schema.medicalRecords.id, id)).limit(1);
+    return result[0];
   }
 
   async createMedicalRecord(data: InsertMedicalRecord): Promise<MedicalRecord> {
