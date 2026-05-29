@@ -7,11 +7,11 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { type User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
-import { Pool } from "pg";
+import { createPool } from "./db-config";
 
 const scryptAsync = promisify(scrypt);
 const PostgresStore = connectPg(session);
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createPool();
 
 // セッション署名鍵を解決する。
 // 本番では SESSION_SECRET 必須（未設定なら起動失敗）。開発では未設定時に

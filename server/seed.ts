@@ -1,8 +1,8 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 import { sql } from "drizzle-orm";
+import { createPool } from "./db-config";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createPool();
 const db = drizzle(pool);
 
 const DEMO_CLINIC_ID = "default-clinic-001";

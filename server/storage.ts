@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { createPool } from "./db-config";
 import { eq, and, gte, lte, desc, asc, sql, ilike, or } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type {
@@ -25,7 +25,7 @@ import type {
   Attendance, InsertAttendance,
 } from "@shared/schema";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createPool();
 const db = drizzle(pool, { schema });
 
 export const DEFAULT_CLINIC_ID = "default-clinic-001";
