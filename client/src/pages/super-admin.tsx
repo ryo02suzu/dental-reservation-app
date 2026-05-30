@@ -261,6 +261,15 @@ export default function SuperAdminPage() {
   });
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+  // オプションの内部key。名前を英数字に変換し、日本語等で空になる場合は自動採番。
+  const genAddonKey = (name?: string) => {
+    const base = (name ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return base || `opt-${Date.now().toString(36)}`;
+  };
+
   const openEmailDialog = async (clinic: ClinicSummary) => {
     setResendKey(""); setShowResendKey(false);
     setEmailDialog({ clinicId: clinic.id, clinicName: clinic.name });
