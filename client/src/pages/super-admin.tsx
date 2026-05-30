@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,7 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Redirect, Link, useLocation } from "wouter";
 import {
   Building2, ExternalLink, Copy, Power, PowerOff, Plus, RefreshCw, LogOut,
-  Users, Calendar, KeyRound, Mail, Pencil, Trash2, PackagePlus, CreditCard,
+  Users, Calendar, KeyRound, Mail, Pencil, Trash2, PackagePlus,
   Puzzle, CheckCircle2, XCircle, LayoutDashboard, MoreHorizontal, ChevronRight,
   Search, Info,
 } from "lucide-react";
@@ -48,18 +47,6 @@ const PLAN_BADGE: Record<string, { label: string; className: string }> = {
   partner:    { label: "パートナー",     className: "bg-green-100 text-green-700" },
 };
 
-interface PlanDefinition {
-  id: string;
-  key: string;
-  name: string;
-  price: number;
-  maxAppointmentsPerMonth: number | null;
-  maxStaff: number | null;
-  features: string[] | null;
-  isActive: boolean | null;
-  sortOrder: number | null;
-}
-
 interface AddonDefinition {
   id: string;
   key: string;
@@ -75,11 +62,6 @@ interface ClinicAddon {
   clinicId: string;
   addonKey: string;
 }
-
-const emptyPlan = (): Partial<PlanDefinition> => ({
-  key: "", name: "", price: 0, maxAppointmentsPerMonth: null, maxStaff: null,
-  features: [], isActive: true, sortOrder: 0,
-});
 
 const emptyAddon = (): Partial<AddonDefinition> => ({
   key: "", name: "", price: 0, description: "", isActive: true, sortOrder: 0,
@@ -106,10 +88,8 @@ export default function SuperAdminPage() {
   const [deleteDialog, setDeleteDialog] = useState<{ clinicId: string; clinicName: string } | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  // Dialogs: plan/addon definition
-  const [planDialog, setPlanDialog] = useState<Partial<PlanDefinition> | null>(null);
+  // Dialogs: addon definition
   const [addonDefDialog, setAddonDefDialog] = useState<Partial<AddonDefinition> | null>(null);
-  const [featuresText, setFeaturesText] = useState("");
 
   // 医院一覧の名前検索
   const [clinicSearch, setClinicSearch] = useState("");
@@ -118,12 +98,6 @@ export default function SuperAdminPage() {
   const { data: clinics, isLoading } = useQuery<ClinicSummary[]>({
     queryKey: ["/api/super-admin/clinics"],
     queryFn: async () => (await apiRequest("GET", "/api/super-admin/clinics")).json(),
-    enabled: !!user?.isSuperAdmin,
-  });
-
-  const { data: planDefs = [], isLoading: plansLoading } = useQuery<PlanDefinition[]>({
-    queryKey: ["/api/super-admin/plans"],
-    queryFn: async () => (await apiRequest("GET", "/api/super-admin/plans")).json(),
     enabled: !!user?.isSuperAdmin,
   });
 
@@ -211,30 +185,6 @@ export default function SuperAdminPage() {
     onSettled: () => setPendingAddonKey(null),
   });
 
-  // ─── Plan definition mutations ───────────────────────────────────────────────
-  const savePlanMutation = useMutation({
-    mutationFn: async (data: Partial<PlanDefinition>) => {
-      const features = featuresText.split("\n").map(s => s.trim()).filter(Boolean);
-      const payload = { ...data, features };
-      if (data.id) {
-        return (await apiRequest("PATCH", `/api/super-admin/plans/${data.id}`, payload)).json();
-      }
-      return (await apiRequest("POST", "/api/super-admin/plans", payload)).json();
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/super-admin/plans"] });
-      toast({ title: "プランを保存しました" });
-      setPlanDialog(null);
-    },
-    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
-  });
-
-  const deletePlanMutation = useMutation({
-    mutationFn: async (id: string) => (await apiRequest("DELETE", `/api/super-admin/plans/${id}`)).json(),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/super-admin/plans"] }); toast({ title: "プランを削除しました" }); },
-    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
-  });
-
   // ─── Addon definition mutations ──────────────────────────────────────────────
   const saveAddonDefMutation = useMutation({
     mutationFn: async (data: Partial<AddonDefinition>) => {
@@ -279,27 +229,19 @@ export default function SuperAdminPage() {
     } catch (_) {}
   };
 
-  const openPlanDialog = (plan?: PlanDefinition) => {
-    const p = plan ?? emptyPlan();
-    setPlanDialog(p);
-    setFeaturesText((p.features ?? []).join("\n"));
-  };
-
   const copyUrl = (slug: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/book/${slug}`);
     toast({ title: "URLをコピーしました" });
   };
 
-  // ─── Plan options from DB (+ fallback to fixed list) ─────────────────────────
-  const planOptions = planDefs.length > 0
-    ? planDefs.filter(p => p.isActive)
-    : [
-        { key: "free", name: "フリー" },
-        { key: "starter", name: "スターター" },
-        { key: "pro", name: "プロ" },
-        { key: "enterprise", name: "エンタープライズ" },
-        { key: "partner", name: "パートナー（初期）" },
-      ];
+  // ─── Plan options（server/plans.ts で確定している契約コース） ─────────────────
+  const planOptions = [
+    { key: "free", name: "フリー" },
+    { key: "starter", name: "スターター" },
+    { key: "pro", name: "プロ" },
+    { key: "enterprise", name: "エンタープライズ" },
+    { key: "partner", name: "パートナー（初期）" },
+  ];
 
   // ─── Auth guards ──────────────────────────────────────────────────────────────
   if (authLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -379,8 +321,8 @@ export default function SuperAdminPage() {
           <Card>
             <CardContent className="pt-5">
               <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">プラン数</p><p className="text-2xl sm:text-3xl font-bold text-purple-600">{planDefs.length}</p></div>
-                <CreditCard className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-purple-400" />
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">オプション数</p><p className="text-2xl sm:text-3xl font-bold text-purple-600">{addonDefs.length}</p></div>
+                <Puzzle className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-purple-400" />
               </div>
             </CardContent>
           </Card>
@@ -396,9 +338,8 @@ export default function SuperAdminPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="clinics">
-          <TabsList className="mb-4 grid grid-cols-3 w-full sm:inline-flex sm:w-auto">
+          <TabsList className="mb-4 grid grid-cols-2 w-full sm:inline-flex sm:w-auto">
             <TabsTrigger value="clinics" data-testid="tab-clinics"><Building2 className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />医院<span className="hidden sm:inline">一覧</span></TabsTrigger>
-            <TabsTrigger value="plans" data-testid="tab-plans"><CreditCard className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />プラン<span className="hidden sm:inline">管理</span></TabsTrigger>
             <TabsTrigger value="addons" data-testid="tab-addons"><Puzzle className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />オプション<span className="hidden sm:inline">管理</span></TabsTrigger>
           </TabsList>
 
@@ -614,75 +555,6 @@ export default function SuperAdminPage() {
             </Card>
           </TabsContent>
 
-          {/* ── プラン管理 ── */}
-          <TabsContent value="plans">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-row items-center justify-between gap-2">
-                  <CardTitle>料金プラン</CardTitle>
-                  <Button size="sm" onClick={() => openPlanDialog()} data-testid="button-add-plan">
-                    <Plus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">プランを追加</span>
-                  </Button>
-                </div>
-                <p className="text-sm text-gray-500 mt-1 flex items-start gap-1.5">
-                  <Info className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
-                  各医院に割り当てる「契約コース」です。月額・予約数やスタッフの上限・使える機能をここで決め、医院一覧の右上で医院ごとに設定します。
-                </p>
-              </CardHeader>
-              <CardContent>
-                {plansLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
-                ) : !planDefs.length ? (
-                  <div className="text-center py-10 text-gray-400">
-                    <CreditCard className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">プランがまだ登録されていません</p>
-                    <Button className="mt-3" size="sm" onClick={() => openPlanDialog()}>最初のプランを追加</Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-gray-500">
-                          <th className="pb-2 pr-3 font-medium">プラン名</th>
-                          <th className="pb-2 pr-3 font-medium">key</th>
-                          <th className="pb-2 pr-3 font-medium">月額</th>
-                          <th className="pb-2 pr-3 font-medium">予約上限</th>
-                          <th className="pb-2 pr-3 font-medium">スタッフ上限</th>
-                          <th className="pb-2 pr-3 font-medium">順序</th>
-                          <th className="pb-2 pr-3 font-medium">状態</th>
-                          <th className="pb-2 font-medium"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {planDefs.map((plan) => (
-                          <tr key={plan.id} className="border-b last:border-0 hover:bg-gray-50" data-testid={`row-plan-${plan.id}`}>
-                            <td className="py-2.5 pr-3 font-medium">{plan.name}</td>
-                            <td className="py-2.5 pr-3 font-mono text-xs text-gray-500">{plan.key}</td>
-                            <td className="py-2.5 pr-3">¥{plan.price.toLocaleString()}</td>
-                            <td className="py-2.5 pr-3">{plan.maxAppointmentsPerMonth ?? "無制限"}</td>
-                            <td className="py-2.5 pr-3">{plan.maxStaff ?? "無制限"}</td>
-                            <td className="py-2.5 pr-3">{plan.sortOrder ?? 0}</td>
-                            <td className="py-2.5 pr-3">
-                              {plan.isActive
-                                ? <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />有効</span>
-                                : <span className="flex items-center gap-1 text-gray-400"><XCircle className="w-3.5 h-3.5" />無効</span>}
-                            </td>
-                            <td className="py-2.5">
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => openPlanDialog(plan)} data-testid={`button-edit-plan-${plan.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => { if (confirm(`プラン「${plan.name}」を削除しますか？`)) deletePlanMutation.mutate(plan.id); }} data-testid={`button-delete-plan-${plan.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* ── オプション管理 ── */}
           <TabsContent value="addons">
             <Card>
@@ -879,63 +751,6 @@ export default function SuperAdminPage() {
           <div className="flex justify-end mt-2">
             <Button variant="outline" onClick={() => setAddonDialog(null)}>閉じる</Button>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* プラン作成・編集 */}
-      <Dialog open={!!planDialog} onOpenChange={(o) => { if (!o) setPlanDialog(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{planDialog?.id ? "プランを編集" : "プランを追加"}</DialogTitle>
-          </DialogHeader>
-          {planDialog && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">プラン名 <span className="text-red-500">*</span></Label>
-                  <Input value={planDialog.name ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, name: e.target.value }))} placeholder="スタンダード" data-testid="input-plan-name" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">key（英数字・ハイフン） <span className="text-red-500">*</span></Label>
-                  <Input value={planDialog.key ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, key: e.target.value }))} placeholder="standard" data-testid="input-plan-key" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">月額（円）</Label>
-                  <Input type="number" value={planDialog.price ?? 0} onChange={e => setPlanDialog(p => ({ ...p!, price: Number(e.target.value) }))} data-testid="input-plan-price" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">予約上限/月（空=無制限）</Label>
-                  <Input type="number" value={planDialog.maxAppointmentsPerMonth ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, maxAppointmentsPerMonth: e.target.value ? Number(e.target.value) : null }))} placeholder="空=無制限" data-testid="input-plan-max-appointments" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">スタッフ上限（空=無制限）</Label>
-                  <Input type="number" value={planDialog.maxStaff ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, maxStaff: e.target.value ? Number(e.target.value) : null }))} placeholder="空=無制限" data-testid="input-plan-max-staff" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">表示順序</Label>
-                  <Input type="number" value={planDialog.sortOrder ?? 0} onChange={e => setPlanDialog(p => ({ ...p!, sortOrder: Number(e.target.value) }))} data-testid="input-plan-sort-order" />
-                </div>
-                <div className="flex items-center gap-2 sm:mt-5">
-                  <Switch checked={planDialog.isActive ?? true} onCheckedChange={v => setPlanDialog(p => ({ ...p!, isActive: v }))} data-testid="switch-plan-active" />
-                  <Label className="text-xs">有効</Label>
-                </div>
-              </div>
-              <div>
-                <Label className="mb-1 block text-xs">機能一覧（1行1項目）</Label>
-                <Textarea rows={4} value={featuresText} onChange={e => setFeaturesText(e.target.value)} placeholder={"メールリマインダー\nLINE通知\n問診票機能"} data-testid="textarea-plan-features" />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setPlanDialog(null)}>キャンセル</Button>
-                <Button onClick={() => savePlanMutation.mutate(planDialog)} disabled={savePlanMutation.isPending || !planDialog.key || !planDialog.name} data-testid="button-save-plan">
-                  {savePlanMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "保存"}
-                </Button>
-              </div>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
 
