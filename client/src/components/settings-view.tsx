@@ -57,7 +57,7 @@ interface ClinicSettings {
 
 interface PlanInfo {
   planType: string;
-  limits: { maxStaff: number; maxMonthlyAppointments: number; canExport: boolean; canLine: boolean; canRecall: boolean; canReport: boolean; label: string; price: string };
+  limits: { maxStaff: number; maxMonthlyAppointments: number; canExport: boolean; canEmail: boolean; canSms: boolean; canLine: boolean; canRecall: boolean; canReport: boolean; label: string; price: string };
   usage: { staffCount: number; monthlyAppointments: number };
 }
 
@@ -191,8 +191,8 @@ function ExportTab() {
           <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800" data-testid="export-plan-locked">
             <Lock className="w-5 h-5 mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold text-sm">スターター以上のプランで利用できます</p>
-              <p className="text-xs mt-0.5">データエクスポート機能をご利用いただくには、スタータープランへのアップグレードが必要です。</p>
+              <p className="font-semibold text-sm">スタンダード以上のプランで利用できます</p>
+              <p className="text-xs mt-0.5">データエクスポート機能をご利用いただくには、スタンダードプランへのアップグレードが必要です。</p>
             </div>
           </div>
         )}
@@ -1945,7 +1945,7 @@ function GeneralTab() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="border rounded-lg p-3">
                 <div className="text-muted-foreground mb-1">スタッフ数</div>
-                <div className="font-semibold">{planInfo.usage.staffCount} / {planInfo.limits.maxStaff === 999 ? "無制限" : `${planInfo.limits.maxStaff}名`}</div>
+                <div className="font-semibold">{planInfo.usage.staffCount} / {planInfo.limits.maxStaff >= 999 ? "無制限" : `${planInfo.limits.maxStaff}名`}</div>
               </div>
               <div className="border rounded-lg p-3">
                 <div className="text-muted-foreground mb-1">今月の予約数</div>
@@ -1956,8 +1956,20 @@ function GeneralTab() {
                 <div className={planInfo.limits.canExport ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canExport ? "利用可能" : "利用不可"}</div>
               </div>
               <div className="border rounded-lg p-3">
-                <div className="text-muted-foreground mb-1">LINE連携</div>
+                <div className="text-muted-foreground mb-1">SMSリマインダー</div>
+                <div className={planInfo.limits.canSms ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canSms ? "利用可能" : "利用不可"}</div>
+              </div>
+              <div className="border rounded-lg p-3">
+                <div className="text-muted-foreground mb-1">LINEリマインダー</div>
                 <div className={planInfo.limits.canLine ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canLine ? "利用可能" : "利用不可"}</div>
+              </div>
+              <div className="border rounded-lg p-3">
+                <div className="text-muted-foreground mb-1">リコール管理</div>
+                <div className={planInfo.limits.canRecall ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canRecall ? "利用可能" : "利用不可"}</div>
+              </div>
+              <div className="border rounded-lg p-3">
+                <div className="text-muted-foreground mb-1">レポート・分析</div>
+                <div className={planInfo.limits.canReport ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canReport ? "利用可能" : "利用不可"}</div>
               </div>
             </div>
             {planInfo.planType === "free" && (
@@ -1989,9 +2001,9 @@ function ReminderTab() {
   const [showResendKey, setShowResendKey] = useState(false);
   const [showTwilioToken, setShowTwilioToken] = useState(false);
 
-  const { canLine } = usePlan();
-  const hasSms = hasAddon("sms_pack");
-  const hasLine = hasAddon("line_reminder") || canLine;
+  const { canLine, canSms } = usePlan();
+  const hasSms = canSms || hasAddon("sms_pack");
+  const hasLine = canLine || hasAddon("line_reminder");
 
   if (settings && !loaded) { setForm({ ...form, ...settings }); setLoaded(true); }
 

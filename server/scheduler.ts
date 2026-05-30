@@ -2,6 +2,20 @@ import { storage } from "./storage.js";
 import { sendReminderEmail } from "./email.js";
 import { sendLineMessage, buildReminderMessage } from "./line.js";
 import { sendSms, buildSmsReminderMessage } from "./sms.js";
+import { getPlanLimitsFromDB } from "./plans.js";
+
+// 医院の実効プラン上限（アドオン解放を含む）を取得する。
+async function getClinicLimits(clinicId: string) {
+  const clinic = await storage.getClinic(clinicId);
+  const limits = { ...await getPlanLimitsFromDB(storage, clinic?.planType || "free") };
+  try {
+    const addons = await storage.getClinicAddons(clinicId);
+    const keys = new Set(addons.map((a: any) => a.addonKey));
+    if (keys.has("line_reminder")) limits.canLine = true;
+    if (keys.has("sms")) limits.canSms = true;
+  } catch { /* アドオン取得失敗時はプラン素の値 */ }
+  return limits;
+}
 
 let schedulerTimer: NodeJS.Timeout | null = null;
 
@@ -26,6 +40,12 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
   const today = getTodayDateStr();
   const tomorrowDate = getTomorrowDateStr();
 
+  // プラン制限: 使えない通知チャネルはスケジューラからも送らない（多層防御）
+  const limits = await getClinicLimits(clinic.id);
+  const allowEmail = reminderCfg.enableEmail && limits.canEmail;
+  const allowLine = reminderCfg.enableLine && limits.canLine;
+  const allowSms = reminderCfg.enableSms && limits.canSms;
+
   const appointments = await storage.getAppointments({
     clinicId: clinic.id,
     startDate: tomorrowDate,
@@ -41,7 +61,7 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
     const dateStr = formatDateJP(appt.date);
     const timeStr = appt.startTime?.slice(0, 5) || "";
 
-    if (reminderCfg.enableEmail && patient.email) {
+    if (allowEmail && patient.email) {
       try {
         await sendReminderEmail(patient.email, patient.name, dateStr, timeStr, clinic.name, reminderCfg.resendApiKey, reminderCfg.resendFromEmail);
         sent++;
@@ -50,7 +70,7 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
       }
     }
 
-    if (reminderCfg.enableLine && reminderCfg.lineChannelAccessToken && patient.lineUserId) {
+    if (allowLine && reminderCfg.lineChannelAccessToken && patient.lineUserId) {
       try {
         const msg = buildReminderMessage(patient.name, clinic.name, dateStr, timeStr);
         await sendLineMessage(reminderCfg.lineChannelAccessToken, patient.lineUserId, msg);
@@ -60,7 +80,7 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
       }
     }
 
-    if (reminderCfg.enableSms && patient.phone) {
+    if (allowSms && patient.phone) {
       try {
         const msg = buildSmsReminderMessage(patient.name, clinic.name, dateStr, timeStr);
         await sendSms(patient.phone, msg, {

@@ -159,7 +159,7 @@ export async function applyMigrations() {
       UPDATE clinics
       SET plan_type = 'partner'
       WHERE id = 'a5225a6e-9fdc-4cf5-bf9e-f43db810c3c1'
-        AND plan_type IN ('free', 'starter', 'pro')
+        AND plan_type IN ('free', 'starter', 'standard', 'pro')
     `);
   } catch (err) {
     console.error("[Migration] 今泉歯科 partner プランエラー:", err);
@@ -317,7 +317,7 @@ export async function seedDatabase() {
         '',
         '',
         '群馬県桐生市',
-        'starter',
+        'partner',
         true
       )
       ON CONFLICT (id) DO NOTHING

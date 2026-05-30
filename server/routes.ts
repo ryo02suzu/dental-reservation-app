@@ -16,7 +16,7 @@ import {
 } from "./email";
 import { sendLineMessage, buildBookingConfirmationMessage } from "./line";
 import { runDailyReminders } from "./scheduler";
-import { getPlanLimitsFromDB } from "./plans";
+import { getPlanLimitsFromDB, type PlanLimits } from "./plans";
 import { validatePassword, sanitizeString, getClientIp, logSecurityEvent, INPUT_LIMITS } from "./security";
 import * as crypto from "crypto";
 
@@ -218,6 +218,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return false;
     }
     return true;
+  };
+
+  // 現在の医院の実効プラン上限を取得する。
+  // plan_definitions の数値上書きに加え、購入済みアドオン（recall/report/line_reminder/
+  // sms）による機能フラグの解放を反映する。プラン判定の単一窓口。
+  const getEffectiveLimits = async (clinicId: string): Promise<PlanLimits> => {
+    const clinic = await storage.getClinic(clinicId);
+    const limits = { ...await getPlanLimitsFromDB(storage, clinic?.planType || "free") };
+    try {
+      const addons = await storage.getClinicAddons(clinicId);
+      const keys = new Set(addons.map(a => a.addonKey));
+      if (keys.has("recall")) limits.canRecall = true;
+      if (keys.has("report")) limits.canReport = true;
+      if (keys.has("line_reminder")) limits.canLine = true;
+      if (keys.has("sms")) limits.canSms = true;
+    } catch { /* アドオン取得失敗時はプラン素の値を使う */ }
+    return limits;
+  };
+
+  // 指定機能がプランで使えなければ 403 を返す。使える場合は limits を返す。
+  const requireFeature = async (
+    req: any,
+    res: any,
+    feature: "canExport" | "canEmail" | "canSms" | "canLine" | "canRecall" | "canReport",
+    label: string,
+  ): Promise<PlanLimits | null> => {
+    const limits = await getEffectiveLimits(getAdminClinicId(req));
+    if (!limits[feature]) {
+      res.status(403).json({
+        code: "plan_upgrade_required",
+        feature,
+        message: `「${label}」は現在のプランではご利用いただけません。プランのアップグレードをご検討ください。`,
+      });
+      return null;
+    }
+    return limits;
   };
 
   // Demo auto-login routes (no auth required)
@@ -1452,18 +1488,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/my-plan", requireAuth, async (req: any, res) => {
     try {
       const clinicId = getAdminClinicId(req);
-      const [clinic, staffList, clinicAddons] = await Promise.all([
+      const now = new Date();
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const [clinic, staffList, monthAppts, limits] = await Promise.all([
         storage.getClinic(clinicId),
         storage.getStaff(clinicId),
-        storage.getClinicAddons(clinicId),
+        storage.getAppointments({ clinicId, startDate: monthStart, endDate: monthEnd }),
+        getEffectiveLimits(clinicId),
       ]);
       const planType = clinic?.planType || "free";
-      const limits = { ...await getPlanLimitsFromDB(storage, planType) };
-      const addonKeys = new Set(clinicAddons.map(a => a.addonKey));
-      if (addonKeys.has("recall")) limits.canRecall = true;
-      if (addonKeys.has("line_reminder")) limits.canLine = true;
-      if (addonKeys.has("report")) limits.canReport = true;
-      res.json({ planType, limits, usage: { staffCount: staffList.length, monthlyAppointments: 0 } });
+      res.json({
+        planType,
+        limits,
+        usage: { staffCount: staffList.length, monthlyAppointments: monthAppts.length },
+      });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
@@ -2392,7 +2432,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/appointments", async (req: any, res) => {
     try {
-      const body = { ...req.body, clinicId: getAdminClinicId(req) };
+      const clinicId = getAdminClinicId(req);
+      const body = { ...req.body, clinicId };
+      // プラン上限: 今月の予約総数（医院側の手動登録もカウント対象）
+      const limits = await getEffectiveLimits(clinicId);
+      const now = new Date();
+      const mStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const mLastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const mEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(mLastDay).padStart(2, "0")}`;
+      const monthAppts = await storage.getAppointments({ clinicId, startDate: mStart, endDate: mEnd });
+      if (monthAppts.length >= limits.maxMonthlyAppointments) {
+        return res.status(403).json({
+          code: "plan_upgrade_required",
+          message: `今月の予約登録が上限（${limits.maxMonthlyAppointments}件）に達しました。プランをアップグレードすると無制限になります。`,
+        });
+      }
       if (!body.staffId) body.staffId = null;
       if (!body.serviceId) body.serviceId = null;
       if (body.staffId && body.date && body.startTime && body.endTime) {
@@ -2650,12 +2704,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.put("/api/reminder-settings", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
       const clinicId = getAdminClinicId(req);
       const {
         enableEmail, enableSms, enableLine, reminderHoursBefore,
         lineChannelAccessToken, lineChannelSecret, resendApiKey, autoReminderEnabled, reminderSendTime,
         resendFromEmail, twilioAccountSid, twilioAuthToken, twilioFromNumber,
       } = req.body;
+      // プラン制限: 使えない通知チャネルはONにできない
+      const limits = await getEffectiveLimits(clinicId);
+      if (enableSms && !limits.canSms) {
+        return res.status(403).json({ code: "plan_upgrade_required", message: "SMSリマインダーはスタンダード以上のプランでご利用いただけます。" });
+      }
+      if (enableLine && !limits.canLine) {
+        return res.status(403).json({ code: "plan_upgrade_required", message: "LINEリマインダーはプロ以上のプランでご利用いただけます。" });
+      }
       // マスク値/未送信のシークレットは既存値を保持する
       const prev = await storage.getReminderSettings(clinicId);
       const settings = await storage.upsertReminderSettings({
@@ -2787,6 +2850,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Reports
   app.get("/api/reports", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canReport", "レポート・分析"))) return;
       const clinicId = getAdminClinicId(req);
       const appointments = await storage.getAppointments({ clinicId });
       const patients = await storage.getPatients(clinicId);
@@ -2897,14 +2962,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const clinicId = getAdminClinicId(req);
       const clinic = await storage.getClinic(clinicId);
-      const planLimits = await getPlanLimitsFromDB(storage, clinic?.planType || "free");
       const now = new Date();
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-      const [staff, monthAppts] = await Promise.all([
+      const [staff, monthAppts, planLimits] = await Promise.all([
         storage.getStaff(clinicId),
         storage.getAppointments({ clinicId, startDate: monthStart, endDate: monthEnd }),
+        getEffectiveLimits(clinicId),
       ]);
       res.json({
         planType: clinic?.planType || "free",
@@ -2920,12 +2985,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Export Data
   app.get("/api/export/patients.csv", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canExport", "データエクスポート"))) return;
       const clinicId = getAdminClinicId(req);
-      const clinic = await storage.getClinic(clinicId);
-      const planLimits = await getPlanLimitsFromDB(storage, clinic?.planType || "free");
-      if (!planLimits.canExport) {
-        return res.status(403).json({ message: "データエクスポートはスターター以上のプランで利用できます。" });
-      }
       const patients = await storage.getPatients(clinicId);
       const BOM = "\uFEFF";
       const header = ["患者番号", "氏名", "ふりがな", "生年月日", "性別", "電話", "メール", "住所", "アレルギー", "備考", "キャンセル数", "無断キャンセル数", "最終来院日", "登録日"].join(",");
@@ -2955,12 +3017,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/export/appointments.csv", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canExport", "データエクスポート"))) return;
       const clinicId = getAdminClinicId(req);
-      const clinic = await storage.getClinic(clinicId);
-      const planLimitsExport = await getPlanLimitsFromDB(storage, clinic?.planType || "free");
-      if (!planLimitsExport.canExport) {
-        return res.status(403).json({ message: "データエクスポートはスターター以上のプランで利用できます。" });
-      }
       const appointments = await storage.getAppointments({ clinicId });
       const BOM = "\uFEFF";
       const header = ["日付", "開始時間", "終了時間", "患者名", "担当スタッフ", "診療メニュー", "治療種別", "ステータス", "確認状況", "チェア番号", "メモ", "作成日"].join(",");
@@ -3037,6 +3096,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/recall", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const patients = await storage.getRecallPatients(getAdminClinicId(req));
       res.json(patients);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -3045,6 +3105,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/patients/:id/recall", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const { nextRecallDate, recallIntervalMonths } = req.body;
       const patient = await storage.updatePatientRecall(req.params.id, { nextRecallDate, recallIntervalMonths }, getAdminClinicId(req));
       if (!patient) return res.status(404).json({ message: "患者が見つかりません" });
@@ -3055,6 +3116,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/recall/:id/send", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const patient = await storage.markRecallSent(req.params.id, getAdminClinicId(req));
       if (!patient) return res.status(404).json({ message: "患者が見つかりません" });
       try {
@@ -3073,6 +3135,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/recall/send-bulk", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const clinicId = getAdminClinicId(req);
       const patients = await storage.getRecallPatients(clinicId);
       const unsent = patients.filter(p => !p.lastRecallSentAt);

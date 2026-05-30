@@ -40,7 +40,8 @@ interface ClinicSummary {
 
 const PLAN_BADGE: Record<string, { label: string; className: string }> = {
   free:       { label: "フリー",         className: "bg-gray-100 text-gray-600" },
-  starter:    { label: "スターター",     className: "bg-blue-100 text-blue-700" },
+  standard:   { label: "スタンダード",   className: "bg-blue-100 text-blue-700" },
+  starter:    { label: "スタンダード",   className: "bg-blue-100 text-blue-700" }, // 旧キー後方互換
   pro:        { label: "プロ",           className: "bg-purple-100 text-purple-700" },
   enterprise: { label: "エンタープライズ", className: "bg-amber-100 text-amber-700" },
   partner:    { label: "パートナー",     className: "bg-green-100 text-green-700" },
@@ -236,7 +237,7 @@ export default function SuperAdminPage() {
   // ─── Plan options（server/plans.ts で確定している契約コース） ─────────────────
   const planOptions = [
     { key: "free", name: "フリー" },
-    { key: "starter", name: "スターター" },
+    { key: "standard", name: "スタンダード" },
     { key: "pro", name: "プロ" },
     { key: "enterprise", name: "エンタープライズ" },
     { key: "partner", name: "パートナー（初期）" },

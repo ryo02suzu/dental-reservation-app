@@ -39,7 +39,7 @@ export default function ClinicSignupPage() {
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState<"free" | "starter" | "pro" | "enterprise">("free");
+  const [selectedPlan, setSelectedPlan] = useState<"free" | "standard" | "pro" | "enterprise">("free");
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [done, setDone] = useState<{ bookingUrl: string; clinicName: string } | null>(null);
 
@@ -370,10 +370,10 @@ export default function ClinicSignupPage() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { id: "free", label: "フリー", price: "¥0", desc: "スタッフ2名・月100件まで", highlight: false },
-                { id: "starter", label: "スターター", price: "¥4,980/月", desc: "スタッフ5名・月500件まで", highlight: false },
-                { id: "pro", label: "プロ", price: "¥9,800/月", desc: "スタッフ15名・月2,000件まで", highlight: true },
-                { id: "enterprise", label: "エンタープライズ", price: "¥19,800/月", desc: "スタッフ・件数 無制限", highlight: false },
+                { id: "free", label: "フリー", price: "¥0", desc: "スタッフ1名・月50件まで", highlight: false },
+                { id: "standard", label: "スタンダード", price: "¥9,800/月", desc: "スタッフ5名・予約無制限・SMS対応", highlight: false },
+                { id: "pro", label: "プロ", price: "¥19,800/月", desc: "無制限・LINE・リコール・分析", highlight: true },
+                { id: "enterprise", label: "エンタープライズ", price: "要相談", desc: "複数院・法人向け", highlight: false },
               ].map((plan) => (
                 <button
                   key={plan.id}
