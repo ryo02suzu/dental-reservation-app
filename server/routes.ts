@@ -56,9 +56,7 @@ function validateClockInToken(token: string): string | null {
 
 setInterval(() => {
   const now = Date.now();
-  for (const [k, v] of clockInTokens) {
-    if (now > v.expiresAt) clockInTokens.delete(k);
-  }
+  clockInTokens.forEach((v, k) => { if (now > v.expiresAt) clockInTokens.delete(k); });
 }, 30_000);
 
 function pushAttendanceToClinic(clinicId: string, payload: object) {
@@ -2059,7 +2057,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       if (!existing || (!existing.clockIn && !existing.clockOut)) {
         // 未出勤 → 出勤
-        const record = await storage.createAttendance({
+        const record = await storage.clockIn({
           clinicId: staffClinicId,
           staffId: staffMemberId,
           date: today,

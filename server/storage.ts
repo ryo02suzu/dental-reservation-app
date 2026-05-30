@@ -57,7 +57,7 @@ export interface IStorage {
   deletePatient(id: string): Promise<void>;
   // Shifts
   getShifts(filters: { clinicId: string; staffId?: string; month?: string; startDate?: string; endDate?: string }): Promise<(Shift & { staff?: Staff })[]>;
-  createShift(data: InsertShift): Promise<Shift>;
+  createShift(data: InsertShift & { reviewedAt?: Date; reviewedBy?: string }): Promise<Shift>;
   updateShift(id: string, data: Partial<InsertShift & { reviewedAt?: Date; reviewedBy?: string }>): Promise<Shift | undefined>;
   getShiftById(id: string): Promise<Shift | undefined>;
   deleteShift(id: string): Promise<void>;
@@ -409,7 +409,7 @@ class PgStorage implements IStorage {
     return rows.map(r => ({ ...r.shifts, staff: r.staff ?? undefined }));
   }
 
-  async createShift(data: InsertShift): Promise<Shift> {
+  async createShift(data: InsertShift & { reviewedAt?: Date; reviewedBy?: string }): Promise<Shift> {
     const result = await db.insert(schema.shifts).values(data).returning();
     return result[0];
   }

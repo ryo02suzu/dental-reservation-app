@@ -1384,14 +1384,14 @@ function HoursTab() {
 
   const toggleMorning = (dayOfWeek: number, enabled: boolean) => {
     setLocalHours(prev => prev.map(h => h.dayOfWeek === dayOfWeek
-      ? { ...h, openTime: enabled ? "09:00" : null, closeTime: enabled ? "12:30" : null }
+      ? { ...h, openTime: enabled ? "09:00" : undefined, closeTime: enabled ? "12:30" : undefined }
       : h
     ));
   };
 
   const toggleAfternoon = (dayOfWeek: number, enabled: boolean) => {
     setLocalHours(prev => prev.map(h => h.dayOfWeek === dayOfWeek
-      ? { ...h, afternoonOpenTime: enabled ? "14:00" : null, afternoonCloseTime: enabled ? "18:00" : null }
+      ? { ...h, afternoonOpenTime: enabled ? "14:00" : undefined, afternoonCloseTime: enabled ? "18:00" : undefined }
       : h
     ));
   };
