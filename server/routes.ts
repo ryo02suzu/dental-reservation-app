@@ -5,7 +5,7 @@ import { storage, DEFAULT_CLINIC_ID } from "./storage";
 import { isJapaneseHoliday, getJapaneseHolidayName } from "./holidays";
 import { resetDemoAppointments } from "./seed";
 import type { Patient } from "@shared/schema";
-import { hashPassword, comparePasswordsExport } from "./auth";
+import { hashPassword, comparePasswordsExport, applyRememberMe } from "./auth";
 import { 
   sendBookingConfirmationEmail, 
   sendCancellationEmail, 
@@ -1224,6 +1224,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(401).json({ message: "電話番号またはパスワードが正しくありません" });
       }
       (req.session as any).patientId = patient.id;
+      applyRememberMe(req, req.body.rememberMe);
       logSecurityEvent("patient_login", ip, { patientId: patient.id });
       const { password: _pw, ...safe } = patient as any;
       res.json({ loggedIn: true, patient: safe });

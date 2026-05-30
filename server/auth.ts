@@ -31,6 +31,21 @@ function resolveSessionSecret(): string {
   return randomBytes(32).toString("hex");
 }
 
+const REMEMBER_ME_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30日
+
+// 「ログイン状態を保持する」チェックに応じてセッションCookieの寿命を切り替える。
+//  - remember あり: 30日間有効な永続Cookie（ブラウザを閉じても維持）
+//  - remember なし: ブラウザを閉じると失効するセッションCookie
+// 各ログインエンドポイント（管理者/患者）から認証成功後に呼び出す。
+export function applyRememberMe(req: any, remember: unknown): void {
+  if (!req?.session?.cookie) return;
+  if (remember) {
+    req.session.cookie.maxAge = REMEMBER_ME_MAX_AGE_MS;
+  } else {
+    req.session.cookie.expires = false;
+  }
+}
+
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -97,6 +112,7 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
+    applyRememberMe(req, (req.body as any)?.rememberMe);
     res.status(200).json(req.user);
   });
 

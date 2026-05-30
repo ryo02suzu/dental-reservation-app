@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { user, loginMutation } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   const { data: setupStatus } = useQuery<{ setupNeeded: boolean }>({
     queryKey: ["/api/auth/setup-needed"],
@@ -66,7 +68,7 @@ export default function LoginPage() {
           <CardContent>
             <Form {...form}>
               <form
-                onSubmit={form.handleSubmit((data) => loginMutation.mutate(data))}
+                onSubmit={form.handleSubmit((data) => loginMutation.mutate({ ...data, rememberMe }))}
                 className="space-y-4"
               >
                 <FormField
@@ -112,6 +114,14 @@ export default function LoginPage() {
                     </FormItem>
                   )}
                 />
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                  <Checkbox
+                    checked={rememberMe}
+                    onCheckedChange={(v) => setRememberMe(v === true)}
+                    data-testid="checkbox-remember-me"
+                  />
+                  ログイン状態を保持する
+                </label>
                 {loginMutation.isError && (
                   <p className="text-sm text-destructive text-center">
                     ユーザー名またはパスワードが正しくありません

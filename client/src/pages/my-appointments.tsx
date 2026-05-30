@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -125,6 +126,7 @@ export default function MyAppointmentsPage() {
   const [authTab, setAuthTab] = useState<AuthTab>("login");
   const [authPhone, setAuthPhone] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [authName, setAuthName] = useState("");
   const [authNameKana, setAuthNameKana] = useState("");
   const kanaReadingRef = useRef<string>("");
@@ -226,7 +228,7 @@ export default function MyAppointmentsPage() {
     mutationFn: async () => {
       const res = await fetch("/api/patient/login", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ phone: authPhone, password: authPassword }),
+        body: JSON.stringify({ phone: authPhone, password: authPassword, rememberMe }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
       return res.json();
@@ -488,6 +490,10 @@ export default function MyAppointmentsPage() {
                   <Label htmlFor="login-password" className="text-sm text-gray-700">パスワード</Label>
                   <Input id="login-password" type="password" placeholder="パスワードを入力" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && loginMutation.mutate()} className="border-gray-200" data-testid="input-login-password" />
                 </div>
+                <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+                  <Checkbox checked={rememberMe} onCheckedChange={v => setRememberMe(v === true)} data-testid="checkbox-remember-me" />
+                  ログイン状態を保持する
+                </label>
                 <button className="w-full py-3 rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-40" style={{ backgroundColor: BEIGE }} disabled={!authPhone || !authPassword || loginMutation.isPending} onClick={() => loginMutation.mutate()} data-testid="button-login-submit">
                   {loginMutation.isPending ? "ログイン中..." : "ログイン"}
                 </button>

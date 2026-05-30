@@ -346,13 +346,15 @@ function LoginPage({
     onError: (err: Error) => toast({ title: err.message, variant: "destructive" }),
   });
 
+  const [rememberMe, setRememberMe] = useState(true);
+
   const loginMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/patient/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ phone, password, clinicId: clinicInfo?.clinic.id }),
+        body: JSON.stringify({ phone, password, clinicId: clinicInfo?.clinic.id, rememberMe }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
       return res.json();
@@ -400,6 +402,15 @@ function LoginPage({
             </button>
           </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-gray-500 mb-4 cursor-pointer select-none">
+          <Checkbox
+            checked={rememberMe}
+            onCheckedChange={(v) => setRememberMe(v === true)}
+            data-testid="checkbox-remember-me"
+          />
+          ログイン状態を保持する
+        </label>
 
         <button
           className="w-full py-3.5 rounded-full text-white font-medium text-sm disabled:opacity-40 transition-opacity hover:opacity-90 mb-4"
