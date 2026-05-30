@@ -365,7 +365,7 @@ export default function ClinicSignupPage() {
         <Card>
           <CardHeader>
             <CardTitle>プランを選択</CardTitle>
-            <CardDescription>後からスーパー管理者が変更できます</CardDescription>
+            <CardDescription>後から運営が変更できます</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

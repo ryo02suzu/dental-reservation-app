@@ -197,7 +197,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Middleware to require super admin
   const requireSuperAdmin = (req: any, res: any, next: any) => {
     if (req.isAuthenticated() && req.user?.isSuperAdmin) return next();
-    res.status(403).json({ message: "スーパー管理者権限が必要です" });
+    res.status(403).json({ message: "運営権限が必要です" });
   };
 
   // Helper: resolve clinicId for the current admin user (supports super-admin impersonation)

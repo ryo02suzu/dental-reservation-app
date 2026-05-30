@@ -71,7 +71,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
     if (item.addonKey && !isPro && !addonsLoading && !hasAddon(item.addonKey) && (!item.planFeature || isPlanLocked(item.planFeature))) {
       toast({
         title: "このオプションは未契約です",
-        description: `「${item.label}」を使用するにはスーパー管理者に有効化を依頼してください。`,
+        description: `「${item.label}」を使用するには運営に有効化を依頼してください。`,
         variant: "destructive",
       });
       return;
@@ -182,7 +182,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{user.username}</p>
                 <p className="text-[11px] text-muted-foreground truncate">
-                  {(user as any)?.isSuperAdmin ? "スーパー管理者" : "管理者"}
+                  {(user as any)?.isSuperAdmin ? "運営" : "管理者"}
                 </p>
               </div>
             </div>

@@ -303,8 +303,8 @@ export default function SuperAdminPage() {
               <Building2 className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">Arche</h1>
-              <p className="text-xs text-gray-500">スーパー管理者ダッシュボード</p>
+              <h1 className="text-lg font-bold text-gray-900">Arche Console</h1>
+              <p className="text-xs text-gray-500">運営ダッシュボード</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

@@ -2077,7 +2077,7 @@ function ReminderTab() {
                           checked={!!form[item.key as keyof ReminderSettings]}
                           onCheckedChange={v => {
                             if (!addonEnabled) {
-                              toast({ title: "このオプションは未契約です", description: "スーパー管理者に有効化を依頼してください。", variant: "destructive" });
+                              toast({ title: "このオプションは未契約です", description: "運営に有効化を依頼してください。", variant: "destructive" });
                               return;
                             }
                             setForm(p => ({ ...p, [item.key]: v }));
@@ -2159,7 +2159,7 @@ function ReminderTab() {
           <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px] z-10 rounded-lg flex flex-col items-center justify-center gap-3" data-testid="sms-addon-locked">
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center max-w-xs">
               <p className="font-semibold text-amber-900 mb-1">SMSリマインダーオプション未契約</p>
-              <p className="text-xs text-amber-700">このオプションを使用するにはスーパー管理者に有効化を依頼してください。</p>
+              <p className="text-xs text-amber-700">このオプションを使用するには運営に有効化を依頼してください。</p>
             </div>
           </div>
         )}
@@ -2218,7 +2218,7 @@ function ReminderTab() {
           <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px] z-10 rounded-lg flex flex-col items-center justify-center gap-3" data-testid="line-addon-locked">
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center max-w-xs">
               <p className="font-semibold text-amber-900 mb-1">LINEリマインダーオプション未契約</p>
-              <p className="text-xs text-amber-700">このオプションを使用するにはスーパー管理者に有効化を依頼してください。</p>
+              <p className="text-xs text-amber-700">このオプションを使用するには運営に有効化を依頼してください。</p>
             </div>
           </div>
         )}
