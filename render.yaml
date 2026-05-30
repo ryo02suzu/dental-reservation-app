@@ -14,7 +14,8 @@ services:
     runtime: node
     plan: free
     branch: claude/japanese-language-request-4ikI5
-    buildCommand: npm install && npm run build
+    # NODE_ENV=production でも devDependencies(tsx/vite/esbuild等)を入れる
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     healthCheckPath: /
     envVars:
