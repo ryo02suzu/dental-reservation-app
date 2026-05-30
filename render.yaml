@@ -1,0 +1,28 @@
+# Render Blueprint
+# このリポジトリを Render(https://render.com) にデプロイするための設定。
+# main に触らず、作業ブランチをそのまま公開URL（プレビュー）にできる。
+#
+# 使い方:
+#   1. render.com に GitHub でサインイン
+#   2. New → Blueprint → このリポジトリを選択
+#   3. DATABASE_URL に Supabase の Session pooler 接続文字列を入力
+#      （SESSION_SECRET は自動生成される）
+#   4. Apply でデプロイ → https://<name>.onrender.com が払い出される
+services:
+  - type: web
+    name: dental-reservation-app
+    runtime: node
+    plan: free
+    branch: claude/japanese-language-request-4ikI5
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # セッション署名鍵は Render が安全な値を自動生成する
+      - key: SESSION_SECRET
+        generateValue: true
+      # Supabase の Session pooler 接続文字列を Render の画面で入力する
+      - key: DATABASE_URL
+        sync: false
