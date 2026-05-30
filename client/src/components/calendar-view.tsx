@@ -494,11 +494,11 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
 
           {/* スタッフ別フィルター（2名以上いる場合のみ表示） */}
           {staff.length >= 2 && (
-            <div className="flex items-center gap-1 flex-wrap">
-              <span className="text-xs text-muted-foreground mr-1">担当：</span>
-              <div className="flex border border-border rounded-md overflow-hidden">
+            <div className="flex items-center gap-1 flex-wrap max-w-full">
+              <span className="text-xs text-muted-foreground mr-1 shrink-0">担当：</span>
+              <div className="flex border border-border rounded-md overflow-x-auto max-w-full">
                 <button
-                  className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${filterStaffId === null ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                  className={`shrink-0 px-2.5 py-1.5 text-xs font-medium transition-colors ${filterStaffId === null ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
                   onClick={() => setFilterStaffId(null)}
                   data-testid="filter-staff-all"
                 >
@@ -510,7 +510,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
                   return (
                     <button
                       key={s.id}
-                      className={`px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-border ${filterStaffId === s.id ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                      className={`shrink-0 px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-border ${filterStaffId === s.id ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
                       onClick={() => setFilterStaffId(s.id)}
                       data-testid={`filter-staff-${s.id}`}
                     >
@@ -758,7 +758,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
       </div>
 
       <div className="overflow-auto flex-1" ref={scrollRef}>
-        <div className="min-w-[600px] relative">
+        <div className="relative" style={{ minWidth: `${Math.max(64 + totalCols * 150, 280)}px` }}>
           {/* Header */}
           <div className="sticky top-0 z-30 bg-background border-b border-border grid" style={{ gridTemplateColumns: `64px repeat(${totalCols}, 1fr)` }}>
             <div className="p-2 text-xs font-medium text-muted-foreground text-center bg-muted/40 border-r border-border">時間</div>
@@ -950,8 +950,8 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
   const [popoverDate, setPopoverDate] = useState<string | null>(null);
 
   return (
-    <div className="p-4">
-      <div className="grid grid-cols-7 gap-2">
+    <div className="p-2 md:p-4 overflow-x-auto">
+      <div className="grid grid-cols-7 gap-1.5 md:gap-2 min-w-[760px]">
         {days.map((day, i) => {
           const dow = day.getDay();
           const dateStr = format(day, "yyyy-MM-dd");
@@ -1091,8 +1091,8 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
   const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
 
   return (
-    <div className="p-4">
-      <div className="border border-border rounded-lg overflow-hidden">
+    <div className="p-2 md:p-4 overflow-x-auto">
+      <div className="border border-border rounded-lg overflow-hidden min-w-[680px]">
         {/* Header row */}
         <div className="grid grid-cols-7 border-b border-border">
           {dayNames.map((d, i) => (

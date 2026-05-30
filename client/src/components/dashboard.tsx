@@ -226,7 +226,7 @@ export function Dashboard() {
           <button
             onClick={() => { setCurrentDate(d => subDays(d, 1)); setActiveFilter("all"); }}
             data-testid="btn-prev-day"
-            className="w-7 h-7 rounded-lg border flex items-center justify-center hover:bg-accent transition-colors shrink-0">
+            className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-accent transition-colors shrink-0 active:scale-95">
             <ChevronLeft className="w-4 h-4 text-muted-foreground" />
           </button>
           <div className="flex-1 text-center relative">
@@ -253,7 +253,7 @@ export function Dashboard() {
           <button
             onClick={() => { setCurrentDate(d => addDays(d, 1)); setActiveFilter("all"); }}
             data-testid="btn-next-day"
-            className="w-7 h-7 rounded-lg border flex items-center justify-center hover:bg-accent transition-colors shrink-0">
+            className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-accent transition-colors shrink-0 active:scale-95">
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
