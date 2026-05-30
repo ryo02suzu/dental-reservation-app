@@ -2633,12 +2633,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const settings = await storage.getReminderSettings(getAdminClinicId(req));
       if (!settings) return res.json(null);
-      // シークレットは実値を返さずマスクする
+      // シークレットは実値を返さずマスクする（識別子のSID/番号/送信元は表示）
       res.json({
         ...settings,
         lineChannelAccessToken: maskSecret(settings.lineChannelAccessToken),
         lineChannelSecret: maskSecret(settings.lineChannelSecret),
         resendApiKey: maskSecret(settings.resendApiKey),
+        twilioAuthToken: maskSecret(settings.twilioAuthToken),
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2649,6 +2650,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const {
         enableEmail, enableSms, enableLine, reminderHoursBefore,
         lineChannelAccessToken, lineChannelSecret, resendApiKey, autoReminderEnabled, reminderSendTime,
+        resendFromEmail, twilioAccountSid, twilioAuthToken, twilioFromNumber,
       } = req.body;
       // マスク値/未送信のシークレットは既存値を保持する
       const prev = await storage.getReminderSettings(clinicId);
@@ -2657,6 +2659,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         lineChannelAccessToken: resolveSecret(lineChannelAccessToken, prev?.lineChannelAccessToken),
         lineChannelSecret: resolveSecret(lineChannelSecret, prev?.lineChannelSecret),
         resendApiKey: resolveSecret(resendApiKey, prev?.resendApiKey),
+        twilioAuthToken: resolveSecret(twilioAuthToken, prev?.twilioAuthToken),
+        resendFromEmail: resendFromEmail ?? prev?.resendFromEmail ?? null,
+        twilioAccountSid: twilioAccountSid ?? prev?.twilioAccountSid ?? null,
+        twilioFromNumber: twilioFromNumber ?? prev?.twilioFromNumber ?? null,
         autoReminderEnabled, reminderSendTime,
       }, clinicId);
       // 応答でも実値を返さない
@@ -2665,6 +2671,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         lineChannelAccessToken: maskSecret(settings.lineChannelAccessToken),
         lineChannelSecret: maskSecret(settings.lineChannelSecret),
         resendApiKey: maskSecret(settings.resendApiKey),
+        twilioAuthToken: maskSecret(settings.twilioAuthToken),
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2677,7 +2684,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "クリニックのメールアドレスが設定されていません" });
       }
       const testSettings = await storage.getReminderSettings(clinicId);
-      await sendTestEmail(clinic.email, clinic.name, testSettings?.resendApiKey);
+      await sendTestEmail(clinic.email, clinic.name, testSettings?.resendApiKey, testSettings?.resendFromEmail);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ message: e.message });

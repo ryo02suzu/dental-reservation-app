@@ -118,6 +118,11 @@ interface ReminderSettings {
   reminderHoursBefore: number;
   lineChannelAccessToken?: string;
   lineChannelSecret?: string;
+  resendApiKey?: string;
+  resendFromEmail?: string;
+  twilioAccountSid?: string;
+  twilioAuthToken?: string;
+  twilioFromNumber?: string;
   autoReminderEnabled?: boolean;
   reminderSendTime?: string;
 }
@@ -1981,6 +1986,8 @@ function ReminderTab() {
   const [loaded, setLoaded] = useState(false);
   const [showLineSecret, setShowLineSecret] = useState(false);
   const [showLineToken, setShowLineToken] = useState(false);
+  const [showResendKey, setShowResendKey] = useState(false);
+  const [showTwilioToken, setShowTwilioToken] = useState(false);
 
   const { canLine } = usePlan();
   const hasSms = hasAddon("sms_pack");
@@ -2059,7 +2066,7 @@ function ReminderTab() {
                 <Label className="text-sm font-medium">送信方法</Label>
                 {([
                   { key: "enableEmail", label: "メールリマインダー", note: null, addonKey: null },
-                  { key: "enableSms", label: "SMSリマインダー", note: "SMS送信にはTwilio設定が必要です（TWILIO_ACCOUNT_SID、TWILIO_AUTH_TOKEN、TWILIO_FROM_NUMBER 環境変数）", addonKey: "sms_pack" },
+                  { key: "enableSms", label: "SMSリマインダー", note: null, addonKey: "sms_pack" },
                   { key: "enableLine", label: "LINEリマインダー", note: null, addonKey: "line_reminder" },
                 ] as const).map(item => {
                   const addonEnabled = !item.addonKey || (item.addonKey === "sms_pack" ? hasSms : hasLine);
@@ -2101,6 +2108,106 @@ function ReminderTab() {
                   {triggerMutation.isPending ? "送信中..." : "今すぐ手動送信"}
                 </Button>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>メール送信設定（Resend）</CardTitle>
+          <CardDescription>メールリマインダーの送信に使用します</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? <Skeleton className="h-32" /> : (
+            <div className="space-y-5 max-w-lg">
+              <div>
+                <Label className="mb-1.5 block">Resend APIキー</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type={showResendKey ? "text" : "password"}
+                    placeholder="re_xxxxxxxx..."
+                    value={form.resendApiKey || ""}
+                    onChange={e => setForm(p => ({ ...p, resendApiKey: e.target.value }))}
+                    data-testid="input-resend-api-key"
+                  />
+                  <Button variant="outline" size="sm" onClick={() => setShowResendKey(p => !p)} type="button">
+                    {showResendKey ? "非表示" : "表示"}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1.5 block">送信元メールアドレス（From）</Label>
+                <Input
+                  type="text"
+                  placeholder="クリニック名 <info@example.com>"
+                  value={form.resendFromEmail || ""}
+                  onChange={e => setForm(p => ({ ...p, resendFromEmail: e.target.value }))}
+                  data-testid="input-resend-from-email"
+                />
+              </div>
+              <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} data-testid="button-save-email-settings">
+                {saveMutation.isPending ? "保存中..." : "メール設定を保存"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="relative">
+        {!hasSms && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px] z-10 rounded-lg flex flex-col items-center justify-center gap-3" data-testid="sms-addon-locked">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center max-w-xs">
+              <p className="font-semibold text-amber-900 mb-1">SMSリマインダーオプション未契約</p>
+              <p className="text-xs text-amber-700">このオプションを使用するにはスーパー管理者に有効化を依頼してください。</p>
+            </div>
+          </div>
+        )}
+        <CardHeader>
+          <CardTitle>SMS送信設定（Twilio）</CardTitle>
+          <CardDescription>SMSリマインダーの送信に使用します</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? <Skeleton className="h-32" /> : (
+            <div className="space-y-5 max-w-lg">
+              <div>
+                <Label className="mb-1.5 block">Account SID</Label>
+                <Input
+                  type="text"
+                  placeholder="ACxxxxxxxx..."
+                  value={form.twilioAccountSid || ""}
+                  onChange={e => setForm(p => ({ ...p, twilioAccountSid: e.target.value }))}
+                  data-testid="input-twilio-account-sid"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block">Auth Token</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type={showTwilioToken ? "text" : "password"}
+                    placeholder="認証トークンを入力..."
+                    value={form.twilioAuthToken || ""}
+                    onChange={e => setForm(p => ({ ...p, twilioAuthToken: e.target.value }))}
+                    data-testid="input-twilio-auth-token"
+                  />
+                  <Button variant="outline" size="sm" onClick={() => setShowTwilioToken(p => !p)} type="button">
+                    {showTwilioToken ? "非表示" : "表示"}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1.5 block">送信元電話番号（From）</Label>
+                <Input
+                  type="text"
+                  placeholder="+81..."
+                  value={form.twilioFromNumber || ""}
+                  onChange={e => setForm(p => ({ ...p, twilioFromNumber: e.target.value }))}
+                  data-testid="input-twilio-from-number"
+                />
+              </div>
+              <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} data-testid="button-save-sms-settings">
+                {saveMutation.isPending ? "保存中..." : "SMS設定を保存"}
+              </Button>
             </div>
           )}
         </CardContent>

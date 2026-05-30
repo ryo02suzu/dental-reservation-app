@@ -43,7 +43,7 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
 
     if (reminderCfg.enableEmail && patient.email) {
       try {
-        await sendReminderEmail(patient.email, patient.name, dateStr, timeStr, clinic.name, reminderCfg.resendApiKey);
+        await sendReminderEmail(patient.email, patient.name, dateStr, timeStr, clinic.name, reminderCfg.resendApiKey, reminderCfg.resendFromEmail);
         sent++;
       } catch (e) {
         console.error(`[Scheduler] Email to ${patient.email} failed:`, e);
@@ -63,7 +63,11 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
     if (reminderCfg.enableSms && patient.phone) {
       try {
         const msg = buildSmsReminderMessage(patient.name, clinic.name, dateStr, timeStr);
-        await sendSms(patient.phone, msg);
+        await sendSms(patient.phone, msg, {
+          accountSid: reminderCfg.twilioAccountSid,
+          authToken: reminderCfg.twilioAuthToken,
+          fromNumber: reminderCfg.twilioFromNumber,
+        });
         sent++;
       } catch (e) {
         console.error(`[Scheduler] SMS to ${patient.phone} failed:`, e);

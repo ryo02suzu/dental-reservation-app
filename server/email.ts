@@ -19,13 +19,14 @@ export async function sendReminderEmail(
   appointmentDate: string,
   appointmentTime: string,
   clinicName: string,
-  clinicApiKey?: string | null
+  clinicApiKey?: string | null,
+  fromEmail?: string | null
 ): Promise<void> {
   const client = getClient(clinicApiKey);
   if (!client) return;
   try {
     await client.emails.send({
-      from: FROM, to: [to],
+      from: fromEmail || FROM, to: [to],
       subject: `予約確認のリマインダー: ${clinicName}`,
       html: `
         <p>${patientName} 様</p>
@@ -284,12 +285,12 @@ export async function sendWaitlistNotificationEmail(
   }
 }
 
-export async function sendTestEmail(to: string, clinicName: string, clinicApiKey?: string | null): Promise<void> {
+export async function sendTestEmail(to: string, clinicName: string, clinicApiKey?: string | null, fromEmail?: string | null): Promise<void> {
   const client = getClient(clinicApiKey);
   if (!client) throw new Error("メール送信APIキーが設定されていません。設定画面でResend APIキーを登録してください。");
   try {
     await client.emails.send({
-      from: FROM, to: [to],
+      from: fromEmail || FROM, to: [to],
       subject: `テストメール: ${clinicName}`,
       html: `
         <p>${clinicName} の管理者様</p>
