@@ -11,7 +11,6 @@ import LoginPage from "@/pages/login";
 import SetupPage from "@/pages/setup";
 import BookingPage from "@/pages/booking";
 import MyAppointmentsPage from "@/pages/my-appointments";
-import ClinicSignupPage from "@/pages/clinic-signup";
 import SuperAdminPage from "@/pages/super-admin";
 import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
@@ -70,10 +69,12 @@ function Router() {
     <>
       <ScrollToTop />
       <Switch>
-        <Route path="/">{() => <Redirect to="/signup" />}</Route>
+        <Route path="/">{() => <Redirect to="/login" />}</Route>
         <Route path="/login" component={LoginPage} />
         <Route path="/setup" component={SetupPage} />
-        <Route path="/signup" component={ClinicSignupPage} />
+        {/* セルフ登録は廃止。医院の追加はスーパー管理者が手動で行う。
+            既存リンク/ブックマーク対策として /signup はログインへ誘導する。 */}
+        <Route path="/signup">{() => <Redirect to="/login" />}</Route>
         <Route path="/super-admin" component={SuperAdminPage} />
         <Route path="/booking">{() => <BookingPage />}</Route>
         <Route path="/book/:slug">{() => <BookingPageWithSlug />}</Route>
