@@ -297,22 +297,22 @@ export default function SuperAdminPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 shrink-0 bg-blue-600 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-gray-900">Arche Console</h1>
-              <p className="text-xs text-gray-500">運営ダッシュボード</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight truncate">Arche Console</h1>
+              <p className="text-xs text-gray-500 truncate">運営ダッシュボード</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries()} data-testid="button-refresh">
               <RefreshCw className="w-4 h-4" />
             </Button>
             <Button variant="outline" size="sm" asChild data-testid="button-add-clinic">
-              <Link href="/signup"><Plus className="w-4 h-4 mr-1" />新規医院</Link>
+              <Link href="/signup"><Plus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">新規医院</span></Link>
             </Button>
             <Button
               variant="ghost"
@@ -322,46 +322,46 @@ export default function SuperAdminPage() {
               data-testid="button-logout"
             >
               {logoutMutation.isPending
-                ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                : <LogOut className="w-4 h-4 mr-1" />}
-              ログアウト
+                ? <Loader2 className="w-4 h-4 sm:mr-1 animate-spin" />
+                : <LogOut className="w-4 h-4 sm:mr-1" />}
+              <span className="hidden sm:inline">ログアウト</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">総医院数</p><p className="text-3xl font-bold" data-testid="stat-total-clinics">{clinics?.length ?? 0}</p></div>
-                <Building2 className="w-8 h-8 text-blue-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">総医院数</p><p className="text-2xl sm:text-3xl font-bold" data-testid="stat-total-clinics">{clinics?.length ?? 0}</p></div>
+                <Building2 className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-blue-400" />
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">稼働中</p><p className="text-3xl font-bold text-green-600" data-testid="stat-active-clinics">{activeCount}</p></div>
-                <Users className="w-8 h-8 text-green-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">稼働中</p><p className="text-2xl sm:text-3xl font-bold text-green-600" data-testid="stat-active-clinics">{activeCount}</p></div>
+                <Users className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-green-400" />
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">プラン数</p><p className="text-3xl font-bold text-purple-600">{planDefs.length}</p></div>
-                <CreditCard className="w-8 h-8 text-purple-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">プラン数</p><p className="text-2xl sm:text-3xl font-bold text-purple-600">{planDefs.length}</p></div>
+                <CreditCard className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-purple-400" />
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">総予約数</p><p className="text-3xl font-bold" data-testid="stat-total-appointments">{totalAppts}</p></div>
-                <Calendar className="w-8 h-8 text-orange-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">総予約数</p><p className="text-2xl sm:text-3xl font-bold" data-testid="stat-total-appointments">{totalAppts}</p></div>
+                <Calendar className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-orange-400" />
               </div>
             </CardContent>
           </Card>
@@ -369,10 +369,10 @@ export default function SuperAdminPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="clinics">
-          <TabsList className="mb-4">
-            <TabsTrigger value="clinics" data-testid="tab-clinics"><Building2 className="w-4 h-4 mr-1.5" />医院一覧</TabsTrigger>
-            <TabsTrigger value="plans" data-testid="tab-plans"><CreditCard className="w-4 h-4 mr-1.5" />プラン管理</TabsTrigger>
-            <TabsTrigger value="addons" data-testid="tab-addons"><Puzzle className="w-4 h-4 mr-1.5" />オプション管理</TabsTrigger>
+          <TabsList className="mb-4 grid grid-cols-3 w-full sm:inline-flex sm:w-auto">
+            <TabsTrigger value="clinics" data-testid="tab-clinics"><Building2 className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />医院<span className="hidden sm:inline">一覧</span></TabsTrigger>
+            <TabsTrigger value="plans" data-testid="tab-plans"><CreditCard className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />プラン<span className="hidden sm:inline">管理</span></TabsTrigger>
+            <TabsTrigger value="addons" data-testid="tab-addons"><Puzzle className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />オプション<span className="hidden sm:inline">管理</span></TabsTrigger>
           </TabsList>
 
           {/* ── 医院一覧 ── */}
@@ -507,11 +507,11 @@ export default function SuperAdminPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="bg-white"
+                                className="bg-white shrink-0"
                                 onClick={() => setAddonDialog({ clinicId: clinic.id, clinicName: clinic.name })}
                                 data-testid={`button-addons-${clinic.id}`}
                               >
-                                <PackagePlus className="w-4 h-4 mr-1" />オプション
+                                <PackagePlus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">オプション</span>
                               </Button>
 
                               <DropdownMenu>
@@ -830,7 +830,7 @@ export default function SuperAdminPage() {
           </DialogHeader>
           {planDialog && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="mb-1 block text-xs">プラン名 <span className="text-red-500">*</span></Label>
                   <Input value={planDialog.name ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, name: e.target.value }))} placeholder="スタンダード" data-testid="input-plan-name" />
@@ -840,7 +840,7 @@ export default function SuperAdminPage() {
                   <Input value={planDialog.key ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, key: e.target.value }))} placeholder="standard" data-testid="input-plan-key" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <Label className="mb-1 block text-xs">月額（円）</Label>
                   <Input type="number" value={planDialog.price ?? 0} onChange={e => setPlanDialog(p => ({ ...p!, price: Number(e.target.value) }))} data-testid="input-plan-price" />
@@ -854,12 +854,12 @@ export default function SuperAdminPage() {
                   <Input type="number" value={planDialog.maxStaff ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, maxStaff: e.target.value ? Number(e.target.value) : null }))} placeholder="空=無制限" data-testid="input-plan-max-staff" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="mb-1 block text-xs">表示順序</Label>
                   <Input type="number" value={planDialog.sortOrder ?? 0} onChange={e => setPlanDialog(p => ({ ...p!, sortOrder: Number(e.target.value) }))} data-testid="input-plan-sort-order" />
                 </div>
-                <div className="flex items-center gap-2 mt-5">
+                <div className="flex items-center gap-2 sm:mt-5">
                   <Switch checked={planDialog.isActive ?? true} onCheckedChange={v => setPlanDialog(p => ({ ...p!, isActive: v }))} data-testid="switch-plan-active" />
                   <Label className="text-xs">有効</Label>
                 </div>
@@ -887,7 +887,7 @@ export default function SuperAdminPage() {
           </DialogHeader>
           {addonDefDialog && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="mb-1 block text-xs">オプション名 <span className="text-red-500">*</span></Label>
                   <Input value={addonDefDialog.name ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, name: e.target.value }))} placeholder="SMS通知パック" data-testid="input-addon-name" />
@@ -897,7 +897,7 @@ export default function SuperAdminPage() {
                   <Input value={addonDefDialog.key ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, key: e.target.value }))} placeholder="sms_pack" data-testid="input-addon-key" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="mb-1 block text-xs">月額（円）</Label>
                   <Input type="number" value={addonDefDialog.price ?? 0} onChange={e => setAddonDefDialog(p => ({ ...p!, price: Number(e.target.value) }))} data-testid="input-addon-price" />
