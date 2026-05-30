@@ -229,12 +229,26 @@ export function Dashboard() {
             className="w-7 h-7 rounded-lg border flex items-center justify-center hover:bg-accent transition-colors shrink-0">
             <ChevronLeft className="w-4 h-4 text-muted-foreground" />
           </button>
-          <div className="flex-1 text-center">
-            <p className="text-sm font-semibold text-foreground">
-              {isTodaySelected && <span className="text-primary mr-1.5 text-xs font-bold">今日</span>}
-              {format(currentDate, "yyyy年M月d日（E）", { locale: ja })}
-            </p>
-            <p className="text-xs text-muted-foreground">予約状況</p>
+          <div className="flex-1 text-center relative">
+            <label className="block cursor-pointer hover:bg-accent rounded-lg py-0.5 transition-colors" title="日付を選択">
+              <p className="text-sm font-semibold text-foreground inline-flex items-center gap-1">
+                {isTodaySelected && <span className="text-primary text-xs font-bold">今日</span>}
+                {format(currentDate, "yyyy年M月d日（E）", { locale: ja })}
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+              </p>
+              <p className="text-xs text-muted-foreground">予約状況（タップで日付選択）</p>
+              <input
+                type="date"
+                value={dateStr}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  setCurrentDate(parse(e.target.value, "yyyy-MM-dd", new Date()));
+                  setActiveFilter("all");
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                data-testid="input-dashboard-date"
+              />
+            </label>
           </div>
           <button
             onClick={() => { setCurrentDate(d => addDays(d, 1)); setActiveFilter("all"); }}

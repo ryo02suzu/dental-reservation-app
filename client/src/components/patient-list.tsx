@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Phone, Mail, Trash2, Edit2, AlertTriangle, CalendarCheck, ArrowUpDown } from "lucide-react";
+import { Search, Plus, Phone, Mail, Trash2, Edit2, AlertTriangle, CalendarCheck, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
@@ -49,12 +49,15 @@ const defaultForm = {
 
 type SortType = "number" | "kana" | "created";
 
+const PAGE_SIZE = 50;
+
 export function PatientList() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortType>("number");
+  const [page, setPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [selectedRecallPatient, setSelectedRecallPatient] = useState<Patient | null>(null);
@@ -92,6 +95,18 @@ export function PatientList() {
       return (a.createdAt || "").localeCompare(b.createdAt || "");
     });
   }, [patients, sortBy]);
+
+  // 検索・並び替えが変わったら1ページ目に戻す
+  useEffect(() => { setPage(1); }, [debouncedSearch, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  );
+  const rangeStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filtered.length);
 
   const saveMutation = useMutation({
     mutationFn: (data: typeof form) => {
@@ -217,7 +232,7 @@ export function PatientList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(p => {
+              {paged.map(p => {
                 const age = calcAge(p.dateOfBirth);
                 const risk = isHighRisk(p);
                 return (
@@ -284,6 +299,42 @@ export function PatientList() {
           </Table>
         )}
       </div>
+
+      {/* ページネーション */}
+      {!isLoading && filtered.length > 0 && (
+        <div className="px-4 md:px-6 py-3 border-t border-border flex items-center justify-between gap-3 bg-background shrink-0">
+          <p className="text-sm text-muted-foreground">
+            {rangeStart}–{rangeEnd}件 / 全{filtered.length}件
+          </p>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                data-testid="button-prev-page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">前へ</span>
+              </Button>
+              <span className="text-sm tabular-nums" data-testid="text-page-indicator">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                data-testid="button-next-page"
+              >
+                <span className="hidden sm:inline mr-1">次へ</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={v => !v && setIsDialogOpen(false)}>
