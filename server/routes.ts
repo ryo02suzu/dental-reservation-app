@@ -484,6 +484,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/clinics/register", async (req, res) => {
     try {
+      // セルフ登録は廃止。医院の追加はスーパー管理者が手動で行う。
+      // フロントを隠すだけでなくAPIも塞ぐ（直接POSTでの登録を防ぐ）。
+      return res.status(403).json({ message: "新規医院の登録は受け付けていません。導入をご希望の場合はお問い合わせください。" });
+
       const { name, slug, phone, address, email, adminUsername, adminPassword, planType, addonKeys } = req.body;
       if (!name || !slug || !adminUsername || !adminPassword) {
         return res.status(400).json({ message: "医院名、スラッグ、管理者ユーザー名、パスワードは必須です" });
