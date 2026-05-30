@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -432,16 +431,30 @@ export default function SuperAdminPage() {
                               <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{clinic.appointmentCount}件</span>
                             </div>
 
-                            {/* 予約URL */}
+                            {/* 予約画面URL */}
                             {bookingUrl && (
-                              <div className="flex items-center gap-1.5 mt-2">
-                                <p className="text-xs text-gray-400 font-mono truncate flex-1" data-testid={`text-booking-url-${clinic.id}`}>/book/{clinic.slug}</p>
-                                <button onClick={() => copyUrl(clinic.slug!)} className="text-gray-400 hover:text-gray-600 transition-colors" data-testid={`button-copy-url-${clinic.id}`}>
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                                <a href={bookingUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 transition-colors" data-testid={`button-open-booking-${clinic.id}`}>
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
+                              <div className="mt-2.5">
+                                <p className="text-[11px] text-gray-400 mb-1 flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />予約画面URL
+                                </p>
+                                <div className="flex items-center gap-1.5 bg-gray-50 border rounded-lg px-2.5 py-1.5">
+                                  <a
+                                    href={bookingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:underline font-mono truncate flex-1"
+                                    data-testid={`text-booking-url-${clinic.id}`}
+                                    title={bookingUrl}
+                                  >
+                                    {bookingUrl}
+                                  </a>
+                                  <button onClick={() => copyUrl(clinic.slug!)} className="text-gray-400 hover:text-gray-700 transition-colors shrink-0" title="URLをコピー" data-testid={`button-copy-url-${clinic.id}`}>
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                  <a href={bookingUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 transition-colors shrink-0" title="予約画面を開く" data-testid={`button-open-booking-${clinic.id}`}>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                </div>
                               </div>
                             )}
 
@@ -602,10 +615,6 @@ export default function SuperAdminPage() {
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700" onClick={() => { if (confirm(`オプション「${addon.name}」を削除しますか？`)) deleteAddonDefMutation.mutate(addon.id); }} data-testid={`button-delete-addon-${addon.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>
                         </div>
-                        <div className="mt-3 pt-3 border-t">
-                          <span className="text-lg font-bold text-gray-900">¥{addon.price.toLocaleString()}</span>
-                          <span className="text-xs font-normal text-gray-400 ml-0.5">/ 月</span>
-                        </div>
                       </div>
                     ))}
                   </div>
@@ -735,7 +744,7 @@ export default function SuperAdminPage() {
                   <div key={addon.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`addon-row-${addon.key}`}>
                     <div>
                       <p className="font-medium text-sm">{addon.name}</p>
-                      <p className="text-xs text-gray-500">¥{addon.price.toLocaleString()}/月 {addon.description ? `・${addon.description}` : ""}</p>
+                      {addon.description && <p className="text-xs text-gray-500">{addon.description}</p>}
                     </div>
                     <Switch
                       checked={isEnabled}
@@ -765,16 +774,6 @@ export default function SuperAdminPage() {
               <div>
                 <Label className="mb-1 block text-xs">オプション名 <span className="text-red-500">*</span></Label>
                 <Input value={addonDefDialog.name ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, name: e.target.value }))} placeholder="SMS通知パック" data-testid="input-addon-name" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">月額（円）</Label>
-                  <Input type="number" value={addonDefDialog.price ?? 0} onChange={e => setAddonDefDialog(p => ({ ...p!, price: Number(e.target.value) }))} data-testid="input-addon-price" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">表示順序</Label>
-                  <Input type="number" value={addonDefDialog.sortOrder ?? 0} onChange={e => setAddonDefDialog(p => ({ ...p!, sortOrder: Number(e.target.value) }))} data-testid="input-addon-sort-order" />
-                </div>
               </div>
               <div>
                 <Label className="mb-1 block text-xs">説明</Label>
