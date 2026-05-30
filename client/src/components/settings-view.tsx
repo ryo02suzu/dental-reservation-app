@@ -137,7 +137,7 @@ export function SettingsView() {
       </div>
       <div className="flex-1 overflow-auto p-4 md:p-6">
         <Tabs defaultValue="clinic">
-          <TabsList className="mb-6 flex-wrap h-auto">
+          <TabsList className="mb-6 max-w-full justify-start overflow-x-auto md:flex-wrap md:h-auto [&>button]:shrink-0">
             <TabsTrigger value="clinic">クリニック情報</TabsTrigger>
             <TabsTrigger value="staff">スタッフ</TabsTrigger>
             <TabsTrigger value="services">診療メニュー</TabsTrigger>
