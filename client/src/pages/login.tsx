@@ -33,7 +33,14 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    if (user) setLocation("/admin");
+    if (!user) return;
+    // 運営(スーパー管理者)はArche Console(全医院一覧)へ、
+    // 医院管理者は自院の管理画面へ振り分ける。
+    if ((user as any).isSuperAdmin) {
+      setLocation("/super-admin");
+    } else {
+      setLocation("/admin");
+    }
   }, [user, setLocation]);
 
   useEffect(() => {
