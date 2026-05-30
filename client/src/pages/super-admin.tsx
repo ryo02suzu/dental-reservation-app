@@ -17,6 +17,7 @@ import {
   Building2, ExternalLink, Copy, Power, PowerOff, Plus, RefreshCw, LogOut,
   Users, Calendar, KeyRound, Mail, Pencil, Trash2, PackagePlus, CreditCard,
   Puzzle, CheckCircle2, XCircle, LayoutDashboard, MoreHorizontal, ChevronRight,
+  Search, Info,
 } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import {
@@ -109,6 +110,9 @@ export default function SuperAdminPage() {
   const [planDialog, setPlanDialog] = useState<Partial<PlanDefinition> | null>(null);
   const [addonDefDialog, setAddonDefDialog] = useState<Partial<AddonDefinition> | null>(null);
   const [featuresText, setFeaturesText] = useState("");
+
+  // 医院一覧の名前検索
+  const [clinicSearch, setClinicSearch] = useState("");
 
   // ─── Queries ────────────────────────────────────────────────────────────────
   const { data: clinics, isLoading } = useQuery<ClinicSummary[]>({
@@ -234,10 +238,13 @@ export default function SuperAdminPage() {
   // ─── Addon definition mutations ──────────────────────────────────────────────
   const saveAddonDefMutation = useMutation({
     mutationFn: async (data: Partial<AddonDefinition>) => {
-      if (data.id) {
-        return (await apiRequest("PATCH", `/api/super-admin/addons/${data.id}`, data)).json();
+      // keyが空なら名前から自動生成（運営がkeyを意識しなくて済むように）
+      const key = (data.key ?? "").trim() || genAddonKey(data.name);
+      const payload = { ...data, key };
+      if (payload.id) {
+        return (await apiRequest("PATCH", `/api/super-admin/addons/${payload.id}`, payload)).json();
       }
-      return (await apiRequest("POST", "/api/super-admin/addons", data)).json();
+      return (await apiRequest("POST", "/api/super-admin/addons", payload)).json();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/super-admin/addons"] });
@@ -292,6 +299,17 @@ export default function SuperAdminPage() {
 
   const activeCount = clinics?.filter(c => c.isActive).length ?? 0;
   const totalAppts = clinics?.reduce((s, c) => s + c.appointmentCount, 0) ?? 0;
+
+  // 医院名・住所・予約URL(slug)で絞り込み
+  const search = clinicSearch.trim().toLowerCase();
+  const filteredClinics = (clinics ?? []).filter((c) => {
+    if (!search) return true;
+    return (
+      c.name.toLowerCase().includes(search) ||
+      (c.address ?? "").toLowerCase().includes(search) ||
+      (c.slug ?? "").toLowerCase().includes(search)
+    );
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -378,7 +396,30 @@ export default function SuperAdminPage() {
           {/* ── 医院一覧 ── */}
           <TabsContent value="clinics">
             <Card>
-              <CardHeader><CardTitle>医院一覧</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <CardTitle className="shrink-0">
+                    医院一覧
+                    {!!clinics?.length && (
+                      <span className="ml-2 text-sm font-normal text-gray-400">
+                        {search ? `${filteredClinics.length} / ${clinics.length}件` : `${clinics.length}件`}
+                      </span>
+                    )}
+                  </CardTitle>
+                  {!!clinics?.length && (
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <Input
+                        placeholder="医院名で検索..."
+                        value={clinicSearch}
+                        onChange={(e) => setClinicSearch(e.target.value)}
+                        className="pl-8 h-9"
+                        data-testid="input-clinic-search"
+                      />
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent>
                 {isLoading ? (
                   <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
@@ -388,9 +429,15 @@ export default function SuperAdminPage() {
                     <p>医院が登録されていません</p>
                     <Button className="mt-4" asChild><Link href="/signup">最初の医院を登録する</Link></Button>
                   </div>
+                ) : !filteredClinics.length ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <Search className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                    <p>「{clinicSearch}」に一致する医院がありません</p>
+                    <Button variant="outline" className="mt-4" onClick={() => setClinicSearch("")}>検索をクリア</Button>
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {clinics.map((clinic) => {
+                    {filteredClinics.map((clinic) => {
                       const bookingUrl = clinic.slug ? `${window.location.origin}/book/${clinic.slug}` : null;
                       const currentPlan = clinic.planType ?? "free";
                       const displayPlan = pendingPlans[clinic.id] ?? currentPlan;
@@ -561,11 +608,17 @@ export default function SuperAdminPage() {
           {/* ── プラン管理 ── */}
           <TabsContent value="plans">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>プラン定義</CardTitle>
-                <Button size="sm" onClick={() => openPlanDialog()} data-testid="button-add-plan">
-                  <Plus className="w-4 h-4 mr-1" />プランを追加
-                </Button>
+              <CardHeader>
+                <div className="flex flex-row items-center justify-between gap-2">
+                  <CardTitle>料金プラン</CardTitle>
+                  <Button size="sm" onClick={() => openPlanDialog()} data-testid="button-add-plan">
+                    <Plus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">プランを追加</span>
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500 mt-1 flex items-start gap-1.5">
+                  <Info className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  各医院に割り当てる「契約コース」です。月額・予約数やスタッフの上限・使える機能をここで決め、医院一覧の右上で医院ごとに設定します。
+                </p>
               </CardHeader>
               <CardContent>
                 {plansLoading ? (
@@ -624,11 +677,17 @@ export default function SuperAdminPage() {
           {/* ── オプション管理 ── */}
           <TabsContent value="addons">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>オプション定義</CardTitle>
-                <Button size="sm" onClick={() => setAddonDefDialog(emptyAddon())} data-testid="button-add-addon">
-                  <Plus className="w-4 h-4 mr-1" />オプションを追加
-                </Button>
+              <CardHeader>
+                <div className="flex flex-row items-center justify-between gap-2">
+                  <CardTitle>オプション一覧</CardTitle>
+                  <Button size="sm" onClick={() => setAddonDefDialog(emptyAddon())} data-testid="button-add-addon">
+                    <Plus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">オプションを追加</span>
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500 mt-1 flex items-start gap-1.5">
+                  <Info className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  ここで作ったオプションを、各医院の「オプション設定」からON/OFFで提供できます。
+                </p>
               </CardHeader>
               <CardContent>
                 {addonsLoading ? (
@@ -640,42 +699,34 @@ export default function SuperAdminPage() {
                     <Button className="mt-3" size="sm" onClick={() => setAddonDefDialog(emptyAddon())}>最初のオプションを追加</Button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-gray-500">
-                          <th className="pb-2 pr-3 font-medium">オプション名</th>
-                          <th className="pb-2 pr-3 font-medium">key</th>
-                          <th className="pb-2 pr-3 font-medium">月額</th>
-                          <th className="pb-2 pr-3 font-medium">説明</th>
-                          <th className="pb-2 pr-3 font-medium">順序</th>
-                          <th className="pb-2 pr-3 font-medium">状態</th>
-                          <th className="pb-2 font-medium"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {addonDefs.map((addon) => (
-                          <tr key={addon.id} className="border-b last:border-0 hover:bg-gray-50" data-testid={`row-addon-${addon.id}`}>
-                            <td className="py-2.5 pr-3 font-medium">{addon.name}</td>
-                            <td className="py-2.5 pr-3 font-mono text-xs text-gray-500">{addon.key}</td>
-                            <td className="py-2.5 pr-3">¥{addon.price.toLocaleString()}</td>
-                            <td className="py-2.5 pr-3 max-w-xs truncate text-gray-500">{addon.description ?? "—"}</td>
-                            <td className="py-2.5 pr-3">{addon.sortOrder ?? 0}</td>
-                            <td className="py-2.5 pr-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {addonDefs.map((addon) => (
+                      <div
+                        key={addon.id}
+                        className="border rounded-xl bg-white p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col"
+                        data-testid={`row-addon-${addon.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-bold text-gray-900 leading-tight">{addon.name}</h3>
                               {addon.isActive
-                                ? <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />有効</span>
-                                : <span className="flex items-center gap-1 text-gray-400"><XCircle className="w-3.5 h-3.5" />無効</span>}
-                            </td>
-                            <td className="py-2.5">
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => setAddonDefDialog(addon)} data-testid={`button-edit-addon-${addon.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => { if (confirm(`オプション「${addon.name}」を削除しますか？`)) deleteAddonDefMutation.mutate(addon.id); }} data-testid={`button-delete-addon-${addon.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                ? <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3" />提供中</span>
+                                : <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full"><XCircle className="w-3 h-3" />停止中</span>}
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1">{addon.description || "説明なし"}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setAddonDefDialog(addon)} data-testid={`button-edit-addon-${addon.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700" onClick={() => { if (confirm(`オプション「${addon.name}」を削除しますか？`)) deleteAddonDefMutation.mutate(addon.id); }} data-testid={`button-delete-addon-${addon.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t">
+                          <span className="text-lg font-bold text-gray-900">¥{addon.price.toLocaleString()}</span>
+                          <span className="text-xs font-normal text-gray-400 ml-0.5">/ 月</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -887,15 +938,9 @@ export default function SuperAdminPage() {
           </DialogHeader>
           {addonDefDialog && (
             <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">オプション名 <span className="text-red-500">*</span></Label>
-                  <Input value={addonDefDialog.name ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, name: e.target.value }))} placeholder="SMS通知パック" data-testid="input-addon-name" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">key（英数字・ハイフン） <span className="text-red-500">*</span></Label>
-                  <Input value={addonDefDialog.key ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, key: e.target.value }))} placeholder="sms_pack" data-testid="input-addon-key" />
-                </div>
+              <div>
+                <Label className="mb-1 block text-xs">オプション名 <span className="text-red-500">*</span></Label>
+                <Input value={addonDefDialog.name ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, name: e.target.value }))} placeholder="SMS通知パック" data-testid="input-addon-name" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -917,7 +962,7 @@ export default function SuperAdminPage() {
               </div>
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setAddonDefDialog(null)}>キャンセル</Button>
-                <Button onClick={() => saveAddonDefMutation.mutate(addonDefDialog)} disabled={saveAddonDefMutation.isPending || !addonDefDialog.key || !addonDefDialog.name} data-testid="button-save-addon">
+                <Button onClick={() => saveAddonDefMutation.mutate(addonDefDialog)} disabled={saveAddonDefMutation.isPending || !addonDefDialog.name} data-testid="button-save-addon">
                   {saveAddonDefMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "保存"}
                 </Button>
               </div>
