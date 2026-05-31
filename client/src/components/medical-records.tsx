@@ -8,9 +8,63 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, StickyNote, X, Phone, User, Hash, ChevronRight, Trash2, AlertTriangle } from "lucide-react";
+import { Search, Plus, StickyNote, X, Phone, User, Hash, ChevronRight, Trash2, AlertTriangle, FileText, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+
+interface ConsentForm {
+  id: string;
+  treatmentName: string;
+  amount: number;
+  signedDate: string;
+  createdAt?: string;
+}
+
+function ConsentFormsSection({ patientId }: { patientId: string }) {
+  const { data: forms = [] } = useQuery<ConsentForm[]>({ queryKey: ["/api/consent-forms", { patientId }], queryFn: async () => {
+    const res = await fetch(`/api/consent-forms?patientId=${patientId}`, { credentials: "include" });
+    if (!res.ok) return [];
+    return res.json();
+  }});
+  const { toast } = useToast();
+
+  async function openPdf(id: string) {
+    try {
+      const res = await apiRequest("GET", `/api/consent-forms/${id}/pdf`);
+      const { url } = await res.json();
+      if (url) window.open(url, "_blank");
+      else toast({ title: "PDFが見つかりません", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "PDFを開けませんでした", description: e.message, variant: "destructive" });
+    }
+  }
+
+  if (forms.length === 0) return null;
+
+  return (
+    <div className="px-5 py-4 border-t border-border">
+      <p className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+        <FileText className="h-3.5 w-3.5" />電子同意書 ({forms.length}件)
+      </p>
+      <div className="space-y-2">
+        {forms.map(f => (
+          <button
+            key={f.id}
+            onClick={() => openPdf(f.id)}
+            className="w-full text-left rounded-lg border border-border bg-card p-2.5 hover:bg-muted/50 transition flex items-center justify-between gap-2"
+            data-testid={`consent-form-${f.id}`}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{f.treatmentName}</p>
+              <p className="text-xs text-muted-foreground">{f.signedDate}・¥{(f.amount ?? 0).toLocaleString()}</p>
+            </div>
+            <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface Patient {
   id: string;
@@ -166,6 +220,7 @@ function PatientPanel({
 
       {/* メモ履歴 */}
       <div className="flex-1 overflow-y-auto">
+        <ConsentFormsSection patientId={patient.id} />
         <div className="px-5 pt-4 pb-2 flex items-center justify-between">
           <span className="text-sm font-semibold text-muted-foreground">受付メモ履歴 ({patientRecords.length}件)</span>
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onAddMemo(patient.id)} data-testid="button-add-memo-from-panel">
