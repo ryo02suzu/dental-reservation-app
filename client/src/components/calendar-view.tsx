@@ -447,18 +447,18 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
       {/* Toolbar */}
       <div className="flex flex-col px-3 md:px-6 py-2 border-b border-border bg-background shrink-0 gap-2">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => navigate(-1)} data-testid="button-prev">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => navigate(-1)} data-testid="button-prev">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h2 className="text-sm md:text-base font-semibold text-center min-w-0 truncate max-w-[140px] md:max-w-none md:min-w-[220px]" data-testid="calendar-title">{headerTitle}</h2>
-            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => navigate(1)} data-testid="button-next">
+            <h2 className="text-sm md:text-base font-semibold text-center min-w-0 flex-1 truncate md:flex-none md:min-w-[220px]" data-testid="calendar-title">{headerTitle}</h2>
+            <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => navigate(1)} data-testid="button-next">
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())} className="h-8 text-xs ml-0.5">今日</Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())} className="h-8 text-xs ml-0.5 shrink-0">今日</Button>
           </div>
           {/* カレンダーモード切替 */}
-          <div className="flex border border-border rounded-md overflow-hidden">
+          <div className="flex border border-border rounded-md overflow-hidden shrink-0">
             {([
               { mode: "view" as CalendarMode, icon: Eye, label: "閲覧" },
               { mode: "book" as CalendarMode, icon: Plus, label: "予約" },
