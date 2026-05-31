@@ -238,10 +238,10 @@ export function RecallView() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>患者名</TableHead>
-                    <TableHead>最終来院</TableHead>
+                    <TableHead className="hidden md:table-cell">最終来院</TableHead>
                     <TableHead>次回予定</TableHead>
                     <TableHead>通知状況</TableHead>
-                    <TableHead>メール</TableHead>
+                    <TableHead className="hidden sm:table-cell">メール</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -252,7 +252,7 @@ export function RecallView() {
                     return (
                       <TableRow key={p.id} data-testid={`recall-row-${p.id}`}>
                         <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                           {p.lastVisitDate ? format(parseISO(p.lastVisitDate), "yyyy/MM/dd") : "—"}
                         </TableCell>
                         <TableCell>
@@ -281,7 +281,7 @@ export function RecallView() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           {p.email ? (
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Mail className="h-3 w-3 text-green-500 shrink-0" />

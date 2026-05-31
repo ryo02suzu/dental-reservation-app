@@ -272,7 +272,7 @@ export function ShiftBoardView() {
         <div className="p-6 space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
       ) : (
         <div className="flex-1 overflow-auto print:overflow-visible">
-          <table className="border-collapse w-full">
+          <table className="border-collapse w-full min-w-[640px] print:min-w-0">
             <thead className="sticky top-0 z-20 bg-white print:relative">
               <tr>
                 <th className="sticky left-0 z-30 bg-white border-b-2 border-r px-3 py-2 text-left min-w-[150px] w-[150px]">

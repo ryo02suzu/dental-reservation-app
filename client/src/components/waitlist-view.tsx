@@ -93,9 +93,9 @@ export function WaitlistView() {
               <Table data-testid="waitlist-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>登録日</TableHead>
+                    <TableHead className="hidden md:table-cell">登録日</TableHead>
                     <TableHead>患者名</TableHead>
-                    <TableHead>連絡先</TableHead>
+                    <TableHead className="hidden sm:table-cell">連絡先</TableHead>
                     <TableHead>希望日</TableHead>
                     <TableHead>ステータス</TableHead>
                     <TableHead className="text-right">操作</TableHead>
@@ -104,11 +104,11 @@ export function WaitlistView() {
                 <TableBody>
                   {waitlist.map((entry) => (
                     <TableRow key={entry.id}>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                         {format(new Date(entry.createdAt), "yyyy/MM/dd HH:mm")}
                       </TableCell>
                       <TableCell className="font-medium">{entry.patientName}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <div className="text-sm">
                           <div>{entry.patientPhone}</div>
                           {entry.patientEmail && <div className="text-xs text-muted-foreground">{entry.patientEmail}</div>}

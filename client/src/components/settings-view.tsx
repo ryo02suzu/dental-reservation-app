@@ -1246,6 +1246,9 @@ function ServicesTab() {
       <Dialog open={isTemplateDialogOpen} onOpenChange={v => !v && setIsTemplateDialogOpen(false)}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader><DialogTitle>メニュー名候補の管理</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            ここで追加した候補は、診療メニューを「追加」する際の入力補助として表示されます。実際に予約で使うには、候補を選んでメニューとして登録してください。
+          </p>
           <div className="space-y-5">
             {/* Add new custom */}
             <div className="p-3 border border-border rounded-md bg-muted/20 space-y-3">
