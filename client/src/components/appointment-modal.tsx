@@ -445,30 +445,33 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
 
           {/* Date / Time */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
+            <div className="min-w-0">
               <Label className="mb-1.5 block text-sm">日付</Label>
               <Input
                 type="date"
                 value={form.date}
                 onChange={e => setForm(prev => ({ ...prev, date: e.target.value }))}
+                className="appearance-none block"
                 data-testid="input-date"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label className="mb-1.5 block text-sm">開始時間</Label>
               <Input
                 type="time"
                 value={form.startTime}
                 onChange={e => setForm(prev => ({ ...prev, startTime: e.target.value }))}
+                className="appearance-none block"
                 data-testid="input-start-time"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label className="mb-1.5 block text-sm">終了時間</Label>
               <Input
                 type="time"
                 value={form.endTime}
                 onChange={e => setForm(prev => ({ ...prev, endTime: e.target.value }))}
+                className="appearance-none block"
                 data-testid="input-end-time"
               />
             </div>
