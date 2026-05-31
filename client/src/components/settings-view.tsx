@@ -1567,7 +1567,7 @@ function HolidaysTab() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Japan public holiday import */}
-        <div className="flex items-center gap-2 p-3 border border-border rounded-md bg-muted/20">
+        <div className="flex flex-wrap items-center gap-2 p-3 border border-border rounded-md bg-muted/20">
           <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm flex-1">国民の祝日を自動取得</span>
           <Select value={String(importYear)} onValueChange={v => setImportYear(parseInt(v))}>
@@ -1826,7 +1826,7 @@ function GeneralTab() {
       <CardContent>
         {isLoading ? <Skeleton className="h-64" /> : (
           <div className="space-y-5 max-w-lg">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
               <div>
                 <Label className="mb-1.5 block">同時予約受付数</Label>
                 <NumericSelectOrCustom
@@ -1928,7 +1928,7 @@ function GeneralTab() {
               <span className="font-bold text-base">{planInfo.limits.label}</span>
               <span className="text-sm text-muted-foreground">{planInfo.limits.price}</span>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div className="border rounded-lg p-3">
                 <div className="text-muted-foreground mb-1">スタッフ数</div>
                 <div className="font-semibold">{planInfo.usage.staffCount} / {planInfo.limits.maxStaff >= 999 ? "無制限" : `${planInfo.limits.maxStaff}名`}</div>
@@ -2035,7 +2035,7 @@ function ReminderTab() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-1.5 block">リマインド送信タイミング</Label>
                   <Select value={String(form.reminderHoursBefore)} onValueChange={v => setForm(p => ({ ...p, reminderHoursBefore: parseInt(v) }))}>
