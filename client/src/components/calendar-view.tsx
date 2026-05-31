@@ -758,7 +758,10 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
       </div>
 
       <div className="overflow-auto flex-1" ref={scrollRef}>
-        <div className="relative" style={{ minWidth: `${Math.max(64 + totalCols * 150, 280)}px` }}>
+        <div
+          className="relative"
+          style={totalCols <= 2 ? { width: "100%" } : { minWidth: `${64 + totalCols * 140}px` }}
+        >
           {/* Header */}
           <div className="sticky top-0 z-30 bg-background border-b border-border grid" style={{ gridTemplateColumns: `64px repeat(${totalCols}, 1fr)` }}>
             <div className="p-2 text-xs font-medium text-muted-foreground text-center bg-muted/40 border-r border-border">時間</div>
