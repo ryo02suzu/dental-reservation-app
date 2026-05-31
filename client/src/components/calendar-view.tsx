@@ -814,13 +814,17 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                 <div className="flex-1 relative">
                   {timeSlots.map((slot, i) => {
                     const st = getSlotStatus(slot, dayHours);
+                    const isClosed = st === "closed";
+                    const isLunch = st === "lunch";
                     return (
                       <div
                         key={slot}
-                        className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${st === "lunch" ? "bg-muted/30" : st === "closed" ? "bg-muted/40" : ""}`}
+                        className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isLunch ? "bg-muted/30" : isClosed ? "bg-muted/40 pointer-events-none" : calendarMode !== "view" ? "cursor-pointer hover:bg-primary/5" : ""}`}
                         style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
+                        onClick={() => !isClosed && !isLunch && calendarMode !== "view" && onSlotClick(dateStr, slot)}
+                        data-testid={!isClosed && !isLunch ? `slot-nostaff-${slot}` : undefined}
                       >
-                        {st === "lunch" && (
+                        {isLunch && (
                           <div className="h-full flex items-center justify-center pointer-events-none">
                             <span className="text-[10px] text-muted-foreground/40">昼休み</span>
                           </div>
