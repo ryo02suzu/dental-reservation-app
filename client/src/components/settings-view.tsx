@@ -1411,8 +1411,6 @@ function HoursTab() {
     ));
   };
 
-  const COL = "40px 48px 1fr 1fr 32px";
-
   return (
     <Card>
       <CardHeader>
@@ -1420,53 +1418,59 @@ function HoursTab() {
         <CardDescription>午前・午後それぞれのトグルで診療時間帯を設定できます。平日の複製はコピーアイコンから。</CardDescription>
       </CardHeader>
       <CardContent className="p-0 pb-5">
-        {isLoading ? <Skeleton className="mx-5 h-64" /> : (
-          <div className="mx-5 rounded-xl border border-border overflow-hidden">
-            {/* ヘッダー行 */}
-            <div
-              className="grid items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground"
-              style={{ gridTemplateColumns: COL }}
-            >
-              <span>曜日</span>
-              <span>診療</span>
-              <span className="flex items-center gap-1.5"><span className="w-8 shrink-0" />午前</span>
-              <span className="flex items-center gap-1.5"><span className="w-8 shrink-0" />午後</span>
-              <span />
-            </div>
-
-            {/* データ行 */}
-            {localHours.map((h, idx) => (
+        {isLoading ? <Skeleton className="mx-3 md:mx-5 h-64" /> : (
+          <div className="mx-3 md:mx-5 rounded-xl border border-border overflow-hidden divide-y divide-border/60">
+            {localHours.map((h) => (
               <div
                 key={h.dayOfWeek}
-                className={`grid items-center gap-3 px-4 py-3 transition-colors border-b last:border-0 border-border/60
-                  ${h.isClosed ? "bg-muted/20" : "bg-card hover:bg-muted/10"}`}
-                style={{ gridTemplateColumns: COL }}
+                className={`px-3 md:px-4 py-3 transition-colors ${h.isClosed ? "bg-muted/20" : "bg-card"}`}
               >
-                {/* 曜日 */}
-                <span className={`text-sm font-bold tabular-nums
-                  ${h.dayOfWeek === 0 ? "text-red-500" : h.dayOfWeek === 6 ? "text-blue-500" : "text-foreground"}`}>
-                  {DAY_NAMES[h.dayOfWeek]}
-                </span>
+                {/* 上段: 曜日 + 診療スイッチ + コピー */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`text-sm font-bold whitespace-nowrap
+                      ${h.dayOfWeek === 0 ? "text-red-500" : h.dayOfWeek === 6 ? "text-blue-500" : "text-foreground"}`}>
+                      {DAY_NAMES[h.dayOfWeek]}
+                    </span>
+                    <Switch
+                      checked={!h.isClosed}
+                      onCheckedChange={v => update(h.dayOfWeek, "isClosed", !v)}
+                      data-testid={`switch-day-${h.dayOfWeek}`}
+                    />
+                    {h.isClosed && <span className="text-xs text-muted-foreground/60 italic">休診日</span>}
+                  </div>
 
-                {/* 診療スイッチ */}
-                <Switch
-                  checked={!h.isClosed}
-                  onCheckedChange={v => update(h.dayOfWeek, "isClosed", !v)}
-                  data-testid={`switch-day-${h.dayOfWeek}`}
-                />
+                  {/* 平日一括複製 */}
+                  {h.dayOfWeek >= 1 && h.dayOfWeek <= 5 && (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => applyToWeekdays(h.dayOfWeek)}
+                            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            data-testid={`button-apply-weekdays-${h.dayOfWeek}`}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="text-xs">平日全てに適用</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
 
-                {/* 午前・午後 */}
-                {h.isClosed ? (
-                  <span className="text-xs text-muted-foreground/50 col-span-2 italic">休診日</span>
-                ) : (
-                  <>
+                {/* 下段: 午前・午後（営業日のみ） */}
+                {!h.isClosed && (
+                  <div className="mt-3 space-y-2.5">
                     {/* 午前 */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Switch
                         checked={!!h.openTime}
                         onCheckedChange={v => toggleMorning(h.dayOfWeek, v)}
                         data-testid={`switch-morning-${h.dayOfWeek}`}
                       />
+                      <span className="text-xs font-medium text-muted-foreground w-8 shrink-0">午前</span>
                       {h.openTime ? (
                         <div className="flex items-center gap-1">
                           <TimeSelect value={h.openTime} onChange={v => update(h.dayOfWeek, "openTime", v)} testId={`select-open-${h.dayOfWeek}`} />
@@ -1479,12 +1483,13 @@ function HoursTab() {
                     </div>
 
                     {/* 午後 */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Switch
                         checked={!!h.afternoonOpenTime}
                         onCheckedChange={v => toggleAfternoon(h.dayOfWeek, v)}
                         data-testid={`switch-afternoon-${h.dayOfWeek}`}
                       />
+                      <span className="text-xs font-medium text-muted-foreground w-8 shrink-0">午後</span>
                       {h.afternoonOpenTime ? (
                         <div className="flex items-center gap-1">
                           <TimeSelect value={h.afternoonOpenTime} onChange={v => update(h.dayOfWeek, "afternoonOpenTime", v)} testId={`select-af-open-${h.dayOfWeek}`} />
@@ -1495,32 +1500,13 @@ function HoursTab() {
                         <span className="text-xs text-muted-foreground">なし</span>
                       )}
                     </div>
-                  </>
+                  </div>
                 )}
-
-                {/* 平日一括複製 */}
-                {h.dayOfWeek >= 1 && h.dayOfWeek <= 5 ? (
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => applyToWeekdays(h.dayOfWeek)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          data-testid={`button-apply-weekdays-${h.dayOfWeek}`}
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="text-xs">平日全てに適用</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : <span />}
               </div>
             ))}
           </div>
         )}
-        <div className="px-5 pt-4">
+        <div className="px-3 md:px-5 pt-4">
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-hours">
             {saveMutation.isPending ? "保存中..." : "保存"}
           </Button>
