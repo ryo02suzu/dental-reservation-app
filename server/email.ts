@@ -285,6 +285,27 @@ export async function sendWaitlistNotificationEmail(
   }
 }
 
+// 汎用メール（フォローアップ/リコール等のプレーンテキストメッセージ用）
+export async function sendGenericEmail(
+  to: string,
+  subject: string,
+  body: string,
+  clinicApiKey?: string | null,
+  fromEmail?: string | null,
+): Promise<void> {
+  const client = getClient(clinicApiKey);
+  if (!client) return;
+  const html = `<div style="white-space:pre-wrap; font-family:sans-serif; line-height:1.7;">${
+    body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  }</div>`;
+  try {
+    await client.emails.send({ from: fromEmail || FROM, to: [to], subject, html });
+  } catch (error) {
+    console.error("Error sending generic email:", error);
+    throw error;
+  }
+}
+
 export async function sendTestEmail(to: string, clinicName: string, clinicApiKey?: string | null, fromEmail?: string | null): Promise<void> {
   const client = getClient(clinicApiKey);
   if (!client) throw new Error("メール送信APIキーが設定されていません。設定画面でResend APIキーを登録してください。");

@@ -16,6 +16,9 @@ import {
 } from "./email";
 import { sendLineMessage, buildBookingConfirmationMessage } from "./line";
 import { runDailyReminders } from "./scheduler";
+import { scheduleFollowUpsForAppointment } from "./followup";
+import { generateConsentPdf } from "./consent-pdf";
+import { uploadConsentPdf, refreshConsentPdfUrl, isStorageEnabled } from "./storage-bucket";
 import { getPlanLimitsFromDB, type PlanLimits } from "./plans";
 import { validatePassword, sanitizeString, getClientIp, logSecurityEvent, INPUT_LIMITS } from "./security";
 import * as crypto from "crypto";
@@ -1606,6 +1609,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const appt = await storage.getAppointmentById(req.params.id);
       if (!appt || appt.clinicId !== clinicId) return res.status(404).json({ message: "予約が見つかりません" });
       const updated = await storage.updateAppointment(req.params.id, { status });
+      // 「会計待ち等 → 完了」への遷移でフォローアップを予約
+      if (status === "completed" && appt.status !== "completed") {
+        await scheduleFollowUpsForAppointment(req.params.id);
+      }
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2337,6 +2344,247 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 機能1: LINE自動フォローアップ＆リコール — テンプレート管理（管理者）
+  // ═══════════════════════════════════════════════════════════════════════════
+  app.get("/api/follow-up-templates", requireAuth, async (req: any, res) => {
+    try {
+      res.json(await storage.getFollowUpTemplates(getAdminClinicId(req)));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/follow-up-templates", requireAuth, async (req: any, res) => {
+    try {
+      const tpl = await storage.createFollowUpTemplate({ ...req.body, clinicId: getAdminClinicId(req) });
+      res.status(201).json(tpl);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/follow-up-templates/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getFollowUpTemplates(getAdminClinicId(req));
+      if (!all.some(t => t.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      const body = { ...req.body }; delete body.id; delete body.clinicId; delete body.createdAt; delete body.updatedAt;
+      res.json(await storage.updateFollowUpTemplate(req.params.id, body));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/follow-up-templates/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getFollowUpTemplates(getAdminClinicId(req));
+      if (!all.some(t => t.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      await storage.deleteFollowUpTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 送信予約キューの閲覧（管理者がフォローアップ状況を確認）
+  app.get("/api/scheduled-messages", requireAuth, async (req: any, res) => {
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      res.json(await storage.getScheduledMessages(getAdminClinicId(req), status));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 機能2: スマート口コミ誘導＆不満吸収
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 管理: 設定の取得/保存
+  app.get("/api/review-settings", requireAuth, async (req: any, res) => {
+    try {
+      const clinicId = getAdminClinicId(req);
+      const s = await storage.getReviewSettings(clinicId) ?? await storage.upsertReviewSettings(clinicId, {});
+      res.json(s);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/review-settings", requireAuth, async (req: any, res) => {
+    try {
+      const body = { ...req.body }; delete body.id; delete body.clinicId; delete body.createdAt; delete body.updatedAt;
+      if (body.threshold != null) body.threshold = Math.min(5, Math.max(1, Number(body.threshold)));
+      res.json(await storage.upsertReviewSettings(getAdminClinicId(req), body));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 管理: 受信した口コミ/匿名意見の一覧
+  app.get("/api/review-responses", requireAuth, async (req: any, res) => {
+    try {
+      res.json(await storage.getReviewResponses(getAdminClinicId(req)));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/review-responses/:id/read", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getReviewResponses(getAdminClinicId(req));
+      if (!all.some(r => r.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      await storage.markReviewResponseRead(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 公開: 患者向けアンケートページの設定取得（医院slug指定）
+  app.get("/api/public/review/:slug", publicGeneralLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const s = await storage.getReviewSettings(clinic.id);
+      if (!s || !s.enabled) return res.status(404).json({ message: "受付を停止しています" });
+      res.json({
+        clinicName: clinic.name,
+        threshold: s.threshold,
+        googleReviewUrl: s.googleReviewUrl,
+        headline: s.headline,
+        positiveMessage: s.positiveMessage,
+        negativeMessage: s.negativeMessage,
+        thanksMessage: s.thanksMessage,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 公開: 星評価・匿名意見の送信
+  app.post("/api/public/review/:slug", publicGeneralLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const s = await storage.getReviewSettings(clinic.id);
+      if (!s || !s.enabled) return res.status(404).json({ message: "受付を停止しています" });
+      const rating = Math.min(5, Math.max(1, Number(req.body.rating)));
+      if (!rating) return res.status(400).json({ message: "評価を選択してください" });
+      const threshold = s.threshold ?? 4;
+      const routedToGoogle = rating >= threshold;
+      const feedback = !routedToGoogle && req.body.feedback
+        ? sanitizeString(req.body.feedback, INPUT_LIMITS.longText) : null;
+      await storage.createReviewResponse({
+        clinicId: clinic.id,
+        rating,
+        routedToGoogle,
+        feedback,
+        appointmentId: null,
+        patientId: null,
+      });
+      // 低評価の意見は管理者へ通知（不満の即時吸収）
+      if (!routedToGoogle && feedback) {
+        try {
+          await storage.createAdminNotification({
+            clinicId: clinic.id,
+            type: "review_feedback",
+            title: `★${rating} のご意見が届きました`,
+            body: feedback.slice(0, 200),
+          });
+        } catch { /* 通知失敗は無視 */ }
+      }
+      res.json({
+        routedToGoogle,
+        googleReviewUrl: routedToGoogle ? s.googleReviewUrl : null,
+        message: routedToGoogle ? s.positiveMessage : s.thanksMessage,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 機能3: 自費診療カウンセリング＆電子同意書
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 治療プラン（比較表カード）の管理
+  app.get("/api/treatment-plans", requireAuth, async (req: any, res) => {
+    try {
+      res.json(await storage.getTreatmentPlans(getAdminClinicId(req)));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/treatment-plans", requireAuth, async (req: any, res) => {
+    try {
+      res.status(201).json(await storage.createTreatmentPlan({ ...req.body, clinicId: getAdminClinicId(req) }));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/treatment-plans/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getTreatmentPlans(getAdminClinicId(req));
+      if (!all.some(p => p.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      const body = { ...req.body }; delete body.id; delete body.clinicId; delete body.createdAt; delete body.updatedAt;
+      res.json(await storage.updateTreatmentPlan(req.params.id, body));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/treatment-plans/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getTreatmentPlans(getAdminClinicId(req));
+      if (!all.some(p => p.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      await storage.deleteTreatmentPlan(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 同意書の発行（署名データを受け取りPDF生成・保存）
+  app.post("/api/consent-forms", requireAuth, async (req: any, res) => {
+    try {
+      const clinicId = getAdminClinicId(req);
+      const clinic = await storage.getClinic(clinicId);
+      const settings = await storage.getClinicSettings(clinicId);
+      const { patientId, treatmentPlanId, patientName, treatmentName, amount, disclaimerText, signatureData, snapshotDataUrl } = req.body;
+      if (!patientName || !treatmentName) return res.status(400).json({ message: "患者名と治療内容は必須です" });
+
+      const signedDate = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const disclaimer = disclaimerText || settings?.consentDisclaimer || "";
+
+      // まずレコードを作成（PDF保存先のIDを得るため）
+      const form = await storage.createConsentForm({
+        clinicId,
+        patientId: patientId || null,
+        treatmentPlanId: treatmentPlanId || null,
+        patientName: sanitizeString(patientName, 100),
+        treatmentName: sanitizeString(treatmentName, 200),
+        amount: Number(amount) || 0,
+        disclaimerText: disclaimer,
+        signedDate,
+        signatureData: signatureData || null,
+        status: "signed",
+      });
+
+      // PDF生成
+      const pdf = generateConsentPdf({
+        clinicName: clinic?.name || "",
+        patientName, treatmentName,
+        amount: Number(amount) || 0,
+        disclaimerText: disclaimer,
+        signedDate,
+        snapshotDataUrl: snapshotDataUrl || null,
+      });
+
+      // Storageが有効ならアップロード、無ければDBにbase64保持
+      const uploaded = await uploadConsentPdf(clinicId, form.id, pdf);
+      if (uploaded) {
+        await storage.updateConsentForm(form.id, { pdfUrl: uploaded.url, pdfPath: uploaded.path, signatureData: null });
+      } else {
+        await storage.updateConsentForm(form.id, { pdfUrl: `data:application/pdf;base64,${pdf.toString("base64")}` });
+      }
+      const saved = await storage.getConsentFormById(form.id);
+      res.status(201).json(saved);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 患者の同意書一覧
+  app.get("/api/consent-forms", requireAuth, async (req: any, res) => {
+    try {
+      const patientId = typeof req.query.patientId === "string" ? req.query.patientId : undefined;
+      res.json(await storage.getConsentForms(getAdminClinicId(req), patientId));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 同意書PDFのURL取得（Storageの署名URLは期限切れがあるため都度発行）
+  app.get("/api/consent-forms/:id/pdf", requireAuth, async (req: any, res) => {
+    try {
+      const form = await storage.getConsentFormById(req.params.id);
+      if (!assertClinicOwnership(req, res, form)) return;
+      if (form.pdfPath && isStorageEnabled()) {
+        const url = await refreshConsentPdfUrl(form.pdfPath);
+        if (url) return res.json({ url });
+      }
+      if (form.pdfUrl) return res.json({ url: form.pdfUrl });
+      res.status(404).json({ message: "PDFが見つかりません" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // Appointments
   // 終了時刻を過ぎた confirmed 予約を自動で completed に変更
   async function autoCompleteAppointments(clinicId: string) {
@@ -2352,6 +2600,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return false;
       });
       await Promise.all(toComplete.map(a => storage.updateAppointment(a.id, { status: "completed" })));
+      // 完了になった予約に対しフォローアップ/リコールを予約（トリガー）
+      await Promise.all(toComplete.map(a => scheduleFollowUpsForAppointment(a.id)));
     } catch (e) { console.error("autoCompleteAppointments error:", e); }
   }
 
@@ -2484,6 +2734,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const appt = await storage.updateAppointment(req.params.id, body);
       if (!appt) return res.status(404).json({ message: "Not found" });
+      // 「完了」への遷移でフォローアップ/リコールを予約（重複作成は内部でガード）
+      if (body.status === "completed" && prevAppt.status !== "completed") {
+        await scheduleFollowUpsForAppointment(req.params.id);
+      }
       res.json(appt);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2673,13 +2927,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { chairsCount, bookingAdvanceDays, bookingBufferMinutes, slotIntervalMinutes,
               maxConcurrentAppointments, allowDoubleBooking, enablePatientConfirmation,
               confirmationDeadlineHours, enableQrCheckin, primaryColor,
-              requireAppointmentApproval, closedOnHolidays, resendApiKey, enableReferral } = req.body;
+              requireAppointmentApproval, closedOnHolidays, resendApiKey, enableReferral,
+              consentDisclaimer } = req.body;
       const settings = await storage.upsertClinicSettings(
         { chairsCount, bookingAdvanceDays, bookingBufferMinutes, slotIntervalMinutes,
           maxConcurrentAppointments, allowDoubleBooking, enablePatientConfirmation,
           confirmationDeadlineHours, enableQrCheckin, primaryColor,
           requireAppointmentApproval, closedOnHolidays, resendApiKey,
-          enableReferral: enableReferral ?? true },
+          enableReferral: enableReferral ?? true, consentDisclaimer },
         getAdminClinicId(req)
       );
       res.json(settings);

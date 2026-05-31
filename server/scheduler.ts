@@ -1,5 +1,5 @@
 import { storage } from "./storage.js";
-import { sendReminderEmail } from "./email.js";
+import { sendReminderEmail, sendGenericEmail } from "./email.js";
 import { sendLineMessage, buildReminderMessage } from "./line.js";
 import { sendSms, buildSmsReminderMessage } from "./sms.js";
 import { getPlanLimitsFromDB } from "./plans.js";
@@ -162,10 +162,66 @@ async function checkAndRunReminders(): Promise<void> {
   }
 }
 
+// 機能1: 送信予約キュー（フォローアップ/リコール）の処理。
+// scheduledFor が現在時刻を過ぎた pending メッセージを送信する。
+const clinicReminderCfgCache = new Map<string, any>();
+async function processScheduledMessages(): Promise<void> {
+  try {
+    const due = await storage.getDueScheduledMessages(new Date());
+    if (due.length === 0) return;
+    clinicReminderCfgCache.clear();
+
+    for (const msg of due) {
+      try {
+        const patient = msg.patientId ? await storage.getPatientById(msg.patientId) : null;
+        if (!patient) {
+          await storage.updateScheduledMessage(msg.id, { status: "failed", error: "患者が見つかりません" });
+          continue;
+        }
+
+        // 医院のチャネル設定/認証情報を取得（キャッシュ）
+        let cfg = clinicReminderCfgCache.get(msg.clinicId);
+        if (cfg === undefined) {
+          cfg = await storage.getReminderSettings(msg.clinicId);
+          clinicReminderCfgCache.set(msg.clinicId, cfg);
+        }
+        const limits = await getClinicLimits(msg.clinicId);
+
+        let delivered = false;
+        if (msg.channel === "line" && patient.lineUserId && cfg?.lineChannelAccessToken && cfg?.enableLine && limits.canLine) {
+          await sendLineMessage(cfg.lineChannelAccessToken, patient.lineUserId, msg.message);
+          delivered = true;
+        } else if (patient.email && limits.canEmail) {
+          // LINE不可でもメールにフォールバック
+          const subject = msg.purpose === "recall" ? "定期検診のご案内" : "ご来院後のご連絡";
+          await sendGenericEmail(patient.email, subject, msg.message, cfg?.resendApiKey, cfg?.resendFromEmail);
+          delivered = true;
+        }
+
+        if (delivered) {
+          await storage.updateScheduledMessage(msg.id, { status: "sent", sentAt: new Date(), error: null });
+        } else {
+          await storage.updateScheduledMessage(msg.id, { status: "failed", error: "送信可能なチャネルがありません（LINE未連携かつメール未登録）" });
+        }
+      } catch (e: any) {
+        await storage.updateScheduledMessage(msg.id, { status: "failed", error: String(e?.message || e) });
+      }
+    }
+    console.log(`[Scheduler] Processed ${due.length} scheduled follow-up message(s).`);
+  } catch (e) {
+    console.error("[Scheduler] processScheduledMessages error:", e);
+  }
+}
+
+async function tick(): Promise<void> {
+  await checkAndRunReminders();
+  await processScheduledMessages();
+}
+
 export function startScheduler(): void {
   if (schedulerTimer) return;
-  schedulerTimer = setInterval(checkAndRunReminders, 60 * 1000);
-  console.log("[Scheduler] Started. Checking every minute for reminder time.");
+  schedulerTimer = setInterval(tick, 60 * 1000);
+  console.log("[Scheduler] Started. Checking every minute for reminders & follow-ups.");
 }
 
 export function stopScheduler(): void {

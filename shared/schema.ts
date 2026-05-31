@@ -183,6 +183,7 @@ export const clinicSettings = pgTable("clinic_settings", {
   enableReferral: boolean("enable_referral").default(true),
   resendApiKey: text("resend_api_key"),
   primaryColor: text("primary_color").default("#C4B5A0"),
+  consentDisclaimer: text("consent_disclaimer"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
