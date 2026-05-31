@@ -1401,6 +1401,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // 患者による予約確認（来院意思の確認）。enablePatientConfirmation が有効なときに使う。
+  app.post("/api/patient/confirm/:id", async (req, res) => {
+    const patientId = (req.session as any).patientId;
+    if (!patientId) return res.status(401).json({ message: "ログインが必要です" });
+    try {
+      const appointment = await storage.getAppointmentById(req.params.id);
+      if (!appointment) return res.status(404).json({ message: "予約が見つかりません" });
+      if (appointment.patientId !== patientId) return res.status(403).json({ message: "権限がありません" });
+      if (appointment.status === "cancelled") return res.status(400).json({ message: "キャンセル済みの予約です" });
+      const updated = await storage.updateAppointment(req.params.id, { confirmationStatus: "confirmed" });
+      res.json({ success: true, appointment: updated });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.put("/api/patient/reschedule/:id", async (req, res) => {
     const patientId = (req.session as any).patientId;
     if (!patientId) return res.status(401).json({ message: "ログインが必要です" });

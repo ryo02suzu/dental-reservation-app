@@ -213,9 +213,61 @@ async function processScheduledMessages(): Promise<void> {
   }
 }
 
+// 患者確認の期限切れ自動キャンセル。
+// enablePatientConfirmation が有効な医院で、confirmationStatus が pending のまま
+// 予約時刻まで confirmationDeadlineHours を切った予約を自動キャンセルする。
+async function autoCancelUnconfirmed(): Promise<void> {
+  try {
+    const clinics = await storage.getAllClinics();
+    const nowMs = Date.now();
+    for (const clinic of clinics) {
+      try {
+        const settings = await storage.getClinicSettings(clinic.id);
+        if (!settings?.enablePatientConfirmation) continue;
+        const deadlineH = settings.confirmationDeadlineHours ?? 24;
+
+        // 今日以降の予約のみ対象
+        const todayJST = new Date(nowMs + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const appts = await storage.getAppointments({ clinicId: clinic.id, startDate: todayJST });
+        for (const a of appts) {
+          if (a.status !== "confirmed" && a.status !== "pending") continue;
+          if (a.confirmationStatus === "confirmed") continue;
+          if (!a.date || !a.startTime) continue;
+          // 予約開始時刻（JST）をUTC msに換算
+          const apptJst = new Date(`${a.date}T${a.startTime}`).getTime();
+          const apptUtcMs = apptJst - 9 * 60 * 60 * 1000;
+          const hoursUntil = (apptUtcMs - nowMs) / (60 * 60 * 1000);
+          // 期限を切った & まだ未来の予約（過去はautoComplete等に任せる）
+          if (hoursUntil <= deadlineH && hoursUntil > 0) {
+            await storage.updateAppointment(a.id, {
+              status: "cancelled",
+              cancellationReason: "確認期限切れによる自動キャンセル",
+            });
+            await storage.cancelPendingMessagesForAppointment(a.id);
+            try {
+              await storage.createAdminNotification({
+                clinicId: clinic.id,
+                type: "auto_cancel",
+                title: "予約を自動キャンセルしました",
+                body: `${a.date} ${a.startTime?.slice(0,5)} の予約が確認期限切れのため自動キャンセルされました。`,
+                appointmentId: a.id,
+              });
+            } catch { /* 通知失敗は無視 */ }
+          }
+        }
+      } catch (e) {
+        console.error(`[Scheduler] autoCancel error for clinic ${clinic.id}:`, e);
+      }
+    }
+  } catch (e) {
+    console.error("[Scheduler] autoCancelUnconfirmed fatal:", e);
+  }
+}
+
 async function tick(): Promise<void> {
   await checkAndRunReminders();
   await processScheduledMessages();
+  await autoCancelUnconfirmed();
 }
 
 export function startScheduler(): void {
