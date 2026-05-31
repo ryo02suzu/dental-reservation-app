@@ -301,12 +301,12 @@ export function MedicalRecords() {
     <div className="flex h-full overflow-hidden">
       {/* メインリスト */}
       <div className={`flex flex-col min-w-0 transition-all duration-300 ${panelOpen ? "flex-[1] hidden md:flex" : "flex-1"}`}>
-        <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">受付メモ</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">{patientRows.length}人 / {records.length}件 — 来院時の申し送り・次回予定などを記録</p>
+        <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight truncate">受付メモ</h1>
+            <p className="text-muted-foreground text-sm mt-0.5 truncate">{patientRows.length}人 / {records.length}件 — 来院時の申し送り・次回予定などを記録</p>
           </div>
-          <Button onClick={() => openAddMemo()} data-testid="button-add-record">
+          <Button onClick={() => openAddMemo()} className="shrink-0" data-testid="button-add-record">
             <Plus className="h-4 w-4 mr-1" />
             メモを追加
           </Button>

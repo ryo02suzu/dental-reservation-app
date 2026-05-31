@@ -172,14 +172,15 @@ export function PatientList() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">患者一覧</h1>
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight truncate">患者一覧</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{patients.length}名登録済み</p>
         </div>
-        <Button onClick={openCreate} data-testid="button-add-patient">
+        <Button onClick={openCreate} className="shrink-0" data-testid="button-add-patient">
           <Plus className="h-4 w-4 mr-1" />
-          新規患者登録
+          <span className="hidden sm:inline">新規患者登録</span>
+          <span className="sm:hidden">新規</span>
         </Button>
       </div>
 
