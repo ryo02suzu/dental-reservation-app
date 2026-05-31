@@ -347,7 +347,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     className="pl-9"
-                    placeholder="患者名・カナ・患者番号・電話番号で検索"
+                    placeholder="名前・カナ・番号・電話で検索"
                     value={searchValue}
                     onChange={e => setSearchValue(e.target.value)}
                     data-testid="input-patient-search"
