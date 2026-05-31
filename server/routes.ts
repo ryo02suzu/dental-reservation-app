@@ -1205,6 +1205,63 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ─── QRチェックイン（受付） ──────────────────────────────────────────────────
+  // 受付に掲示したQR（/checkin/:slug）を患者がスマホで読み、電話番号で
+  // 本日の予約を照合して「来院済(arrived)」にする。enableQrCheckin が有効な医院のみ。
+  app.get("/api/public/checkin/:slug", publicGeneralLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const settings = await storage.getClinicSettings(clinic.id);
+      if (!settings?.enableQrCheckin) return res.status(404).json({ message: "QRチェックインは利用できません" });
+      res.json({ clinicName: clinic.name });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/checkin/:slug", publicLookupLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const settings = await storage.getClinicSettings(clinic.id);
+      if (!settings?.enableQrCheckin) return res.status(404).json({ message: "QRチェックインは利用できません" });
+
+      const phone = sanitizeString(req.body.phone ?? "", INPUT_LIMITS.phone);
+      if (!phone) return res.status(400).json({ message: "電話番号を入力してください" });
+      const patient = await storage.getPatientByPhone(phone, clinic.id);
+      if (!patient) return res.status(404).json({ message: "ご予約が見つかりませんでした。受付スタッフにお声がけください。" });
+
+      const todayJST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const todays = (await storage.getAppointments({ clinicId: clinic.id, date: todayJST }))
+        .filter(a => a.patientId === patient.id && a.status !== "cancelled" && a.status !== "no_show");
+      if (todays.length === 0) {
+        return res.status(404).json({ message: "本日のご予約が見つかりませんでした。受付スタッフにお声がけください。" });
+      }
+
+      // 既にチェックイン済み（arrived/in_progress/completed）ならそのまま成功扱い
+      const target = todays.find(a => a.status === "confirmed" || a.status === "pending") ?? todays[0];
+      const already = ["arrived", "in_progress", "completed"].includes(target.status ?? "");
+      if (!already) {
+        await storage.updateAppointment(target.id, { status: "arrived", confirmationStatus: "confirmed" });
+        try {
+          const notif = await storage.createAdminNotification({
+            clinicId: clinic.id,
+            type: "checkin",
+            title: "患者が来院しました",
+            body: `${patient.name}様（${target.startTime?.slice(0,5)}〜）がチェックインしました。`,
+            appointmentId: target.id,
+          });
+          pushNotificationToClinic(clinic.id, { type: "checkin", notification: notif });
+        } catch { /* 通知失敗は無視 */ }
+      }
+      res.json({
+        success: true,
+        alreadyCheckedIn: already,
+        patientName: patient.name,
+        time: target.startTime?.slice(0, 5) ?? "",
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.post("/api/public/cancel/:id", async (req, res) => {
     try {
       const { phone, cancellationReason } = req.body;

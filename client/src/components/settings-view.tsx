@@ -1820,9 +1820,11 @@ function GeneralTab() {
     requireAppointmentApproval: false, closedOnHolidays: true, primaryColor: "#C4B5A0", enableReferral: true,
   });
   const { data: planInfo } = useQuery<PlanInfo>({ queryKey: ["/api/plan-info"] });
+  const { data: generalClinic } = useQuery<{ slug?: string | null }>({ queryKey: ["/api/clinic"] });
   const [loaded, setLoaded] = useState(false);
 
   if (settings && !loaded) { setForm(settings); setLoaded(true); }
+  const checkinUrl = generalClinic?.slug ? `${window.location.origin}/checkin/${generalClinic.slug}` : "";
 
   const saveMutation = useMutation({
     mutationFn: (data: ClinicSettings) => apiRequest("PUT", "/api/clinic-settings", data),
@@ -1925,6 +1927,32 @@ function GeneralTab() {
         )}
       </CardContent>
     </Card>
+
+    {form.enableQrCheckin && checkinUrl && (
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>受付チェックインQR</CardTitle>
+          <CardDescription>このQRを受付に掲示してください。患者さんがスマホで読み取り、電話番号で来院チェックインできます。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row items-center gap-5">
+            <div className="bg-white p-3 rounded-lg border shrink-0">
+              <QRCodeSVG value={checkinUrl} size={160} level="M" />
+            </div>
+            <div className="min-w-0 w-full">
+              <Label className="text-xs text-muted-foreground">チェックインURL</Label>
+              <div className="flex items-center gap-2 mt-1.5">
+                <Input readOnly value={checkinUrl} className="text-sm" />
+                <Button size="icon" variant="outline" onClick={() => { navigator.clipboard.writeText(checkinUrl); toast({ title: "URLをコピーしました" }); }}>
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">「QRチェックインを有効にする」をONにして保存すると利用できます。</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )}
 
     {planInfo && (
       <Card className="mt-4">
