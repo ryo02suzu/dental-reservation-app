@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Phone, Mail, Trash2, Edit2, AlertTriangle, CalendarCheck, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Phone, Mail, Trash2, Edit2, AlertTriangle, CalendarCheck, ArrowUpDown, ChevronLeft, ChevronRight, Presentation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
+import { CounselingMode } from "@/components/counseling-mode";
 
 interface Patient {
   id: string;
@@ -61,6 +62,7 @@ export function PatientList() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [selectedRecallPatient, setSelectedRecallPatient] = useState<Patient | null>(null);
+  const [counselingPatient, setCounselingPatient] = useState<Patient | null>(null);
   const [nextRecallDate, setNextRecallDate] = useState("");
   const [recallInterval, setRecallInterval] = useState(6);
   const [form, setForm] = useState(defaultForm);
@@ -279,6 +281,15 @@ export function PatientList() {
                         >
                           <CalendarCheck className="h-3.5 w-3.5" />
                         </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setCounselingPatient(p)}
+                          title="カウンセリング開始"
+                          data-testid={`button-counseling-${p.id}`}
+                        >
+                          <Presentation className="h-3.5 w-3.5" />
+                        </Button>
                         <Button size="icon" variant="ghost" onClick={() => openEdit(p)} data-testid={`edit-patient-${p.id}`}>
                           <Edit2 className="h-3.5 w-3.5" />
                         </Button>
@@ -467,6 +478,13 @@ export function PatientList() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {counselingPatient && (
+        <CounselingMode
+          patient={{ id: counselingPatient.id, name: counselingPatient.name }}
+          onClose={() => setCounselingPatient(null)}
+        />
+      )}
     </div>
   );
 }
