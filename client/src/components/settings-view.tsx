@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { FollowUpTab, ReviewTab, TreatmentPlansTab } from "@/components/settings-features";
 import { useAuth } from "@/hooks/use-auth";
 import { useClinicAddons } from "@/hooks/use-clinic-addons";
 import { usePlan } from "@/hooks/use-plan";
@@ -130,6 +131,7 @@ interface ReminderSettings {
 const DAY_NAMES = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
 
 export function SettingsView() {
+  const { data: clinic } = useQuery<{ slug?: string | null }>({ queryKey: ["/api/clinic"] });
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 md:px-6 py-4 border-b border-border bg-background">
@@ -145,6 +147,9 @@ export function SettingsView() {
             <TabsTrigger value="holidays">休診日</TabsTrigger>
             <TabsTrigger value="general">一般設定</TabsTrigger>
             <TabsTrigger value="reminders">リマインダー</TabsTrigger>
+            <TabsTrigger value="followup">フォローアップ</TabsTrigger>
+            <TabsTrigger value="review">口コミ誘導</TabsTrigger>
+            <TabsTrigger value="plans">自費プラン</TabsTrigger>
             <TabsTrigger value="calendar">カレンダー連携</TabsTrigger>
             <TabsTrigger value="export">データエクスポート</TabsTrigger>
             <TabsTrigger value="account">アカウント</TabsTrigger>
@@ -156,6 +161,9 @@ export function SettingsView() {
           <TabsContent value="holidays"><HolidaysTab /></TabsContent>
           <TabsContent value="general"><GeneralTab /></TabsContent>
           <TabsContent value="reminders"><ReminderTab /></TabsContent>
+          <TabsContent value="followup"><FollowUpTab /></TabsContent>
+          <TabsContent value="review"><ReviewTab clinicSlug={clinic?.slug ?? undefined} /></TabsContent>
+          <TabsContent value="plans"><TreatmentPlansTab /></TabsContent>
           <TabsContent value="calendar"><CalendarIntegrationTab /></TabsContent>
           <TabsContent value="export"><ExportTab /></TabsContent>
           <TabsContent value="account"><AccountTab /></TabsContent>

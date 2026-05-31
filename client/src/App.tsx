@@ -18,6 +18,7 @@ import DemoLoginPage from "@/pages/demo-login";
 import StaffLoginPage from "@/pages/staff-login";
 import MySchedulePage from "@/pages/my-schedule";
 import QrClockInPage from "@/pages/qr-clock-in";
+import ReviewPage from "@/pages/review";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "./lib/queryClient";
 import { Redirect } from "wouter";
@@ -86,6 +87,7 @@ function Router() {
         <Route path="/staff-login/:token" component={StaffLoginPage} />
         <Route path="/my-schedule" component={MySchedulePage} />
         <Route path="/qr-clock-in/:token" component={QrClockInPage} />
+        <Route path="/review/:slug" component={ReviewPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route component={NotFound} />
