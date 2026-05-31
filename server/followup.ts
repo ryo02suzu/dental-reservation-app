@@ -7,15 +7,17 @@ function jstNow(): Date {
   return new Date(Date.now() + 9 * 60 * 60 * 1000);
 }
 
-// 指定日(YYYY-MM-DD基準のbaseDate)の delayHours 後の日付に、HH:MM の時刻を設定したJST時刻を
-// UTC Dateとして返す（DBはtimestampなのでUTCで保持）。
+// base は jstNow()/addMonths の戻り値で、getUTC* で読むとJST壁時計を表す
+// （内部ms = 実UTC + 9h）。base から delayHours 後の「JSTカレンダー日」の HH:MM を
+// 求め、実UTCの Date（= JST壁時計 - 9h）として返す。
 function buildSendTime(base: Date, delayHours: number, hhmm: string): Date {
+  // delay を加算した時点でも getUTC* はJST壁時計のまま
   const t = new Date(base.getTime() + delayHours * 60 * 60 * 1000);
   const [h, m] = (hhmm || "18:00").split(":").map(Number);
-  // JST想定で時刻をセットし、UTCに戻す
-  const jst = new Date(t.getTime() + 9 * 60 * 60 * 1000);
-  jst.setUTCHours(h, m, 0, 0);
-  return new Date(jst.getTime() - 9 * 60 * 60 * 1000);
+  // t のUTCフィールド（=JST壁時計）の時刻部分だけ HH:MM に置き換える
+  t.setUTCHours(h, m, 0, 0);
+  // JST壁時計 → 実UTC へ戻す（9時間引く）
+  return new Date(t.getTime() - 9 * 60 * 60 * 1000);
 }
 
 function addMonths(d: Date, months: number): Date {
