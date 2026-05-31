@@ -332,7 +332,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
   return (
     <>
     <Dialog open={isOpen} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="w-[calc(100%-32px)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{appointment?.id ? "予約の編集" : "新規予約"}</DialogTitle>
         </DialogHeader>
