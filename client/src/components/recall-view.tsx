@@ -313,6 +313,7 @@ export function RecallView() {
                               size="icon"
                               variant="ghost"
                               className="h-10 w-10 sm:h-9 sm:w-9 active:scale-95"
+                              aria-label="リコール設定"
                               onClick={() => openSettings(p)}
                               data-testid={`button-recall-settings-${p.id}`}
                             >

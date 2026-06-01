@@ -429,7 +429,7 @@ function ClinicTab() {
             <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
               <Label className="text-xs text-muted-foreground block">患者向け予約ページ</Label>
               <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-                <div className="shrink-0 self-center sm:self-start p-3 bg-white border-2 border-gray-200 rounded-xl shadow-inner">
+                <div className="shrink-0 self-center sm:self-start p-3 bg-white border-2 border-border rounded-xl shadow-inner">
                   <QRCodeSVG value={bookingUrl} size={120} level="M" data-testid="qr-booking-url-clinic" />
                 </div>
                 <div className="flex-1 space-y-1.5 min-w-0">
@@ -1017,7 +1017,7 @@ function StaffTab() {
               </div>
               <div><Label className="mb-1.5 block">打刻PIN（4桁）</Label>
                 <Input type="text" inputMode="numeric" maxLength={4} value={form.pin} onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 4); setForm(p => ({ ...p, pin: v })); }} placeholder="1234" data-testid="input-pin" />
-                <p className="text-[10px] text-gray-400 mt-1">QR出勤時の本人確認用</p>
+                <p className="text-[10px] text-muted-foreground mt-1">QR出勤時の本人確認用</p>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
@@ -1048,7 +1048,7 @@ function StaffTab() {
             {staffLoginUrl ? (
               <>
                 <div className="flex justify-center py-2">
-                  <div className="p-4 bg-white border-2 border-gray-200 rounded-xl shadow-inner">
+                  <div className="p-4 bg-white border-2 border-border rounded-xl shadow-inner">
                     <QRCodeSVG value={staffLoginUrl} size={180} level="M" />
                   </div>
                 </div>
@@ -1082,11 +1082,11 @@ function StaffTab() {
               </>
             ) : (
               <div className="text-center py-6 space-y-4">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                  <QrCode className="w-8 h-8 text-gray-400" />
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                  <QrCode className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-700">QRコードが未発行です</p>
+                  <p className="font-medium text-foreground">QRコードが未発行です</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     ボタンを押してQRコードを発行してください
                   </p>

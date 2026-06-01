@@ -192,6 +192,7 @@ export function PatientList() {
           <Input
             className="pl-9 h-10"
             placeholder="患者名・カナ・番号・電話番号で検索"
+            aria-label="患者を検索"
             value={search}
             onChange={e => setSearch(e.target.value)}
             data-testid="input-patient-search"
@@ -200,7 +201,7 @@ export function PatientList() {
         <div className="flex items-center gap-1.5 shrink-0">
           <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
           <Select value={sortBy} onValueChange={v => setSortBy(v as SortType)}>
-            <SelectTrigger className="h-10 w-36 text-sm" data-testid="select-sort-patients">
+            <SelectTrigger className="h-10 w-36 text-sm" aria-label="並び替え" data-testid="select-sort-patients">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -263,9 +264,9 @@ export function PatientList() {
                       {p.dateOfBirth ? `${p.dateOfBirth}（${age}歳）` : "—"}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <div className="space-y-0.5">
-                        {p.phone && <div className="text-sm flex items-center gap-1"><Phone className="h-3 w-3" />{p.phone}</div>}
-                        {p.email && <div className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{p.email}</div>}
+                      <div className="space-y-0.5 min-w-0">
+                        {p.phone && <div className="text-sm flex items-center gap-1 min-w-0"><Phone className="h-3 w-3 shrink-0" /><span className="truncate">{p.phone}</span></div>}
+                        {p.email && <div className="text-xs text-muted-foreground flex items-center gap-1 min-w-0"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{p.email}</span></div>}
                       </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">

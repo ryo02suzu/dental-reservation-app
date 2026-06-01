@@ -38,15 +38,15 @@ export function AttendancePanel() {
   const [tab, setTab] = useState<"today" | "report">("today");
   return (
     <div className="flex-1 overflow-auto flex flex-col">
-      <div className="border-b bg-white sticky top-0 z-10">
+      <div className="border-b bg-card sticky top-0 z-10">
         <div className="flex">
           <button onClick={() => setTab("today")}
-            className={`flex-1 py-2.5 text-sm font-bold border-b-2 transition-colors ${tab === "today" ? "border-primary text-primary" : "border-transparent text-gray-400"}`}
+            className={`flex-1 py-2.5 text-sm font-bold border-b-2 transition-colors ${tab === "today" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
             data-testid="tab-attendance-today">
             本日の出退勤
           </button>
           <button onClick={() => setTab("report")}
-            className={`flex-1 py-2.5 text-sm font-bold border-b-2 transition-colors ${tab === "report" ? "border-primary text-primary" : "border-transparent text-gray-400"}`}
+            className={`flex-1 py-2.5 text-sm font-bold border-b-2 transition-colors ${tab === "report" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
             data-testid="tab-attendance-report">
             月次レポート
           </button>
@@ -131,11 +131,11 @@ function TodayView() {
       <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">出退勤状況</h2>
+            <h2 className="text-lg font-bold text-foreground">出退勤状況</h2>
             <p className="text-xs text-muted-foreground">{format(now, "yyyy年M月d日(E)", { locale: ja })}</p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-mono font-bold text-gray-900 tabular-nums" data-testid="text-admin-clock">
+            <p className="text-3xl font-mono font-bold text-foreground tabular-nums" data-testid="text-admin-clock">
               {format(now, "HH:mm:ss")}
             </p>
           </div>
@@ -150,9 +150,9 @@ function TodayView() {
             <p className="text-2xl font-bold text-amber-600" data-testid="text-count-break">{onBreak.length}</p>
             <p className="text-xs text-amber-700 font-medium">休憩中</p>
           </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-gray-600" data-testid="text-count-done">{clockedOut.length}</p>
-            <p className="text-xs text-gray-500 font-medium">退勤済</p>
+          <div className="bg-muted border border-border rounded-xl px-4 py-3 text-center">
+            <p className="text-2xl font-bold text-muted-foreground" data-testid="text-count-done">{clockedOut.length}</p>
+            <p className="text-xs text-muted-foreground font-medium">退勤済</p>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-center">
             <p className="text-2xl font-bold text-blue-600">{notClockedIn.length}</p>
@@ -161,17 +161,17 @@ function TodayView() {
         </div>
 
         {qrUrl && (
-          <div className="bg-white rounded-xl border shadow-sm p-4">
+          <div className="bg-card rounded-xl border shadow-sm p-4">
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-white border-2 border-gray-200 rounded-xl shadow-inner shrink-0">
+              <div className="p-3 bg-white border-2 border-border rounded-xl shadow-inner shrink-0">
                 <QRCodeSVG value={qrUrl} size={140} level="M" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5 mb-2">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5 mb-2">
                   <QrCode className="w-4 h-4 text-primary" />
                   出退勤打刻用QRコード
                 </h3>
-                <p className="text-xs text-gray-500 mb-2">スタッフがスマホでスキャンして出勤・退勤打刻します</p>
+                <p className="text-xs text-muted-foreground mb-2">スタッフがスマホでスキャンして出勤・退勤打刻します</p>
                 <div className="flex gap-2 mb-2">
                   <button onClick={() => { navigator.clipboard.writeText(qrUrl!); }}
                     className="flex-1 text-xs font-bold text-primary border border-primary/30 rounded-lg px-3 py-1.5 hover:bg-primary/5 active:bg-primary/10 transition-colors"
@@ -184,9 +184,9 @@ function TodayView() {
                     QR更新
                   </button>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-500">
+                <div className="bg-muted rounded-lg px-3 py-2 text-xs text-muted-foreground">
                   <p>30秒ごとに自動更新 / 手動更新も可能</p>
-                  <p className="text-gray-400 mt-0.5">受付のタブレットやPCに表示してください</p>
+                  <p className="text-muted-foreground mt-0.5">受付のタブレットやPCに表示してください</p>
                 </div>
               </div>
             </div>
@@ -195,7 +195,7 @@ function TodayView() {
 
         {clockedIn.length > 0 && (
           <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <UserCheck className="w-3.5 h-3.5" />勤務中
             </h3>
             <div className="space-y-1.5">
@@ -205,15 +205,15 @@ function TodayView() {
                 const isBreak = !!r.breakStart && !r.breakEnd;
                 return (
                   <div key={r.id}
-                    className={`bg-white rounded-xl border px-4 py-3 flex items-center gap-3 transition-colors ${isBreak ? "border-amber-200 bg-amber-50/30" : ""}`}
+                    className={`bg-card rounded-xl border px-4 py-3 flex items-center gap-3 transition-colors ${isBreak ? "border-amber-200 bg-amber-50/30" : ""}`}
                     data-testid={`attendance-row-${r.staffId}`}>
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${role.dot}`}>
                       {role.label}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-800">{staff?.name ?? "?"}</p>
+                      <p className="text-sm font-bold text-foreground">{staff?.name ?? "?"}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                           <LogIn className="w-2.5 h-2.5" />{fmtTime(r.clockIn)}
                         </span>
                         {isBreak && (
@@ -243,7 +243,7 @@ function TodayView() {
                       )}
                     </div>
                     <button onClick={() => setEditingRecord(r)}
-                      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 text-gray-400 hover:text-gray-600 shrink-0 transition-colors"
+                      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent text-muted-foreground hover:text-foreground shrink-0 transition-colors"
                       data-testid={`button-edit-attendance-${r.staffId}`}>
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -257,7 +257,7 @@ function TodayView() {
 
         {clockedOut.length > 0 && (
           <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <LogOut className="w-3.5 h-3.5" />退勤済み
             </h3>
             <div className="space-y-1.5">
@@ -265,22 +265,22 @@ function TodayView() {
                 const staff = r.staff || staffList.find(s => s.id === r.staffId);
                 const role = ROLE_CFG[staff?.role ?? ""] || ROLE_CFG.assistant;
                 return (
-                  <div key={r.id} className="bg-white rounded-xl border px-4 py-2.5 flex items-center gap-3 opacity-60"
+                  <div key={r.id} className="bg-card rounded-xl border px-4 py-2.5 flex items-center gap-3 opacity-60"
                     data-testid={`attendance-done-${r.staffId}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${role.dot}`}>
                       {role.label}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-600">{staff?.name ?? "?"}</p>
+                      <p className="text-sm font-bold text-muted-foreground">{staff?.name ?? "?"}</p>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500 shrink-0">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
                       <span className="flex items-center gap-0.5"><LogIn className="w-3 h-3" />{fmtTime(r.clockIn)}</span>
                       <span>→</span>
                       <span className="flex items-center gap-0.5"><LogOut className="w-3 h-3" />{fmtTime(r.clockOut)}</span>
-                      <span className="font-mono font-bold text-gray-700">{elapsed(r.clockIn, r.clockOut)}</span>
+                      <span className="font-mono font-bold text-foreground">{elapsed(r.clockIn, r.clockOut)}</span>
                     </div>
                     <button onClick={() => setEditingRecord(r)}
-                      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 text-gray-400 hover:text-gray-600 shrink-0 transition-colors"
+                      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent text-muted-foreground hover:text-foreground shrink-0 transition-colors"
                       data-testid={`button-edit-done-${r.staffId}`}>
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -293,19 +293,19 @@ function TodayView() {
 
         {notClockedIn.length > 0 && (
           <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5" />未出勤
             </h3>
             <div className="flex flex-wrap gap-2">
               {notClockedIn.map(s => {
                 const role = ROLE_CFG[s.role] || ROLE_CFG.assistant;
                 return (
-                  <div key={s.id} className="flex items-center gap-1.5 bg-gray-100 rounded-full px-3 py-1.5"
+                  <div key={s.id} className="flex items-center gap-1.5 bg-muted rounded-full px-3 py-1.5"
                     data-testid={`attendance-absent-${s.id}`}>
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold ${role.dot}`}>
                       {role.label}
                     </div>
-                    <span className="text-xs text-gray-500">{s.name}</span>
+                    <span className="text-xs text-muted-foreground">{s.name}</span>
                   </div>
                 );
               })}
@@ -316,20 +316,20 @@ function TodayView() {
         {isLoading && records.length === 0 && (
           <div className="space-y-1.5 pt-1">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-white rounded-xl border px-4 py-3 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gray-100 animate-pulse shrink-0" />
+              <div key={i} className="bg-card rounded-xl border px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-muted animate-pulse shrink-0" />
                 <div className="flex-1 space-y-1.5">
-                  <div className="h-3.5 w-24 bg-gray-100 rounded animate-pulse" />
-                  <div className="h-2.5 w-16 bg-gray-100 rounded animate-pulse" />
+                  <div className="h-3.5 w-24 bg-muted rounded animate-pulse" />
+                  <div className="h-2.5 w-16 bg-muted rounded animate-pulse" />
                 </div>
-                <div className="h-5 w-16 bg-gray-100 rounded animate-pulse" />
+                <div className="h-5 w-16 bg-muted rounded animate-pulse" />
               </div>
             ))}
           </div>
         )}
 
         {!isLoading && records.length === 0 && notClockedIn.length === 0 && (
-          <div className="text-center py-10 text-gray-400">
+          <div className="text-center py-10 text-muted-foreground">
             <Users className="w-9 h-9 mx-auto mb-2 opacity-25" />
             <p className="text-sm">本日の出退勤記録はありません</p>
           </div>
@@ -371,36 +371,36 @@ function EditAttendanceModal({ record, staffList, onClose }: { record: Attendanc
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-gray-900">打刻編集</h3>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5 text-gray-400" /></button>
+          <h3 className="text-lg font-bold text-foreground">打刻編集</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-accent"><X className="w-5 h-5 text-muted-foreground" /></button>
         </div>
-        <p className="text-sm text-gray-500 mb-4">{staff?.name} — {record.date}</p>
+        <p className="text-sm text-muted-foreground mb-4">{staff?.name} — {record.date}</p>
         <div className="space-y-3">
           <div>
-            <label className="text-sm font-medium text-gray-600 block mb-1.5">出勤時刻</label>
+            <label className="text-sm font-medium text-muted-foreground block mb-1.5">出勤時刻</label>
             <input type="time" value={clockIn} onChange={e => setClockIn(e.target.value)}
               className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-clock-in" />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-600 block mb-1.5">退勤時刻</label>
+            <label className="text-sm font-medium text-muted-foreground block mb-1.5">退勤時刻</label>
             <input type="time" value={clockOut} onChange={e => setClockOut(e.target.value)}
               className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-clock-out" />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-600 block mb-1.5">休憩開始</label>
+            <label className="text-sm font-medium text-muted-foreground block mb-1.5">休憩開始</label>
             <input type="time" value={breakStart} onChange={e => setBreakStart(e.target.value)}
               className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-break-start" />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-600 block mb-1.5">休憩終了</label>
+            <label className="text-sm font-medium text-muted-foreground block mb-1.5">休憩終了</label>
             <input type="time" value={breakEnd} onChange={e => setBreakEnd(e.target.value)}
               className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-break-end" />
           </div>
         </div>
         <div className="flex gap-2 mt-5">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 text-sm font-bold">キャンセル</button>
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-foreground text-sm font-bold">キャンセル</button>
           <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !clockIn}
             className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-bold disabled:opacity-50"
             data-testid="button-save-edit-attendance">
@@ -442,12 +442,12 @@ function MonthlyReport() {
     <div className="flex-1 overflow-auto">
       <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
         <div className="flex items-center justify-between">
-          <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors shrink-0" data-testid="btn-report-prev">
-            <ChevronLeft className="w-5 h-5 text-gray-500" />
+          <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent transition-colors shrink-0" data-testid="btn-report-prev">
+            <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </button>
-          <h2 className="text-lg font-bold text-gray-900">{format(monthBase, "yyyy年M月", { locale: ja })} 給与レポート</h2>
-          <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors shrink-0" data-testid="btn-report-next">
-            <ChevronRight className="w-5 h-5 text-gray-500" />
+          <h2 className="text-lg font-bold text-foreground">{format(monthBase, "yyyy年M月", { locale: ja })} 給与レポート</h2>
+          <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-accent active:bg-accent transition-colors shrink-0" data-testid="btn-report-next">
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
@@ -465,18 +465,18 @@ function MonthlyReport() {
         {isLoading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="bg-white rounded-xl border px-4 py-3 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-gray-100 animate-pulse shrink-0" />
+              <div key={i} className="bg-card rounded-xl border px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-muted animate-pulse shrink-0" />
                 <div className="flex-1 space-y-1.5">
-                  <div className="h-3.5 w-24 bg-gray-100 rounded animate-pulse" />
-                  <div className="h-2.5 w-16 bg-gray-100 rounded animate-pulse" />
+                  <div className="h-3.5 w-24 bg-muted rounded animate-pulse" />
+                  <div className="h-2.5 w-16 bg-muted rounded animate-pulse" />
                 </div>
-                <div className="h-4 w-20 bg-gray-100 rounded animate-pulse" />
+                <div className="h-4 w-20 bg-muted rounded animate-pulse" />
               </div>
             ))}
           </div>
         ) : staffSummary.length === 0 ? (
-          <div className="text-center py-10 text-gray-400">
+          <div className="text-center py-10 text-muted-foreground">
             <FileText className="w-9 h-9 mx-auto mb-2 opacity-25" />
             <p className="text-sm">データがありません</p>
           </div>
@@ -485,28 +485,28 @@ function MonthlyReport() {
             {staffSummary.map(({ staff: s, totalDays, totalHours, pay }) => {
               const role = ROLE_CFG[s.role] || ROLE_CFG.assistant;
               return (
-                <div key={s.id} className="bg-white rounded-xl border px-4 py-3 flex items-center gap-3"
+                <div key={s.id} className="bg-card rounded-xl border px-4 py-3 flex items-center gap-3"
                   data-testid={`report-row-${s.id}`}>
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${role.dot}`}>
                     {role.label}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800">{s.name}</p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-sm font-bold text-foreground">{s.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
                       {s.hourlyRate ? `時給 ¥${s.hourlyRate.toLocaleString()}` : "時給未設定"}
                     </p>
                   </div>
                   <div className="text-center shrink-0 px-2">
-                    <p className="text-sm font-bold text-gray-800">{totalDays}<span className="text-[10px] font-normal text-gray-400">日</span></p>
+                    <p className="text-sm font-bold text-foreground">{totalDays}<span className="text-[10px] font-normal text-muted-foreground">日</span></p>
                   </div>
                   <div className="text-center shrink-0 px-2">
-                    <p className="text-sm font-bold text-blue-600">{totalHours.toFixed(1)}<span className="text-[10px] font-normal text-gray-400">h</span></p>
+                    <p className="text-sm font-bold text-blue-600">{totalHours.toFixed(1)}<span className="text-[10px] font-normal text-muted-foreground">h</span></p>
                   </div>
                   <div className="text-right shrink-0 min-w-[80px]">
                     {pay !== null ? (
                       <p className="text-sm font-bold text-emerald-600">¥{pay.toLocaleString()}</p>
                     ) : (
-                      <p className="text-xs text-gray-400">—</p>
+                      <p className="text-xs text-muted-foreground">—</p>
                     )}
                   </div>
                 </div>
