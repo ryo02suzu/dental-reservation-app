@@ -737,9 +737,11 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     return () => clearInterval(timer);
   }, [isToday, startHour]);
 
+  // 横タイムライン：初期表示で現在時刻あたりまで横スクロール
   useEffect(() => {
-    if (nowTop !== null && scrollRef.current) {
-      scrollRef.current.scrollTop = Math.max(0, nowTop - 120);
+    const t = calcNowTop();
+    if (t !== null && scrollRef.current) {
+      scrollRef.current.scrollLeft = Math.max(0, (t / SLOT_HEIGHT) * 60 - 240);
     }
   }, []);
 
@@ -800,21 +802,27 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     }
   }
 
-  // ── ドラッグ移動 ─────────────────────────────────────────────────────────────
+  // ── 横タイムライン台帳の寸法（時間=横／行=スタッフ・ユニット）──────────────
+  const SLOT_WIDTH = 60;   // 30分あたりの横幅(px)
+  const ROW_HEIGHT = 64;   // 1行(スタッフ/ユニット)の高さ(px)
+  const LABEL_WIDTH = 104;  // 左側の行ラベル幅(px)
+  const HEADER_HEIGHT = 36; // 上部の時刻ヘッダー高さ(px)
+  const trackWidth = timeSlots.length * SLOT_WIDTH;
+
+  // ── ドラッグ移動（上下=担当/ユニット変更、左右=時間変更）─────────────────────
   const dragMeta = useRef<{ appt: Appointment; durSlots: number; startX: number; startY: number; moved: boolean } | null>(null);
   const handlersRef = useRef<{ move: (e: PointerEvent) => void; up: (e: PointerEvent) => void } | null>(null);
-  const [drag, setDrag] = useState<{ apptId: string; durSlots: number; colIndex: number; slotIndex: number } | null>(null);
+  const [drag, setDrag] = useState<{ apptId: string; durSlots: number; rowIndex: number; slotIndex: number } | null>(null);
 
   const locate = (clientX: number, clientY: number, durSlots: number) => {
     const grid = gridRef.current;
     if (!grid || columns.length === 0) return null;
     const rect = grid.getBoundingClientRect();
-    const colW = rect.width / columns.length;
-    let ci = Math.floor((clientX - rect.left) / colW);
-    ci = Math.max(0, Math.min(columns.length - 1, ci));
-    let si = Math.round((clientY - rect.top) / SLOT_HEIGHT);
+    let ri = Math.floor((clientY - rect.top) / ROW_HEIGHT);
+    ri = Math.max(0, Math.min(columns.length - 1, ri));
+    let si = Math.round((clientX - rect.left) / SLOT_WIDTH);
     si = Math.max(0, Math.min(timeSlots.length - durSlots, si));
-    return { ci, si };
+    return { ri, si };
   };
 
   const onPointerMoveDoc = (e: PointerEvent) => {
@@ -826,7 +834,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
       document.body.style.userSelect = "none";
     }
     const loc = locate(e.clientX, e.clientY, m.durSlots);
-    if (loc) setDrag({ apptId: m.appt.id, durSlots: m.durSlots, colIndex: loc.ci, slotIndex: loc.si });
+    if (loc) setDrag({ apptId: m.appt.id, durSlots: m.durSlots, rowIndex: loc.ri, slotIndex: loc.si });
   };
 
   const removeDragListeners = () => {
@@ -847,7 +855,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     if (!m.moved) { onAppointmentClick(m.appt); return; }
     const loc = locate(e.clientX, e.clientY, m.durSlots);
     if (!loc) return;
-    const col = columns[loc.ci];
+    const col = columns[loc.ri];
     const newStart = minsToTime(startHour * 60 + loc.si * SLOT_MINUTES);
     const newEnd = minsToTime(startHour * 60 + (loc.si + m.durSlots) * SLOT_MINUTES);
     const sameTime = m.appt.startTime.slice(0, 5) === newStart;
@@ -1029,154 +1037,130 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     );
   }
 
-  const totalCols = Math.max(columns.length, 1);
+  const nowLeft = nowTop === null ? null : (nowTop / SLOT_HEIGHT) * SLOT_WIDTH;
 
   return (
     <div className="h-full flex flex-col bg-background">
       {summaryBar}
 
       <div className="overflow-auto flex-1" ref={scrollRef}>
-        <div
-          className="relative"
-          style={totalCols <= 2 ? { width: "100%" } : { minWidth: `${64 + totalCols * 140}px` }}
-        >
-          {/* Header */}
-          <div className="sticky top-0 z-30 bg-background border-b border-border grid" style={{ gridTemplateColumns: `64px repeat(${totalCols}, 1fr)` }}>
-            <div className="p-2 text-xs font-medium text-muted-foreground text-center bg-muted/40 border-r border-border">時間</div>
-            {columns.length === 0
-              ? <div className="p-3 text-sm font-medium text-center bg-muted/40">{axis === "chair" ? "ユニットなし" : "スタッフなし"}</div>
-              : columns.map(col => (
-                <div key={col.key} className={`p-2.5 text-center border-r border-border last:border-r-0 ${col.accent ? "bg-amber-50 dark:bg-amber-900/20" : "bg-muted/40"}`}>
-                  <div className={`text-sm font-semibold ${col.accent ? "text-amber-700 dark:text-amber-300" : ""}`}>{col.label}</div>
-                  <div className={`text-xs ${col.accent ? "text-amber-500" : "text-muted-foreground"}`}>{col.sub}</div>
+        <div className="relative" style={{ width: LABEL_WIDTH + trackWidth }}>
+          {/* 時刻ヘッダー（上部固定・横スクロール追従） */}
+          <div className="sticky top-0 z-30 flex bg-background border-b border-border" style={{ height: HEADER_HEIGHT }}>
+            <div className="sticky left-0 z-40 shrink-0 bg-muted/50 border-r border-border flex items-center justify-center text-xs font-medium text-muted-foreground" style={{ width: LABEL_WIDTH }}>
+              {axis === "chair" ? "ユニット" : "担当"}
+            </div>
+            <div className="relative" style={{ width: trackWidth }}>
+              {timeSlots.map((slot, i) => (
+                <div
+                  key={slot}
+                  className={`absolute top-0 bottom-0 border-r flex items-center justify-center text-xs font-mono ${isHourStart(slot) ? "border-border/60 text-foreground font-semibold" : "border-border/30 text-muted-foreground/50"}`}
+                  style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }}
+                >
+                  {isHourStart(slot) ? slot : slot.slice(3)}
                 </div>
-              ))
-            }
+              ))}
+            </div>
           </div>
 
-          {/* Grid wrapper – now-line is relative to this */}
-          <div className="relative">
-            {/* Now line */}
-            {nowTop !== null && (
-              <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${nowTop}px` }}>
-                <div className="flex items-center">
-                  <div className="w-16 flex justify-end pr-1">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                  </div>
-                  <div className="flex-1 h-0.5 bg-red-500 opacity-80" />
+          {/* 本体：左ラベル列 + 右トラック領域 */}
+          <div className="flex">
+            {/* 行ラベル（左固定・横スクロール追従） */}
+            <div className="sticky left-0 z-20 shrink-0 bg-background border-r border-border" style={{ width: LABEL_WIDTH }}>
+              {columns.length === 0 ? (
+                <div className="p-3 text-sm text-center text-muted-foreground flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
+                  {axis === "chair" ? "ユニットなし" : "スタッフなし"}
                 </div>
-              </div>
-            )}
+              ) : columns.map(col => (
+                <div
+                  key={col.key}
+                  className={`flex flex-col justify-center px-2.5 border-b border-border/60 ${col.accent ? "bg-amber-50 dark:bg-amber-900/20" : "bg-muted/30"}`}
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  <div className={`text-sm font-semibold leading-tight truncate ${col.accent ? "text-amber-700 dark:text-amber-300" : ""}`}>{col.label}</div>
+                  <div className={`text-[11px] truncate ${col.accent ? "text-amber-500" : "text-muted-foreground"}`}>{col.sub}</div>
+                </div>
+              ))}
+            </div>
 
-            <div className="flex" style={{ height: `${timeSlots.length * SLOT_HEIGHT}px` }}>
-              {/* Time column */}
-              <div className="w-16 shrink-0 relative border-r border-border">
-                {timeSlots.map((slot, i) => (
-                  <div
-                    key={slot}
-                    className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30 text-foreground font-semibold" : "border-border text-muted-foreground/50"} flex items-start justify-center pt-0.5 text-xs font-mono select-none`}
-                    style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                  >
-                    {isHourStart(slot) ? slot : ""}
-                  </div>
-                ))}
-              </div>
+            {/* トラック領域（ドラッグ計算の基準要素） */}
+            <div className="relative" ref={gridRef} style={{ width: trackWidth, height: Math.max(columns.length, 1) * ROW_HEIGHT }}>
+              {/* 背景セル（行 × 時間スロット） */}
+              {columns.length === 0 ? (
+                timeSlots.map((slot, i) => {
+                  const st = getSlotStatus(slot, dayHours);
+                  return <div key={slot} className={`absolute top-0 bottom-0 border-r border-border/30 ${st === "closed" ? "bg-muted/40" : st === "lunch" ? "bg-muted/30" : ""}`} style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }} />;
+                })
+              ) : columns.map((col, ri) => (
+                <div key={col.key}>
+                  {timeSlots.map((slot, i) => {
+                    const st = getSlotStatus(slot, dayHours);
+                    const isClosed = st === "closed";
+                    const isLunch = st === "lunch";
+                    const clickable = !isClosed && !isLunch && calendarMode !== "view";
+                    return (
+                      <div
+                        key={slot}
+                        className={`absolute border-r border-b ${isHourStart(slot) ? "border-border/40" : "border-border/20"} ${isClosed ? "bg-muted/40 pointer-events-none" : isLunch ? (col.accent ? "bg-amber-50/40 dark:bg-amber-900/10" : "bg-muted/25") : col.accent ? "bg-amber-50/20 dark:bg-amber-900/5" : ""} ${clickable ? "cursor-pointer hover:bg-primary/5" : ""}`}
+                        style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH, top: ri * ROW_HEIGHT, height: ROW_HEIGHT }}
+                        onClick={() => clickable && onSlotClick(dateStr, slot, col.kind === "staff" ? col.key : undefined)}
+                        data-testid={clickable ? `slot-${col.key}-${slot}` : undefined}
+                      >
+                        {isLunch && i % 4 === 0 && (
+                          <div className="h-full flex items-center justify-center pointer-events-none">
+                            <span className="text-[10px] text-muted-foreground/40 whitespace-nowrap">昼休み</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
 
-              {/* Columns (axis-driven) */}
-              <div className="flex-1 flex min-w-0" ref={gridRef}>
-                {columns.length === 0 ? (
-                  <div className="flex-1 relative">
-                    {timeSlots.map((slot, i) => {
-                      const st = getSlotStatus(slot, dayHours);
-                      const isClosed = st === "closed";
-                      const isLunch = st === "lunch";
-                      return (
-                        <div
-                          key={slot}
-                          className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isLunch ? "bg-muted/30" : isClosed ? "bg-muted/40 pointer-events-none" : calendarMode !== "view" ? "cursor-pointer hover:bg-primary/5" : ""}`}
-                          style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                          onClick={() => !isClosed && !isLunch && calendarMode !== "view" && onSlotClick(dateStr, slot)}
-                        >
-                          {isLunch && (
-                            <div className="h-full flex items-center justify-center pointer-events-none">
-                              <span className="text-[10px] text-muted-foreground/40">昼休み</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : columns.map((col, ci) => {
-                  const appts = colAppts(col);
+              {/* 現在時刻ライン（縦・全行を貫く） */}
+              {nowLeft !== null && nowLeft >= 0 && nowLeft <= trackWidth && (
+                <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: nowLeft }}>
+                  <div className="w-0.5 h-full bg-red-500 opacity-80" />
+                  <div className="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-red-500" />
+                </div>
+              )}
+
+              {/* ドラッグ先ゴースト */}
+              {drag && (
+                <div
+                  className="absolute z-30 rounded border-2 border-dashed border-primary bg-primary/10 pointer-events-none"
+                  style={{ left: drag.slotIndex * SLOT_WIDTH + 1, width: drag.durSlots * SLOT_WIDTH - 2, top: drag.rowIndex * ROW_HEIGHT + 2, height: ROW_HEIGHT - 4 }}
+                />
+              )}
+
+              {/* 予約カード（同時刻の重なりは行内で上下に分割） */}
+              {columns.map((col, ri) => {
+                const appts = colAppts(col);
+                return layoutAppts(appts).map(({ appt, left: vOff, width: vH }) => {
+                  const s = timeToMins(appt.startTime.slice(0, 5)) - startHour * 60;
+                  const e = appt.endTime ? timeToMins(appt.endTime.slice(0, 5)) - startHour * 60 : s + SLOT_MINUTES;
+                  const left = (s / SLOT_MINUTES) * SLOT_WIDTH;
+                  const width = Math.max(SLOT_WIDTH - 2, ((e - s) / SLOT_MINUTES) * SLOT_WIDTH - 2);
+                  const top = ri * ROW_HEIGHT + vOff * ROW_HEIGHT + 1;
+                  const height = vH * ROW_HEIGHT - 2;
+                  const dimmed = drag?.apptId === appt.id;
                   return (
-                    <div key={col.key} className={`flex-1 relative border-l border-border/40 min-w-0 ${col.accent ? "bg-amber-50/20 dark:bg-amber-900/5" : ""}`}>
-                      {/* Background grid slots */}
-                      {timeSlots.map((slot, i) => {
-                        const st = getSlotStatus(slot, dayHours);
-                        const isClosed = st === "closed";
-                        const isLunch = st === "lunch";
-                        const cont = isContinuation(appts, slot);
-                        const clickable = !isClosed && !isLunch && !cont && calendarMode !== "view";
-                        return (
-                          <div
-                            key={slot}
-                            className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isClosed ? "bg-muted/40 pointer-events-none" : isLunch ? (col.accent ? "bg-amber-50/50 dark:bg-amber-900/10" : "bg-muted/30") : cont ? "" : clickable ? "cursor-pointer hover:bg-primary/5" : ""}`}
-                            style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                            onClick={() => clickable && onSlotClick(dateStr, slot, col.kind === "staff" ? col.key : undefined)}
-                            data-testid={clickable ? `slot-${col.key}-${slot}` : undefined}
-                          >
-                            {isLunch && (
-                              <div className="h-full flex items-center justify-center pointer-events-none">
-                                <span className="text-[10px] text-muted-foreground/40">昼休み</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* Drag target ghost */}
-                      {drag && drag.colIndex === ci && (
-                        <div
-                          className="absolute left-0.5 right-0.5 z-20 rounded border-2 border-dashed border-primary bg-primary/10 pointer-events-none"
-                          style={{ top: drag.slotIndex * SLOT_HEIGHT + 2, height: drag.durSlots * SLOT_HEIGHT - 4 }}
-                        />
-                      )}
-
-                      {/* Appointment cards – concurrent appointments rendered side-by-side */}
-                      {layoutAppts(appts).map(({ appt, left, width }) => {
-                        const startMins = timeToMins(appt.startTime.slice(0, 5)) - startHour * 60;
-                        const endMins = appt.endTime
-                          ? timeToMins(appt.endTime.slice(0, 5)) - startHour * 60
-                          : startMins + SLOT_MINUTES;
-                        const top = (startMins / SLOT_MINUTES) * SLOT_HEIGHT;
-                        const height = Math.max(SLOT_HEIGHT - 4, ((endMins - startMins) / SLOT_MINUTES) * SLOT_HEIGHT - 4);
-                        const GAP = 1;
-                        const dimmed = drag?.apptId === appt.id;
-                        return (
-                          <div
-                            key={appt.id}
-                            className="absolute z-10 group touch-none"
-                            style={{
-                              top: top + 2,
-                              height,
-                              left: `calc(${left * 100}% + ${GAP}px)`,
-                              width: `calc(${width * 100}% - ${GAP * 2}px)`,
-                            }}
-                            onPointerDown={(e) => startDrag(e, appt)}
-                          >
-                            <div className={`h-full ${dimmed ? "opacity-40" : "cursor-grab active:cursor-grabbing"}`}>
-                              <ApptCard appt={appt} height={height} onClick={() => {}} />
-                            </div>
-                            {!dimmed && <GripVertical className="absolute top-0.5 right-0.5 h-3 w-3 text-foreground/30 opacity-0 group-hover:opacity-100 pointer-events-none" />}
-                          </div>
-                        );
-                      })}
+                    <div
+                      key={appt.id}
+                      className="absolute z-10 group touch-none"
+                      style={{ left: left + 1, width, top, height }}
+                      onPointerDown={(ev) => startDrag(ev, appt)}
+                    >
+                      <div className={`h-full ${dimmed ? "opacity-40" : "cursor-grab active:cursor-grabbing"}`}>
+                        <ApptCard appt={appt} height={height} onClick={() => {}} />
+                      </div>
+                      {!dimmed && <GripVertical className="absolute top-0.5 right-0.5 h-3 w-3 text-foreground/30 opacity-0 group-hover:opacity-100 pointer-events-none" />}
                     </div>
                   );
-                })}
-              </div>
+                });
+              })}
             </div>
-          </div>{/* end grid wrapper relative */}
+          </div>
         </div>
       </div>
     </div>
