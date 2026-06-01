@@ -103,11 +103,11 @@ export default function Home() {
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <header className="md:hidden flex items-center gap-3 px-4 h-14 border-b bg-background shrink-0">
-            <Button variant="ghost" size="icon" className="shrink-0 -ml-2" onClick={() => setSidebarOpen(true)} data-testid="button-open-sidebar">
+          <header className="md:hidden flex items-center gap-2 px-3 h-14 border-b bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 shrink-0 sticky top-0 z-40">
+            <Button variant="ghost" size="icon" className="shrink-0 rounded-xl" onClick={() => setSidebarOpen(true)} data-testid="button-open-sidebar">
               <Menu className="w-5 h-5" />
             </Button>
-            <span className="font-semibold text-sm truncate flex-1">{clinic?.name ?? "Arche"}</span>
+            <span className="font-semibold text-base truncate flex-1 tracking-tight">{clinic?.name ?? "Arche"}</span>
           </header>
 
           <main className="flex-1 overflow-hidden flex flex-col pb-16 md:pb-0">
@@ -126,7 +126,7 @@ export default function Home() {
       </div>
 
       {/* Mobile bottom navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border flex items-stretch" style={{ height: "calc(64px + env(safe-area-inset-bottom))", paddingBottom: "env(safe-area-inset-bottom)" }} data-testid="mobile-bottom-nav">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75 border-t border-border flex items-stretch px-1.5 pt-1.5" style={{ height: "calc(64px + env(safe-area-inset-bottom))", paddingBottom: "env(safe-area-inset-bottom)" }} data-testid="mobile-bottom-nav">
         {BOTTOM_NAV.map(({ id, icon: Icon, label }) => {
           const isActive = activeView === id;
           const hasBadge = (id === "calendar" || id === "dashboard") && pendingCount > 0;
@@ -134,29 +134,28 @@ export default function Home() {
             <button
               key={id}
               onClick={() => handleViewChange(id)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 relative transition-colors active:bg-accent/50
+              className={`flex-1 flex flex-col items-center justify-center gap-1 relative rounded-2xl transition-all duration-200 active:scale-90
                 ${isActive ? "text-primary" : "text-muted-foreground"}`}
               data-testid={`bottom-nav-${id}`}
             >
-              <div className="relative">
+              <div className={`relative flex items-center justify-center h-8 w-12 rounded-full transition-colors duration-200 ${isActive ? "bg-primary/10" : "bg-transparent"}`}>
                 <Icon className="w-5 h-5" />
                 {hasBadge && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full" />
+                  <span className="absolute top-0.5 right-2 w-2 h-2 bg-amber-500 rounded-full ring-2 ring-background" />
                 )}
               </div>
-              <span className="text-[10px] font-medium leading-none">{label}</span>
-              {isActive && (
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary" />
-              )}
+              <span className={`text-[10px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}>{label}</span>
             </button>
           );
         })}
         <button
           onClick={() => setSidebarOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors active:bg-accent/50"
+          className="flex-1 flex flex-col items-center justify-center gap-1 text-muted-foreground rounded-2xl transition-all duration-200 active:scale-90"
           data-testid="bottom-nav-more"
         >
-          <MoreHorizontal className="w-5 h-5" />
+          <div className="flex items-center justify-center h-8 w-12 rounded-full">
+            <MoreHorizontal className="w-5 h-5" />
+          </div>
           <span className="text-[10px] font-medium leading-none">メニュー</span>
         </button>
       </nav>

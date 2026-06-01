@@ -46,7 +46,7 @@
   --font-sans: Open Sans, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
-  --radius: .5rem;
+  --radius: .75rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(0 0% 0% / 0.00), 0px 1px 2px -1px hsl(0 0% 0% / 0.00);
@@ -172,6 +172,24 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tighten heading rhythm for a more refined, premium feel (shape/typography only) */
+  h1, h2, h3, h4 {
+    letter-spacing: -0.015em;
+  }
+}
+
+@layer utilities {
+  /* Subtle, consistent elevation built only from black/transparent shadows
+     (already used across the app via Tailwind's neutral shadow utilities). */
+  .elevation-card {
+    box-shadow:
+      0 1px 2px -1px rgb(0 0 0 / 0.06),
+      0 2px 8px -2px rgb(0 0 0 / 0.08);
   }
 }
 

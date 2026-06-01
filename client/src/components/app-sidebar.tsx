@@ -94,7 +94,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
       // グループが切り替わったらラベルを挿入（collapsed時は非表示）
       if (!collapsed && item.group && item.group !== lastGroup) {
         elements.push(
-          <div key={`group-${item.group}`} className="text-[10px] text-muted-foreground uppercase tracking-wider px-2 pt-3 pb-1 select-none">
+          <div key={`group-${item.group}`} className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em] px-3 pt-4 pb-1.5 select-none">
             {item.group}
           </div>
         );
@@ -105,7 +105,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
         <Button
           key={item.id}
           variant={isActive ? "default" : "ghost"}
-          className={`w-full h-9 transition-all duration-200 ${collapsed ? "justify-center px-0" : "justify-start"} ${isLocked ? "opacity-50" : ""}`}
+          className={`w-full h-10 rounded-xl transition-all duration-200 active:scale-[0.98] ${isActive ? "shadow-sm font-semibold" : "font-medium"} ${collapsed ? "justify-center px-0" : "justify-start"} ${isLocked ? "opacity-50" : ""}`}
           onClick={() => handleNavClick(item)}
           data-testid={`nav-${item.id}`}
         >
@@ -145,7 +145,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
         <div className={`border-b border-sidebar-border flex items-center justify-between shrink-0 h-[65px] ${collapsed ? "px-3" : "px-5"}`}>
           {!collapsed && (
             <div className="min-w-0">
-              <h1 className="text-lg font-bold text-primary leading-tight">Arche</h1>
+              <h1 className="text-xl font-bold text-primary leading-tight tracking-tight">Arche</h1>
               <p className="text-xs text-muted-foreground mt-0.5 truncate">{clinic?.name ?? "クリニック"}</p>
             </div>
           )}
@@ -169,15 +169,15 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
           </div>
         </div>
 
-        <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? "px-2" : "px-3"}`}>
+        <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${collapsed ? "px-2" : "px-3"}`}>
           {renderNavItems()}
         </nav>
 
         <div className={`border-t border-sidebar-border space-y-1 shrink-0 py-3 ${collapsed ? "px-2" : "px-3"}`}>
           {user && !collapsed && (
-            <div className="flex items-center gap-2.5 px-2 py-1.5 mb-2">
-              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <User className="h-3.5 w-3.5 text-primary" />
+            <div className="flex items-center gap-2.5 px-2.5 py-2 mb-2 rounded-xl bg-sidebar-accent/50">
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <User className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{user.username}</p>
@@ -199,7 +199,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
                 <TooltipContent side="right" className="text-xs">全医院管理</TooltipContent>
               </Tooltip>
             ) : (
-              <Button variant="ghost" className="w-full h-9 justify-start text-sm text-muted-foreground" asChild data-testid="button-super-admin">
+              <Button variant="ghost" className="w-full h-10 rounded-xl justify-start text-sm font-medium text-muted-foreground" asChild data-testid="button-super-admin">
                 <Link href="/super-admin">
                   <Building2 className="w-4 h-4 mr-3 shrink-0" />
                   全医院管理
@@ -211,7 +211,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
           {/* お問い合わせ（collapsed時は非表示） */}
           {!collapsed && (
             <button
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors rounded-xl hover:bg-accent"
               onClick={() => onViewChange("support" as ViewType)}
               data-testid="nav-support"
             >
@@ -238,7 +238,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
           ) : (
             <Button
               variant="ghost"
-              className="w-full h-9 justify-start text-sm text-muted-foreground hover:text-destructive"
+              className="w-full h-10 rounded-xl justify-start text-sm font-medium text-muted-foreground hover:text-destructive"
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
               data-testid="button-logout"
