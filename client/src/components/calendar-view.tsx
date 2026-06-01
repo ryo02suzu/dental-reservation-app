@@ -363,11 +363,12 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
   }, [createHolidayMutation, queryClient]);
 
-  const { data: clinicSettings } = useQuery<{ closedOnHolidays?: boolean; chairsCount?: number }>({
+  const { data: clinicSettings } = useQuery<{ closedOnHolidays?: boolean; chairsCount?: number; slotIntervalMinutes?: number }>({
     queryKey: ["/api/clinic-settings"],
   });
   const closedOnHolidays = clinicSettings?.closedOnHolidays !== false;
   const chairsCount = clinicSettings?.chairsCount ?? 5;
+  const slotIntervalMinutes = clinicSettings?.slotIntervalMinutes ?? 30;
 
   const { data: clinicHolidays = [] } = useQuery<Holiday[]>({
     queryKey: ["/api/holidays"],
@@ -608,7 +609,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
           </div>
         ) : viewMode === "day" ? (
-          <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} axis={dayAxis} chairsCount={chairsCount} isMobile={isMobile} onAppointmentClick={handleApptClick} onApptMove={handleApptMove} onNewBooking={handleNewBooking} onSlotClick={handleSlotClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} />
+          <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} axis={dayAxis} chairsCount={chairsCount} slotIntervalMinutes={slotIntervalMinutes} isMobile={isMobile} onAppointmentClick={handleApptClick} onApptMove={handleApptMove} onNewBooking={handleNewBooking} onSlotClick={handleSlotClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} />
         ) : viewMode === "week" ? (
           <WeekView currentDate={currentDate} appointments={appointments} businessHours={businessHours} closedOnHolidays={closedOnHolidays} clinicHolidays={clinicHolidays} calendarMode={calendarMode} onAppointmentClick={handleApptClick} onDayClick={handleDayClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} onHolidayDetailOpen={(date) => { setHolidayModalDate(date); setHolidayModalInitialTime(null); }} />
         ) : (
@@ -678,7 +679,7 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
 }
 
 // ─── Day View ────────────────────────────────────────────────────────────────
-function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, businessHours, calendarMode, clinicHolidays, axis, chairsCount, isMobile, onAppointmentClick, onApptMove, onNewBooking, onSlotClick, onHolidayQuickSave, onHolidayCustomSave, onHolidayDelete }: {
+function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, businessHours, calendarMode, clinicHolidays, axis, chairsCount, slotIntervalMinutes, isMobile, onAppointmentClick, onApptMove, onNewBooking, onSlotClick, onHolidayQuickSave, onHolidayCustomSave, onHolidayDelete }: {
   currentDate: Date;
   appointments: Appointment[];
   staff: Staff[];
@@ -688,6 +689,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   clinicHolidays: Holiday[];
   axis: DayAxis;
   chairsCount: number;
+  slotIntervalMinutes: number;
   isMobile: boolean;
   onAppointmentClick: (a: Appointment) => void;
   onApptMove: (a: Appointment, patch: { date: string; startTime: string; endTime: string; staffId?: string | null; chairNumber?: number | null }) => void;
@@ -726,6 +728,9 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   const clinicHoliday = clinicHolidays.find(h => h.date === dateStr);
   const dateLabel = format(currentDate, "M月d日(E)", { locale: ja });
 
+  // 院の設定「時間刻み」を台帳のグリッドに反映（モジュール定数SLOT_MINUTESを局所的に上書き）
+  const SLOT_MINUTES = Math.min(60, Math.max(5, slotIntervalMinutes || 30));
+
   const timeSlots: string[] = [];
   for (let h = startHour; h < endHour; h++) {
     for (let m = 0; m < 60; m += SLOT_MINUTES) {
@@ -753,7 +758,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   useEffect(() => {
     const t = calcNowTop();
     if (t !== null && scrollRef.current) {
-      scrollRef.current.scrollLeft = Math.max(0, (t / SLOT_HEIGHT) * 88 - 240);
+      scrollRef.current.scrollLeft = Math.max(0, (t / SLOT_HEIGHT) * SLOT_WIDTH - 240);
     }
   }, []);
 
@@ -815,7 +820,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   }
 
   // ── 横タイムライン台帳の寸法（時間=横／行=スタッフ・ユニット）──────────────
-  const SLOT_WIDTH = 88;    // 30分あたりの横幅(px)
+  const SLOT_WIDTH = Math.round((SLOT_MINUTES * 88) / 30); // 1コマの横幅(px)＝刻みに比例（30分=88px相当）
   const LABEL_WIDTH = 132;  // 左側の行ラベル幅(px)
   const HEADER_HEIGHT = 40; // 上部の時刻ヘッダー高さ(px)
   // 行の高さは画面高さと行数から動的に決定（少人数なら縦を程よく埋め、多人数ならスクロール）
@@ -1074,7 +1079,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                 <div
                   key={slot}
                   className="absolute top-0 bottom-0 flex items-center pl-2 text-sm font-semibold text-foreground border-l border-border/70"
-                  style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH * 2 }}
+                  style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH * (60 / SLOT_MINUTES) }}
                 >
                   {slot}
                 </div>
