@@ -23,6 +23,7 @@ import CheckinPage from "@/pages/checkin";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "./lib/queryClient";
 import { Redirect } from "wouter";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -100,14 +101,16 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
