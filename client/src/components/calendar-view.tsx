@@ -4,7 +4,7 @@ import { format, startOfWeek, addDays, isSameDay, parseISO, addMonths, subMonths
 import { ja } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Sun, Sunset, Eye, Ban, Trash2, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Sun, Sunset, Eye, Ban, Trash2, Clock, Users, Armchair, GripVertical } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { AppointmentModal } from "@/components/appointment-modal";
 import { getHolidayName, isHoliday } from "@/lib/holidays";
 import { apiRequest } from "@/lib/queryClient";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useToast } from "@/hooks/use-toast";
+
+type DayAxis = "staff" | "chair";
 
 type CalendarMode = "view" | "book" | "holiday";
 
@@ -77,6 +81,12 @@ const SLOT_HEIGHT = 48;
 function toMins(t: string): number {
   const [h, m] = t.slice(0, 5).split(":").map(Number);
   return h * 60 + m;
+}
+
+function minsToTime(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 // ─── Concurrent appointment layout algorithm ───────────────────────────────
@@ -303,7 +313,10 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
   const [calendarMode, setCalendarMode] = useState<CalendarMode>("view");
   const [holidayModalDate, setHolidayModalDate] = useState<string | null>(null);
   const [holidayModalInitialTime, setHolidayModalInitialTime] = useState<string | null>(null);
+  const [dayAxis, setDayAxis] = useState<DayAxis>("staff");
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   const { data: businessHours = [] } = useQuery<BusinessHours[]>({
     queryKey: ["/api/business-hours"],
@@ -350,10 +363,11 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
   }, [createHolidayMutation, queryClient]);
 
-  const { data: clinicSettings } = useQuery<{ closedOnHolidays?: boolean }>({
+  const { data: clinicSettings } = useQuery<{ closedOnHolidays?: boolean; chairsCount?: number }>({
     queryKey: ["/api/clinic-settings"],
   });
   const closedOnHolidays = clinicSettings?.closedOnHolidays !== false;
+  const chairsCount = clinicSettings?.chairsCount ?? 5;
 
   const { data: clinicHolidays = [] } = useQuery<Holiday[]>({
     queryKey: ["/api/holidays"],
@@ -436,6 +450,33 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     setIsModalOpen(true);
   };
 
+  // ドラッグ移動：変更フィールドのみPUT（updateAppointmentは部分更新）
+  const handleApptMove = useCallback(async (
+    appt: Appointment,
+    patch: { date: string; startTime: string; endTime: string; staffId?: string | null; chairNumber?: number | null },
+  ) => {
+    // 楽観的更新：即座にキャッシュを書き換えて待ち時間をゼロに見せる
+    const queries = queryClient.getQueriesData<Appointment[]>({ queryKey: ["/api/appointments"] });
+    const apply = (a: Appointment): Appointment => a.id === appt.id ? { ...a, ...patch } as Appointment : a;
+    queries.forEach(([key, data]) => {
+      if (Array.isArray(data)) queryClient.setQueryData(key, data.map(apply));
+    });
+    try {
+      await apiRequest("PUT", `/api/appointments/${appt.id}`, patch);
+    } catch (e: any) {
+      const msg = String(e?.message || "").replace(/^\d+:\s*/, "");
+      toast({ title: "移動できませんでした", description: msg, variant: "destructive" });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+    }
+  }, [queryClient, toast]);
+
+  const handleNewBooking = (date: string, time: string) => {
+    setSelectedAppointment(null);
+    setInitialSlotData({ date, time });
+    setIsModalOpen(true);
+  };
+
   const headerTitle = viewMode === "day"
     ? format(currentDate, "yyyy年M月d日（E）", { locale: ja })
     : viewMode === "week"
@@ -492,6 +533,26 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             ))}
           </div>
 
+          {/* 台帳の軸切替（日ビュー・PC/タブレットのみ）: スタッフ別 ⇄ ユニット別 */}
+          {viewMode === "day" && !isMobile && (
+            <div className="flex border border-border rounded-md overflow-hidden w-fit">
+              {([
+                { axis: "staff" as DayAxis, icon: Users, label: "スタッフ別" },
+                { axis: "chair" as DayAxis, icon: Armchair, label: "ユニット別" },
+              ] as const).map(({ axis, icon: Icon, label }, idx) => (
+                <button
+                  key={axis}
+                  className={`flex items-center gap-1.5 px-3 h-10 sm:h-9 text-xs font-medium transition-colors active:scale-95 ${idx > 0 ? "border-l border-border" : ""} ${dayAxis === axis ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                  onClick={() => setDayAxis(axis)}
+                  data-testid={`day-axis-${axis}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="hidden md:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* スタッフ別フィルター（2名以上いる場合のみ表示） */}
           {staff.length >= 2 && (
             <div className="flex items-center gap-1 flex-wrap max-w-full">
@@ -536,7 +597,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
           </div>
         ) : viewMode === "day" ? (
-          <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} onAppointmentClick={handleApptClick} onSlotClick={handleSlotClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} />
+          <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} axis={dayAxis} chairsCount={chairsCount} isMobile={isMobile} onAppointmentClick={handleApptClick} onApptMove={handleApptMove} onNewBooking={handleNewBooking} onSlotClick={handleSlotClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} />
         ) : viewMode === "week" ? (
           <WeekView currentDate={currentDate} appointments={appointments} businessHours={businessHours} closedOnHolidays={closedOnHolidays} clinicHolidays={clinicHolidays} calendarMode={calendarMode} onAppointmentClick={handleApptClick} onDayClick={handleDayClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} onHolidayDetailOpen={(date) => { setHolidayModalDate(date); setHolidayModalInitialTime(null); }} />
         ) : (
@@ -606,7 +667,7 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
 }
 
 // ─── Day View ────────────────────────────────────────────────────────────────
-function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, businessHours, calendarMode, clinicHolidays, onAppointmentClick, onSlotClick, onHolidayQuickSave, onHolidayCustomSave, onHolidayDelete }: {
+function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, businessHours, calendarMode, clinicHolidays, axis, chairsCount, isMobile, onAppointmentClick, onApptMove, onNewBooking, onSlotClick, onHolidayQuickSave, onHolidayCustomSave, onHolidayDelete }: {
   currentDate: Date;
   appointments: Appointment[];
   staff: Staff[];
@@ -614,13 +675,19 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   businessHours: BusinessHours[];
   calendarMode: CalendarMode;
   clinicHolidays: Holiday[];
+  axis: DayAxis;
+  chairsCount: number;
+  isMobile: boolean;
   onAppointmentClick: (a: Appointment) => void;
+  onApptMove: (a: Appointment, patch: { date: string; startTime: string; endTime: string; staffId?: string | null; chairNumber?: number | null }) => void;
+  onNewBooking: (date: string, time: string) => void;
   onSlotClick: (date: string, time: string, staffId?: string) => void;
   onHolidayQuickSave: (date: string, preset: "morning" | "afternoon" | "allday", dayOfWeek: number) => Promise<void>;
   onHolidayCustomSave: (date: string, startTime: string, endTime: string) => Promise<void>;
   onHolidayDelete: (id: string) => Promise<void>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const [nowTop, setNowTop] = useState<number | null>(null);
   const [holidayPopoverOpen, setHolidayPopoverOpen] = useState(false);
   const isToday = isSameDay(currentDate, new Date());
@@ -665,6 +732,9 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     }
   }, []);
 
+  const timeToMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const isHourStart = (slot: string) => slot.endsWith(":00");
+
   const todayAppts = appointments.filter(a => isSameDay(parseISO(a.date), currentDate));
   const activeAppts = todayAppts.filter(a => a.status !== "cancelled");
   const morningAppts = activeAppts.filter(a => parseInt(a.startTime) < 13);
@@ -673,25 +743,127 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   const afternoonCount = afternoonAppts.length;
   const morningNew = morningAppts.filter(a => (a.treatmentType || "").includes("初診")).length;
   const afternoonNew = afternoonAppts.filter(a => (a.treatmentType || "").includes("初診")).length;
-  const unassignedAppts = todayAppts.filter(a => !a.staffId);
-  const hasUnassigned = unassignedAppts.length > 0;
-  const totalCols = (staff.length || 1) + (hasUnassigned ? 1 : 0);
 
-  const timeToMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-  const getAppts = (staffId: string, slot: string) => todayAppts.filter(a => a.staffId === staffId && a.startTime.slice(0, 5) === slot);
-  const getUnassignedAppts = (slot: string) => unassignedAppts.filter(a => a.startTime.slice(0, 5) === slot);
+  // ── 台帳の列を軸（スタッフ別／ユニット別）から構築 ──────────────────────────
+  type Col = { key: string; label: string; sub: string; kind: "staff" | "chair" | "unassigned"; accent?: boolean };
+  const hasUnassignedStaff = activeAppts.some(a => !a.staffId);
+  const hasUnassignedChair = activeAppts.some(a => !a.chairNumber);
+  let columns: Col[];
+  if (axis === "chair") {
+    const usedMax = activeAppts.reduce((m, a) => Math.max(m, a.chairNumber || 0), 0);
+    const n = Math.max(chairsCount, usedMax, 1);
+    columns = Array.from({ length: n }, (_, i) => ({ key: String(i + 1), label: `ユニット${i + 1}`, sub: "診療台", kind: "chair" as const }));
+    if (hasUnassignedChair) columns.push({ key: "__none__", label: "未割当", sub: "台未設定", kind: "unassigned", accent: true });
+  } else {
+    columns = staff.map(s => ({ key: s.id, label: s.name, sub: s.role === "doctor" ? "歯科医師" : "衛生士", kind: "staff" as const }));
+    if (hasUnassignedStaff && !filterStaffId) columns.push({ key: "__none__", label: "未割当", sub: "担当者未設定", kind: "unassigned", accent: true });
+  }
+
+  const colAppts = (col: Col): Appointment[] => {
+    if (col.kind === "unassigned") return activeAppts.filter(a => axis === "chair" ? !a.chairNumber : !a.staffId);
+    if (col.kind === "chair") return activeAppts.filter(a => a.chairNumber === Number(col.key));
+    return activeAppts.filter(a => a.staffId === col.key);
+  };
+
   const isContinuation = (appts: Appointment[], slot: string) =>
     appts.some(a => {
       const s = timeToMins(a.startTime.slice(0, 5));
       const e = a.endTime ? timeToMins(a.endTime.slice(0, 5)) : s + SLOT_MINUTES;
       return s < timeToMins(slot) && e > timeToMins(slot);
     });
-  const getHeight = (appt: Appointment) => {
-    const s = timeToMins(appt.startTime.slice(0, 5));
-    const e = appt.endTime ? timeToMins(appt.endTime.slice(0, 5)) : s + SLOT_MINUTES;
-    return Math.max(1, (e - s) / SLOT_MINUTES) * SLOT_HEIGHT - 4;
+
+  // ── 空き枠カウント（営業中スロットのうち予約で埋まっていない数）──────────────
+  const openSlots = timeSlots.filter(s => getSlotStatus(s, dayHours) === "open");
+  const realCols = columns.filter(c => c.kind !== "unassigned");
+  let freeCount = 0;
+  for (const col of realCols) {
+    const appts = colAppts(col);
+    for (const slot of openSlots) {
+      const sm = timeToMins(slot);
+      const covered = appts.some(a => {
+        const as = timeToMins(a.startTime.slice(0, 5));
+        const ae = a.endTime ? timeToMins(a.endTime.slice(0, 5)) : as + SLOT_MINUTES;
+        return as <= sm && ae > sm;
+      });
+      if (!covered) freeCount++;
+    }
+  }
+
+  // ── ドラッグ移動 ─────────────────────────────────────────────────────────────
+  const dragMeta = useRef<{ appt: Appointment; durSlots: number; startX: number; startY: number; moved: boolean } | null>(null);
+  const handlersRef = useRef<{ move: (e: PointerEvent) => void; up: (e: PointerEvent) => void } | null>(null);
+  const [drag, setDrag] = useState<{ apptId: string; durSlots: number; colIndex: number; slotIndex: number } | null>(null);
+
+  const locate = (clientX: number, clientY: number, durSlots: number) => {
+    const grid = gridRef.current;
+    if (!grid || columns.length === 0) return null;
+    const rect = grid.getBoundingClientRect();
+    const colW = rect.width / columns.length;
+    let ci = Math.floor((clientX - rect.left) / colW);
+    ci = Math.max(0, Math.min(columns.length - 1, ci));
+    let si = Math.round((clientY - rect.top) / SLOT_HEIGHT);
+    si = Math.max(0, Math.min(timeSlots.length - durSlots, si));
+    return { ci, si };
   };
-  const isHourStart = (slot: string) => slot.endsWith(":00");
+
+  const onPointerMoveDoc = (e: PointerEvent) => {
+    const m = dragMeta.current;
+    if (!m) return;
+    if (!m.moved) {
+      if (Math.hypot(e.clientX - m.startX, e.clientY - m.startY) < 6) return;
+      m.moved = true;
+      document.body.style.userSelect = "none";
+    }
+    const loc = locate(e.clientX, e.clientY, m.durSlots);
+    if (loc) setDrag({ apptId: m.appt.id, durSlots: m.durSlots, colIndex: loc.ci, slotIndex: loc.si });
+  };
+
+  const removeDragListeners = () => {
+    if (handlersRef.current) {
+      document.removeEventListener("pointermove", handlersRef.current.move);
+      document.removeEventListener("pointerup", handlersRef.current.up);
+      handlersRef.current = null;
+    }
+    document.body.style.userSelect = "";
+  };
+
+  const onPointerUpDoc = (e: PointerEvent) => {
+    removeDragListeners();
+    const m = dragMeta.current;
+    dragMeta.current = null;
+    setDrag(null);
+    if (!m) return;
+    if (!m.moved) { onAppointmentClick(m.appt); return; }
+    const loc = locate(e.clientX, e.clientY, m.durSlots);
+    if (!loc) return;
+    const col = columns[loc.ci];
+    const newStart = minsToTime(startHour * 60 + loc.si * SLOT_MINUTES);
+    const newEnd = minsToTime(startHour * 60 + (loc.si + m.durSlots) * SLOT_MINUTES);
+    const sameTime = m.appt.startTime.slice(0, 5) === newStart;
+    const sameCol = axis === "chair"
+      ? (m.appt.chairNumber ?? null) === (col.kind === "unassigned" ? null : Number(col.key))
+      : (m.appt.staffId ?? null) === (col.kind === "unassigned" ? null : col.key);
+    if (sameTime && sameCol) return;
+    const patch: { date: string; startTime: string; endTime: string; staffId?: string | null; chairNumber?: number | null } =
+      { date: dateStr, startTime: newStart, endTime: newEnd };
+    if (axis === "chair") patch.chairNumber = col.kind === "unassigned" ? null : Number(col.key);
+    else patch.staffId = col.kind === "unassigned" ? null : col.key;
+    onApptMove(m.appt, patch);
+  };
+
+  const startDrag = (e: React.PointerEvent, appt: Appointment) => {
+    if (isMobile || e.button !== 0) return;
+    e.stopPropagation();
+    const s = timeToMins(appt.startTime.slice(0, 5));
+    const en = appt.endTime ? timeToMins(appt.endTime.slice(0, 5)) : s + SLOT_MINUTES;
+    const durSlots = Math.max(1, Math.round((en - s) / SLOT_MINUTES));
+    dragMeta.current = { appt, durSlots, startX: e.clientX, startY: e.clientY, moved: false };
+    handlersRef.current = { move: onPointerMoveDoc, up: onPointerUpDoc };
+    document.addEventListener("pointermove", onPointerMoveDoc);
+    document.addEventListener("pointerup", onPointerUpDoc);
+  };
+
+  useEffect(() => () => removeDragListeners(), []);
 
   const holidayButton = (
     <Popover open={holidayPopoverOpen} onOpenChange={setHolidayPopoverOpen}>
@@ -719,6 +891,115 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     </Popover>
   );
 
+  const summaryBar = (
+    <div className="flex items-center gap-4 px-4 md:px-6 py-2 bg-muted/30 border-b border-border text-sm shrink-0 overflow-x-auto">
+      <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
+        <Sun className="h-3.5 w-3.5" />午前 <strong className="text-foreground">{morningCount}</strong>件
+        {morningNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(新患{morningNew}名)</span>}
+      </div>
+      <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
+        <Sunset className="h-3.5 w-3.5" />午後 <strong className="text-foreground">{afternoonCount}</strong>件
+        {afternoonNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(新患{afternoonNew}名)</span>}
+      </div>
+      <div className="text-muted-foreground shrink-0">計 <strong className="text-foreground">{activeAppts.length}</strong>件</div>
+      {!isDayOff && <div className="text-emerald-600 dark:text-emerald-400 shrink-0">空き <strong>{freeCount}</strong>枠</div>}
+      {dayHours?.openTime && (
+        <div className="text-xs text-muted-foreground shrink-0 hidden sm:block">
+          診療時間: {dayHours.openTime.slice(0,5)}〜{dayHours.closeTime?.slice(0,5) || ""}
+          {dayHours.afternoonOpenTime && ` / ${dayHours.afternoonOpenTime.slice(0,5)}〜${dayHours.afternoonCloseTime?.slice(0,5) || ""}`}
+        </div>
+      )}
+      <div className="ml-auto">{holidayButton}</div>
+    </div>
+  );
+
+  // ── モバイル：縦アジェンダ（時系列リスト）───────────────────────────────────
+  if (isMobile) {
+    const sorted = [...activeAppts].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const nowMins = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : -1;
+    const suggestTime = () => {
+      const open = dayHours?.openTime ? timeToMins(dayHours.openTime.slice(0, 5)) : startHour * 60;
+      const close = dayHours?.closeTime ? timeToMins(dayHours.closeTime.slice(0, 5)) : endHour * 60;
+      if (!isToday) return minsToTime(open);
+      const now = new Date();
+      let m = Math.ceil((now.getHours() * 60 + now.getMinutes()) / SLOT_MINUTES) * SLOT_MINUTES;
+      if (m < open || m > close - SLOT_MINUTES) m = open;
+      return minsToTime(m);
+    };
+    let dividerShown = false;
+    return (
+      <div className="h-full flex flex-col bg-background relative">
+        {summaryBar}
+        {isDayOff ? (
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="text-center text-muted-foreground">
+              <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
+              <p className="text-sm font-medium">定休日</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto p-3 space-y-2 pb-24" ref={scrollRef}>
+            {sorted.length === 0 ? (
+              <div className="text-center text-muted-foreground py-16">
+                <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
+                <p className="text-sm">予約はありません</p>
+                <p className="text-xs mt-1 opacity-60">右下のボタンから追加できます</p>
+              </div>
+            ) : sorted.map(appt => {
+              const c = getTreatmentColor(appt.treatmentType || "");
+              const isNewPatient = (appt.treatmentType || "").includes("初診");
+              const start = appt.startTime.slice(0, 5);
+              const showDivider = isToday && !dividerShown && timeToMins(start) >= nowMins;
+              if (showDivider) dividerShown = true;
+              return (
+                <div key={appt.id}>
+                  {showDivider && (
+                    <div className="flex items-center gap-2 py-1.5">
+                      <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                      <div className="flex-1 h-px bg-red-500/50" />
+                      <span className="text-[10px] font-medium text-red-500">現在 {minsToTime(nowMins)}</span>
+                    </div>
+                  )}
+                  <button
+                    className="w-full flex items-stretch rounded-lg border border-border/60 overflow-hidden bg-card active:brightness-95 transition-all shadow-sm"
+                    onClick={() => onAppointmentClick(appt)}
+                    data-testid={`agenda-appt-${appt.id}`}
+                  >
+                    <div className={`w-1.5 shrink-0 ${c.bar}`} />
+                    <div className="flex-1 p-3 text-left min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-sm font-semibold">{start}〜{appt.endTime?.slice(0, 5)}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                          {appt.chairNumber ? `ユニット${appt.chairNumber}` : appt.staff?.name || "未割当"}
+                        </span>
+                      </div>
+                      <div className="font-semibold mt-1 flex items-center gap-1.5 truncate">
+                        <span className="truncate">{appt.patient?.name || "患者不明"}</span>
+                        {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-1 shrink-0">新患</span>}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {appt.treatmentType}{appt.staff && appt.chairNumber ? ` ・ ${appt.staff.name}` : ""}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {!isDayOff && (
+          <button
+            className="absolute bottom-5 right-5 z-30 flex items-center gap-2 h-14 px-5 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform font-medium"
+            onClick={() => onNewBooking(dateStr, suggestTime())}
+            data-testid="agenda-new-booking"
+          >
+            <Plus className="h-5 w-5" />新規予約
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (isDayOff) {
     return (
       <div className="h-full flex flex-col bg-background">
@@ -737,28 +1018,11 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     );
   }
 
+  const totalCols = Math.max(columns.length, 1);
+
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Summary */}
-      <div className="flex items-center gap-4 px-4 md:px-6 py-2 bg-muted/30 border-b border-border text-sm shrink-0 overflow-x-auto">
-        <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-          <Sun className="h-3.5 w-3.5" />午前 <strong className="text-foreground">{morningCount}</strong>件
-          {morningNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(新患{morningNew}名)</span>}
-        </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-          <Sunset className="h-3.5 w-3.5" />午後 <strong className="text-foreground">{afternoonCount}</strong>件
-          {afternoonNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(新患{afternoonNew}名)</span>}
-        </div>
-        <div className="text-muted-foreground shrink-0">計 <strong className="text-foreground">{activeAppts.length}</strong>件</div>
-        {hasUnassigned && <div className="text-amber-600 dark:text-amber-400 font-medium shrink-0">未割当 <strong>{unassignedAppts.filter(a => a.status !== "cancelled").length}</strong>件</div>}
-        {dayHours?.openTime && (
-          <div className="text-xs text-muted-foreground shrink-0 hidden sm:block">
-            診療時間: {dayHours.openTime.slice(0,5)}〜{dayHours.closeTime?.slice(0,5) || ""}
-            {dayHours.afternoonOpenTime && ` / ${dayHours.afternoonOpenTime.slice(0,5)}〜${dayHours.afternoonCloseTime?.slice(0,5) || ""}`}
-          </div>
-        )}
-        <div className="ml-auto">{holidayButton}</div>
-      </div>
+      {summaryBar}
 
       <div className="overflow-auto flex-1" ref={scrollRef}>
         <div
@@ -768,146 +1032,107 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
           {/* Header */}
           <div className="sticky top-0 z-30 bg-background border-b border-border grid" style={{ gridTemplateColumns: `64px repeat(${totalCols}, 1fr)` }}>
             <div className="p-2 text-xs font-medium text-muted-foreground text-center bg-muted/40 border-r border-border">時間</div>
-            {staff.length === 0 && !hasUnassigned
-              ? <div className="p-3 text-sm font-medium text-center bg-muted/40">スタッフなし</div>
-              : staff.map(s => (
-                <div key={s.id} className="p-2.5 text-center bg-muted/40 border-r border-border last:border-r-0">
-                  <div className="text-sm font-semibold">{s.name}</div>
-                  <div className="text-xs text-muted-foreground">{s.role === "doctor" ? "歯科医師" : "衛生士"}</div>
+            {columns.length === 0
+              ? <div className="p-3 text-sm font-medium text-center bg-muted/40">{axis === "chair" ? "ユニットなし" : "スタッフなし"}</div>
+              : columns.map(col => (
+                <div key={col.key} className={`p-2.5 text-center border-r border-border last:border-r-0 ${col.accent ? "bg-amber-50 dark:bg-amber-900/20" : "bg-muted/40"}`}>
+                  <div className={`text-sm font-semibold ${col.accent ? "text-amber-700 dark:text-amber-300" : ""}`}>{col.label}</div>
+                  <div className={`text-xs ${col.accent ? "text-amber-500" : "text-muted-foreground"}`}>{col.sub}</div>
                 </div>
               ))
             }
-            {hasUnassigned && (
-              <div className="p-2.5 text-center bg-amber-50 dark:bg-amber-900/20">
-                <div className="text-sm font-semibold text-amber-700 dark:text-amber-300">未割り当て</div>
-                <div className="text-xs text-amber-500">担当者未設定</div>
-              </div>
-            )}
           </div>
 
-          {/* Grid wrapper – now-line is relative to this, not the outer container */}
+          {/* Grid wrapper – now-line is relative to this */}
           <div className="relative">
-          {/* Now line */}
-          {nowTop !== null && (
-            <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${nowTop}px` }}>
-              <div className="flex items-center">
-                <div className="w-16 flex justify-end pr-1">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+            {/* Now line */}
+            {nowTop !== null && (
+              <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${nowTop}px` }}>
+                <div className="flex items-center">
+                  <div className="w-16 flex justify-end pr-1">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                  </div>
+                  <div className="flex-1 h-0.5 bg-red-500 opacity-80" />
                 </div>
-                <div className="flex-1 h-0.5 bg-red-500 opacity-80" />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Grid – absolute positioning to prevent column drift */}
-          <div className="flex" style={{ height: `${timeSlots.length * SLOT_HEIGHT}px` }}>
-            {/* Time column */}
-            <div className="w-16 shrink-0 relative border-r border-border">
-              {timeSlots.map((slot, i) => (
-                <div
-                  key={slot}
-                  className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30 text-foreground font-semibold" : "border-border text-muted-foreground/50"} flex items-start justify-center pt-0.5 text-xs font-mono select-none`}
-                  style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                >
-                  {isHourStart(slot) ? slot : ""}
-                </div>
-              ))}
-            </div>
+            <div className="flex" style={{ height: `${timeSlots.length * SLOT_HEIGHT}px` }}>
+              {/* Time column */}
+              <div className="w-16 shrink-0 relative border-r border-border">
+                {timeSlots.map((slot, i) => (
+                  <div
+                    key={slot}
+                    className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30 text-foreground font-semibold" : "border-border text-muted-foreground/50"} flex items-start justify-center pt-0.5 text-xs font-mono select-none`}
+                    style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
+                  >
+                    {isHourStart(slot) ? slot : ""}
+                  </div>
+                ))}
+              </div>
 
-            {/* Staff columns */}
-            <div className="flex-1 flex min-w-0">
-              {staff.length === 0 && !hasUnassigned ? (
-                <div className="flex-1 relative">
-                  {timeSlots.map((slot, i) => {
-                    const st = getSlotStatus(slot, dayHours);
-                    const isClosed = st === "closed";
-                    const isLunch = st === "lunch";
-                    return (
-                      <div
-                        key={slot}
-                        className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isLunch ? "bg-muted/30" : isClosed ? "bg-muted/40 pointer-events-none" : calendarMode !== "view" ? "cursor-pointer hover:bg-primary/5" : ""}`}
-                        style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                        onClick={() => !isClosed && !isLunch && calendarMode !== "view" && onSlotClick(dateStr, slot)}
-                        data-testid={!isClosed && !isLunch ? `slot-nostaff-${slot}` : undefined}
-                      >
-                        {isLunch && (
-                          <div className="h-full flex items-center justify-center pointer-events-none">
-                            <span className="text-[10px] text-muted-foreground/40">昼休み</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <>
-                  {staff.map(s => {
-                    const sAppts = todayAppts.filter(a => a.staffId === s.id);
-                    return (
-                      <div key={s.id} className="flex-1 relative border-l border-border/40 min-w-0">
-                        {/* Background grid slots */}
-                        {timeSlots.map((slot, i) => {
-                          const st = getSlotStatus(slot, dayHours);
-                          const isClosed = st === "closed";
-                          const isLunch = st === "lunch";
-                          const cont = isContinuation(sAppts, slot);
-                          return (
-                            <div
-                              key={slot}
-                              className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isClosed ? "bg-muted/40 pointer-events-none" : isLunch ? "bg-muted/30" : cont ? "" : calendarMode !== "view" ? "cursor-pointer hover:bg-primary/5" : ""}`}
-                              style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                              onClick={() => !isClosed && !isLunch && !cont && calendarMode !== "view" && onSlotClick(dateStr, slot, s.id)}
-                              data-testid={!isClosed && !isLunch && !cont ? `slot-${s.id}-${slot}` : undefined}
-                            >
-                              {isLunch && (
-                                <div className="h-full flex items-center justify-center pointer-events-none">
-                                  <span className="text-[10px] text-muted-foreground/40">昼休み</span>
-                                </div>
-                              )}
+              {/* Columns (axis-driven) */}
+              <div className="flex-1 flex min-w-0" ref={gridRef}>
+                {columns.length === 0 ? (
+                  <div className="flex-1 relative">
+                    {timeSlots.map((slot, i) => {
+                      const st = getSlotStatus(slot, dayHours);
+                      const isClosed = st === "closed";
+                      const isLunch = st === "lunch";
+                      return (
+                        <div
+                          key={slot}
+                          className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isLunch ? "bg-muted/30" : isClosed ? "bg-muted/40 pointer-events-none" : calendarMode !== "view" ? "cursor-pointer hover:bg-primary/5" : ""}`}
+                          style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
+                          onClick={() => !isClosed && !isLunch && calendarMode !== "view" && onSlotClick(dateStr, slot)}
+                        >
+                          {isLunch && (
+                            <div className="h-full flex items-center justify-center pointer-events-none">
+                              <span className="text-[10px] text-muted-foreground/40">昼休み</span>
                             </div>
-                          );
-                        })}
-                        {/* Appointment cards – concurrent appointments rendered side-by-side */}
-                        {layoutAppts(sAppts).map(({ appt, left, width }) => {
-                          const startMins = timeToMins(appt.startTime.slice(0, 5)) - startHour * 60;
-                          const endMins = appt.endTime
-                            ? timeToMins(appt.endTime.slice(0, 5)) - startHour * 60
-                            : startMins + SLOT_MINUTES;
-                          const top = (startMins / SLOT_MINUTES) * SLOT_HEIGHT;
-                          const height = Math.max(SLOT_HEIGHT - 4, ((endMins - startMins) / SLOT_MINUTES) * SLOT_HEIGHT - 4);
-                          const GAP = 1;
-                          return (
-                            <div key={appt.id} className="absolute z-10" style={{
-                              top: top + 2,
-                              height,
-                              left: `calc(${left * 100}% + ${GAP}px)`,
-                              width: `calc(${width * 100}% - ${GAP * 2}px)`,
-                            }}>
-                              <ApptCard appt={appt} height={height} onClick={() => onAppointmentClick(appt)} />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-
-                  {hasUnassigned && (
-                    <div className="flex-1 relative border-l border-border/40 bg-amber-50/20 dark:bg-amber-900/5 min-w-0">
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : columns.map((col, ci) => {
+                  const appts = colAppts(col);
+                  return (
+                    <div key={col.key} className={`flex-1 relative border-l border-border/40 min-w-0 ${col.accent ? "bg-amber-50/20 dark:bg-amber-900/5" : ""}`}>
+                      {/* Background grid slots */}
                       {timeSlots.map((slot, i) => {
                         const st = getSlotStatus(slot, dayHours);
                         const isClosed = st === "closed";
                         const isLunch = st === "lunch";
-                        const cont = isContinuation(unassignedAppts, slot);
+                        const cont = isContinuation(appts, slot);
+                        const clickable = !isClosed && !isLunch && !cont && calendarMode !== "view";
                         return (
                           <div
                             key={slot}
-                            className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isClosed ? "bg-muted/40 pointer-events-none" : isLunch ? "bg-amber-50/50 dark:bg-amber-900/10" : cont ? "bg-amber-50/20 dark:bg-amber-900/5" : calendarMode !== "view" ? "cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/20" : ""}`}
+                            className={`absolute left-0 right-0 border-b ${isHourStart(slot) ? "border-border/30" : "border-border"} ${isClosed ? "bg-muted/40 pointer-events-none" : isLunch ? (col.accent ? "bg-amber-50/50 dark:bg-amber-900/10" : "bg-muted/30") : cont ? "" : clickable ? "cursor-pointer hover:bg-primary/5" : ""}`}
                             style={{ top: i * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                            onClick={() => !isClosed && !isLunch && !cont && calendarMode !== "view" && onSlotClick(dateStr, slot)}
-                          />
+                            onClick={() => clickable && onSlotClick(dateStr, slot, col.kind === "staff" ? col.key : undefined)}
+                            data-testid={clickable ? `slot-${col.key}-${slot}` : undefined}
+                          >
+                            {isLunch && (
+                              <div className="h-full flex items-center justify-center pointer-events-none">
+                                <span className="text-[10px] text-muted-foreground/40">昼休み</span>
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
-                      {layoutAppts(unassignedAppts).map(({ appt, left, width }) => {
+
+                      {/* Drag target ghost */}
+                      {drag && drag.colIndex === ci && (
+                        <div
+                          className="absolute left-0.5 right-0.5 z-20 rounded border-2 border-dashed border-primary bg-primary/10 pointer-events-none"
+                          style={{ top: drag.slotIndex * SLOT_HEIGHT + 2, height: drag.durSlots * SLOT_HEIGHT - 4 }}
+                        />
+                      )}
+
+                      {/* Appointment cards – concurrent appointments rendered side-by-side */}
+                      {layoutAppts(appts).map(({ appt, left, width }) => {
                         const startMins = timeToMins(appt.startTime.slice(0, 5)) - startHour * 60;
                         const endMins = appt.endTime
                           ? timeToMins(appt.endTime.slice(0, 5)) - startHour * 60
@@ -915,23 +1140,31 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                         const top = (startMins / SLOT_MINUTES) * SLOT_HEIGHT;
                         const height = Math.max(SLOT_HEIGHT - 4, ((endMins - startMins) / SLOT_MINUTES) * SLOT_HEIGHT - 4);
                         const GAP = 1;
+                        const dimmed = drag?.apptId === appt.id;
                         return (
-                          <div key={appt.id} className="absolute z-10" style={{
-                            top: top + 2,
-                            height,
-                            left: `calc(${left * 100}% + ${GAP}px)`,
-                            width: `calc(${width * 100}% - ${GAP * 2}px)`,
-                          }}>
-                            <ApptCard appt={appt} height={height} onClick={() => onAppointmentClick(appt)} />
+                          <div
+                            key={appt.id}
+                            className="absolute z-10 group touch-none"
+                            style={{
+                              top: top + 2,
+                              height,
+                              left: `calc(${left * 100}% + ${GAP}px)`,
+                              width: `calc(${width * 100}% - ${GAP * 2}px)`,
+                            }}
+                            onPointerDown={(e) => startDrag(e, appt)}
+                          >
+                            <div className={`h-full ${dimmed ? "opacity-40" : "cursor-grab active:cursor-grabbing"}`}>
+                              <ApptCard appt={appt} height={height} onClick={() => {}} />
+                            </div>
+                            {!dimmed && <GripVertical className="absolute top-0.5 right-0.5 h-3 w-3 text-foreground/30 opacity-0 group-hover:opacity-100 pointer-events-none" />}
                           </div>
                         );
                       })}
                     </div>
-                  )}
-                </>
-              )}
+                  );
+                })}
+              </div>
             </div>
-          </div>
           </div>{/* end grid wrapper relative */}
         </div>
       </div>
