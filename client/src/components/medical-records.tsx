@@ -43,7 +43,7 @@ function ConsentFormsSection({ patientId }: { patientId: string }) {
 
   return (
     <div className="px-5 py-4 border-t border-border">
-      <p className="text-sm font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+      <p className="text-sm font-semibold text-muted-foreground mb-2.5 flex items-center gap-1.5">
         <FileText className="h-3.5 w-3.5" />電子同意書 ({forms.length}件)
       </p>
       <div className="space-y-2">
@@ -51,7 +51,7 @@ function ConsentFormsSection({ patientId }: { patientId: string }) {
           <button
             key={f.id}
             onClick={() => openPdf(f.id)}
-            className="w-full text-left rounded-lg border border-border bg-card p-2.5 hover:bg-muted/50 transition flex items-center justify-between gap-2"
+            className="w-full text-left rounded-lg border border-border bg-card p-3 hover:bg-muted/50 transition-colors flex items-center justify-between gap-2"
             data-testid={`consent-form-${f.id}`}
           >
             <div className="min-w-0">
@@ -223,19 +223,19 @@ function PatientPanel({
         <ConsentFormsSection patientId={patient.id} />
         <div className="px-5 pt-4 pb-2 flex items-center justify-between">
           <span className="text-sm font-semibold text-muted-foreground">受付メモ履歴 ({patientRecords.length}件)</span>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onAddMemo(patient.id)} data-testid="button-add-memo-from-panel">
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onAddMemo(patient.id)} data-testid="button-add-memo-from-panel">
             <Plus className="h-3.5 w-3.5 mr-1" />
             追加
           </Button>
         </div>
 
         {patientRecords.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground px-5">
-            <StickyNote className="h-10 w-10 mb-2 opacity-25" />
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground px-5">
+            <StickyNote className="h-9 w-9 mb-3 opacity-25" />
             <p className="text-sm">この患者のメモはありません</p>
           </div>
         ) : (
-          <div className="px-4 pb-6 space-y-3">
+          <div className="px-5 pb-6 space-y-3">
             {patientRecords.map(r => {
               const staffName = staff.find(s => s.id === r.staffId)?.name || r.staff?.name;
               return (
@@ -356,32 +356,40 @@ export function MedicalRecords() {
     <div className="flex h-full overflow-hidden">
       {/* メインリスト */}
       <div className={`flex flex-col min-w-0 transition-all duration-300 ${panelOpen ? "flex-[1] hidden md:flex" : "flex-1"}`}>
-        <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between gap-3">
+        <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between gap-3 shrink-0">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight truncate">受付メモ</h1>
-            <p className="text-muted-foreground text-sm mt-0.5 truncate">{patientRows.length}人 / {records.length}件 — 来院時の申し送り・次回予定などを記録</p>
+            <h1 className="text-xl font-bold tracking-tight truncate">受付メモ</h1>
+            <p className="text-sm text-muted-foreground mt-0.5 truncate">{patientRows.length}人 / {records.length}件 — 来院時の申し送り・次回予定などを記録</p>
           </div>
-          <Button onClick={() => openAddMemo()} className="shrink-0" data-testid="button-add-record">
+          <Button onClick={() => openAddMemo()} className="shrink-0 h-10" data-testid="button-add-record">
             <Plus className="h-4 w-4 mr-1" />
             メモを追加
           </Button>
         </div>
 
-        <div className="px-4 md:px-6 py-3 border-b border-border">
+        <div className="px-4 md:px-6 py-3 border-b border-border shrink-0">
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="患者名・メモ内容で検索" value={search}
+            <Input className="pl-9 h-10" placeholder="患者名・メモ内容で検索" value={search}
               onChange={e => setSearch(e.target.value)} data-testid="input-record-search" />
           </div>
         </div>
 
         <div className="flex-1 overflow-auto">
           {isLoading ? (
-            <div className="p-6 space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12" />)}</div>
+            <div className="p-4 md:p-6 space-y-3">
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 flex-1" />
+                </div>
+              ))}
+            </div>
           ) : patientRows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-              <StickyNote className="h-12 w-12 mb-3 opacity-30" />
-              <p>{search ? "検索結果が見つかりません" : "受付メモがありません"}</p>
+            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+              <StickyNote className="h-9 w-9 mb-3 opacity-25" />
+              <p className="text-sm">{search ? "検索結果が見つかりません" : "受付メモがありません"}</p>
               <p className="text-xs mt-1">来院時の申し送りや次回予定を記録できます</p>
             </div>
           ) : (

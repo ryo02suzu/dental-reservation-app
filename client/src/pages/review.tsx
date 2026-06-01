@@ -85,10 +85,10 @@ export default function ReviewPage() {
 
   if (isError || !cfg) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-6">
         <div className="text-center text-slate-500">
           <p className="text-lg font-medium">アンケートを表示できません</p>
-          <p className="text-sm mt-1">URLをご確認ください。</p>
+          <p className="text-sm mt-2">URLをご確認ください。</p>
         </div>
       </div>
     );
@@ -96,18 +96,18 @@ export default function ReviewPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-5">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-        <p className="text-center text-sm text-slate-500 mb-1">{cfg.clinicName}</p>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 sm:p-10">
+        <p className="text-center text-sm font-medium text-slate-500 mb-6">{cfg.clinicName}</p>
 
         {step === "rate" && (
           <>
-            <h1 className="text-xl font-bold text-center text-slate-800 mb-8 leading-relaxed">
+            <h1 className="text-2xl font-bold text-center text-slate-800 mb-3 leading-relaxed">
               {cfg.headline}
             </h1>
-            <p className="text-center text-sm text-slate-500 mb-5">
+            <p className="text-center text-sm text-slate-500 mb-8">
               本日のご満足度はいかがでしたか？
             </p>
-            <div className="flex justify-center gap-2 mb-2">
+            <div className="flex justify-center gap-1.5 sm:gap-2 mb-3">
               {[1, 2, 3, 4, 5].map((v) => (
                 <button
                   key={v}
@@ -116,22 +116,23 @@ export default function ReviewPage() {
                   onMouseEnter={() => setHover(v)}
                   onMouseLeave={() => setHover(0)}
                   onClick={() => handleStarClick(v)}
-                  className="p-1 transition-transform hover:scale-110 disabled:opacity-50"
+                  className="p-1.5 rounded-full transition-transform duration-150 hover:scale-125 active:scale-110 disabled:opacity-50"
                   aria-label={`${v}つ星`}
                   data-testid={`star-${v}`}
                 >
                   <Star
-                    className={`w-11 h-11 ${
+                    className={`w-12 h-12 transition-colors duration-150 ${
                       v <= (hover || rating)
-                        ? "fill-amber-400 text-amber-400"
-                        : "text-slate-300"
+                        ? "fill-amber-400 text-amber-400 drop-shadow-sm"
+                        : "text-slate-200"
                     }`}
                   />
                 </button>
               ))}
             </div>
+            <p className="text-center text-xs text-slate-400">星をタップして評価してください</p>
             {submitting && (
-              <div className="flex justify-center mt-4">
+              <div className="flex justify-center mt-5">
                 <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
               </div>
             )}
@@ -139,10 +140,10 @@ export default function ReviewPage() {
         )}
 
         {step === "positive" && (
-          <div className="text-center py-6">
-            <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto mb-4" />
-            <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{cfg.positiveMessage}</p>
-            <div className="flex items-center justify-center gap-2 mt-5 text-sm text-slate-400">
+          <div className="text-center py-8">
+            <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-5" />
+            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap">{cfg.positiveMessage}</p>
+            <div className="flex items-center justify-center gap-2 mt-6 text-sm text-slate-400">
               <Loader2 className="w-4 h-4 animate-spin" />
               Googleの口コミページへ移動します…
             </div>
@@ -151,12 +152,12 @@ export default function ReviewPage() {
 
         {step === "negative" && (
           <div className="py-2">
-            <div className="flex justify-center gap-1 mb-4">
+            <div className="flex justify-center gap-1.5 mb-5">
               {[1, 2, 3, 4, 5].map((v) => (
-                <Star key={v} className={`w-6 h-6 ${v <= rating ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />
+                <Star key={v} className={`w-7 h-7 ${v <= rating ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />
               ))}
             </div>
-            <p className="text-sm text-slate-600 leading-relaxed mb-4 whitespace-pre-wrap">
+            <p className="text-sm text-slate-600 leading-relaxed mb-5 whitespace-pre-wrap text-center">
               {cfg.negativeMessage}
             </p>
             <Textarea
@@ -164,24 +165,24 @@ export default function ReviewPage() {
               onChange={(e) => setFeedback(e.target.value)}
               placeholder="具体的なご意見をお聞かせください（匿名で院長に届きます）"
               rows={5}
-              className="mb-4"
+              className="mb-4 text-base rounded-xl resize-none"
               data-testid="feedback-input"
             />
             <Button
-              className="w-full"
+              className="w-full h-12 text-base rounded-xl"
               disabled={submitting || !feedback.trim()}
               onClick={() => submit(rating, feedback.trim())}
               data-testid="submit-feedback"
             >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "送信する"}
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "送信する"}
             </Button>
           </div>
         )}
 
         {step === "done" && (
-          <div className="text-center py-8">
-            <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto mb-4" />
-            <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{cfg.thanksMessage}</p>
+          <div className="text-center py-10">
+            <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-5" />
+            <p className="text-slate-700 text-base leading-relaxed whitespace-pre-wrap">{cfg.thanksMessage}</p>
           </div>
         )}
       </div>

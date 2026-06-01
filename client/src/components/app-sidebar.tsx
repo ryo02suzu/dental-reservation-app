@@ -105,14 +105,14 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
         <Button
           key={item.id}
           variant={isActive ? "default" : "ghost"}
-          className={`w-full transition-all duration-200 ${collapsed ? "justify-center px-0" : "justify-start"} ${isLocked ? "opacity-50" : ""}`}
+          className={`w-full h-9 transition-all duration-200 ${collapsed ? "justify-center px-0" : "justify-start"} ${isLocked ? "opacity-50" : ""}`}
           onClick={() => handleNavClick(item)}
           data-testid={`nav-${item.id}`}
         >
           <Icon className={`w-4 h-4 shrink-0 ${collapsed ? "" : "mr-3"}`} />
           {!collapsed && (
             <>
-              <span className="flex-1 text-left">{item.label}</span>
+              <span className="flex-1 text-left text-sm">{item.label}</span>
               {isLocked && <Lock className="w-3 h-3 ml-auto text-muted-foreground" data-testid={`lock-${item.id}`} />}
             </>
           )}
@@ -199,7 +199,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
                 <TooltipContent side="right" className="text-xs">全医院管理</TooltipContent>
               </Tooltip>
             ) : (
-              <Button variant="ghost" className="w-full justify-start text-muted-foreground" asChild data-testid="button-super-admin">
+              <Button variant="ghost" className="w-full h-9 justify-start text-sm text-muted-foreground" asChild data-testid="button-super-admin">
                 <Link href="/super-admin">
                   <Building2 className="w-4 h-4 mr-3 shrink-0" />
                   全医院管理
@@ -238,7 +238,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
           ) : (
             <Button
               variant="ghost"
-              className="w-full justify-start text-muted-foreground hover:text-destructive"
+              className="w-full h-9 justify-start text-sm text-muted-foreground hover:text-destructive"
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
               data-testid="button-logout"

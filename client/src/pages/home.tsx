@@ -134,7 +134,7 @@ export default function Home() {
             <button
               key={id}
               onClick={() => handleViewChange(id)}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-colors
+              className={`flex-1 flex flex-col items-center justify-center gap-1 relative transition-colors active:bg-accent/50
                 ${isActive ? "text-primary" : "text-muted-foreground"}`}
               data-testid={`bottom-nav-${id}`}
             >
@@ -153,7 +153,7 @@ export default function Home() {
         })}
         <button
           onClick={() => setSidebarOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-muted-foreground transition-colors"
+          className="flex-1 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors active:bg-accent/50"
           data-testid="bottom-nav-more"
         >
           <MoreHorizontal className="w-5 h-5" />

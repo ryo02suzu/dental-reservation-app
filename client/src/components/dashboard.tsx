@@ -67,17 +67,17 @@ function StatCard({
       onClick={onClick}
       data-testid={testId}
     >
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-medium text-muted-foreground">{title}</span>
-          <Icon className={`h-4 w-4 shrink-0 ${iconClass}`} />
+      <div className="p-3 md:p-4">
+        <div className="flex items-start justify-between gap-1.5 mb-2 md:mb-3">
+          <span className="text-xs md:text-sm font-medium text-muted-foreground leading-tight min-w-0">{title}</span>
+          <Icon className={`h-4 w-4 shrink-0 mt-0.5 ${iconClass}`} />
         </div>
         <div className="flex items-end justify-between">
-          <div>
-            <div className={`text-3xl font-bold ${active ? "text-primary" : ""}`}>{value}</div>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+          <div className="min-w-0">
+            <div className={`text-2xl md:text-3xl font-bold tabular-nums leading-none ${active ? "text-primary" : ""}`}>{value}</div>
+            {sub && <p className="text-xs text-muted-foreground mt-1 truncate">{sub}</p>}
           </div>
-          {active && <ChevronRight className="w-4 h-4 text-primary mb-1" />}
+          {active && <ChevronRight className="w-4 h-4 text-primary mb-1 shrink-0" />}
         </div>
         {barValue !== undefined && barValue >= 0 && (
           <div className="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -259,9 +259,9 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 space-y-5 flex-1">
+      <div className="p-4 md:p-6 space-y-5 md:space-y-6 flex-1">
         {/* ─── Stats Grid ─────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2.5 md:gap-3">
           <StatCard
             title={`${dayLabel}の予約`}
             icon={Calendar}
@@ -323,7 +323,16 @@ export function Dashboard() {
               <CardContent>
                 {isLoading ? (
                   <div className="space-y-2">
-                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border">
+                        <Skeleton className="h-8 w-12 shrink-0" />
+                        <div className="flex-1 space-y-1.5">
+                          <Skeleton className="h-4 w-28" />
+                          <Skeleton className="h-3 w-20" />
+                        </div>
+                        <Skeleton className="h-6 w-16 rounded-full shrink-0" />
+                      </div>
+                    ))}
                   </div>
                 ) : filteredAppointments.length === 0 ? (
                   <div className="text-center py-10 text-muted-foreground">
@@ -345,7 +354,7 @@ export function Dashboard() {
                           onClick={() => handleApptClick(apt)}
                           data-testid={`appt-${apt.id}`}
                         >
-                          <div className="text-xs font-mono font-semibold w-20 shrink-0 text-muted-foreground">
+                          <div className="text-xs font-mono font-semibold w-14 shrink-0 text-muted-foreground tabular-nums leading-tight">
                             {apt.startTime.slice(0, 5)}<br />{apt.endTime.slice(0, 5)}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -360,7 +369,7 @@ export function Dashboard() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                                className="h-9 md:h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
                                 onClick={e => { e.stopPropagation(); completeMutation.mutate(apt.id); }}
                                 disabled={completeMutation.isPending}
                                 data-testid={`button-complete-${apt.id}`}
@@ -372,7 +381,7 @@ export function Dashboard() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7"
+                                className="h-9 w-9 md:h-7 md:w-7"
                                 onClick={e => {
                                   e.stopPropagation();
                                   handleSlotClick(dateStr, "09:00", apt.staff?.id, apt.patient?.id, apt.patient?.name);

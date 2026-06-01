@@ -46,11 +46,11 @@ export default function CheckinPage() {
   }
   if (isError || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-6">
         <div className="text-center text-slate-500">
           <QrCode className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-lg font-medium">チェックインを利用できません</p>
-          <p className="text-sm mt-1">受付スタッフにお声がけください。</p>
+          <p className="text-sm mt-2">受付スタッフにお声がけください。</p>
         </div>
       </div>
     );
@@ -58,13 +58,16 @@ export default function CheckinPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 p-5">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-        <p className="text-center text-sm text-slate-500 mb-1">{data.clinicName}</p>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 sm:p-10">
+        <p className="text-center text-sm font-medium text-slate-500 mb-6">{data.clinicName}</p>
 
         {!result ? (
           <>
-            <h1 className="text-xl font-bold text-center text-slate-800 mb-2">受付チェックイン</h1>
-            <p className="text-center text-sm text-slate-500 mb-6">
+            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-5">
+              <QrCode className="w-7 h-7 text-slate-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-center text-slate-800 mb-3">受付チェックイン</h1>
+            <p className="text-center text-sm text-slate-500 mb-8 leading-relaxed">
               ご予約時の電話番号を入力して、来院をお知らせください。
             </p>
             <Input
@@ -72,24 +75,27 @@ export default function CheckinPage() {
               inputMode="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
               placeholder="090-1234-5678"
-              className="text-center text-lg h-12 mb-3"
+              className="text-center text-lg h-14 rounded-xl mb-3"
               data-testid="checkin-phone"
             />
             {error && <p className="text-sm text-red-500 text-center mb-3">{error}</p>}
-            <Button className="w-full h-12 text-base" onClick={submit} disabled={submitting || !phone.trim()} data-testid="checkin-submit">
+            <Button className="w-full h-14 text-base rounded-xl mt-1" onClick={submit} disabled={submitting || !phone.trim()} data-testid="checkin-submit">
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "チェックイン"}
             </Button>
           </>
         ) : (
-          <div className="text-center py-6">
-            <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
-            <p className="text-xl font-bold text-slate-800">{result.patientName} 様</p>
-            <p className="text-slate-600 mt-2">
+          <div className="text-center py-8">
+            <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-5" />
+            <p className="text-2xl font-bold text-slate-800">{result.patientName} 様</p>
+            <p className="text-slate-600 mt-3 text-base">
               {result.already ? "すでにチェックイン済みです。" : "チェックインが完了しました。"}
             </p>
-            {result.time && <p className="text-sm text-slate-500 mt-1">ご予約時間: {result.time}〜</p>}
-            <p className="text-sm text-slate-500 mt-4">待合室でお待ちください。</p>
+            {result.time && <p className="text-sm text-slate-500 mt-2">ご予約時間: {result.time}〜</p>}
+            <div className="mt-6 pt-6 border-t border-slate-100">
+              <p className="text-sm text-slate-500">待合室でお待ちください。</p>
+            </div>
           </div>
         )}
       </div>

@@ -361,39 +361,39 @@ export default function MyAppointmentsPage() {
     const status = STATUS_MAP[appt.status] ?? { label: appt.status, color: "bg-gray-100 text-gray-700" };
     const canModify = appt.status !== "cancelled" && appt.status !== "completed";
     return (
-      <div className="border border-gray-200 rounded-xl p-4 bg-white" data-testid={`card-appointment-${appt.id}`}>
-        <div className="flex justify-between items-start mb-3">
-          <span className="font-medium text-sm text-gray-800">{appt.treatmentType}</span>
-          <Badge className={cn("text-xs font-normal", status.color)}>{status.label}</Badge>
+      <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm transition-shadow hover:shadow-md" data-testid={`card-appointment-${appt.id}`}>
+        <div className="flex justify-between items-start gap-3 mb-4">
+          <span className="font-semibold text-base text-gray-800 leading-snug">{appt.treatmentType}</span>
+          <Badge className={cn("text-xs font-medium rounded-full px-2.5 py-0.5 shrink-0", status.color)}>{status.label}</Badge>
         </div>
-        <div className="space-y-1.5 text-sm text-gray-500 mb-3">
-          <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 shrink-0" /><span>{formatDateJP(appt.date)}</span></div>
-          <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 shrink-0" /><span>{appt.startTime?.slice(0, 5)} 〜 {appt.endTime?.slice(0, 5)}</span></div>
+        <div className="space-y-2 text-sm text-gray-600 mb-4">
+          <div className="flex items-center gap-2.5"><Calendar className="w-4 h-4 shrink-0 text-gray-400" /><span>{formatDateJP(appt.date)}</span></div>
+          <div className="flex items-center gap-2.5"><Clock className="w-4 h-4 shrink-0 text-gray-400" /><span>{appt.startTime?.slice(0, 5)} 〜 {appt.endTime?.slice(0, 5)}</span></div>
         </div>
-        {appt.notes && <p className="text-xs text-gray-400 mb-3 bg-gray-50 rounded-lg p-2">{appt.notes}</p>}
+        {appt.notes && <p className="text-xs text-gray-500 mb-4 bg-gray-50 rounded-xl p-3 leading-relaxed">{appt.notes}</p>}
         {canModify && session?.loggedIn && appt.confirmationStatus !== "confirmed" && (
           <button
             onClick={() => confirmMutation.mutate(appt.id)}
             disabled={confirmMutation.isPending}
-            className="w-full mb-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1 disabled:opacity-60"
+            className="w-full mb-2.5 h-11 bg-green-600 hover:bg-green-700 active:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
             data-testid={`button-confirm-${appt.id}`}
           >
-            <Check className="w-3.5 h-3.5" /> 来院を確認する
+            <Check className="w-4 h-4" /> {confirmMutation.isPending ? "確認中..." : "来院を確認する"}
           </button>
         )}
         {canModify && session?.loggedIn && appt.confirmationStatus === "confirmed" && (
-          <p className="text-xs text-green-600 mb-2 flex items-center gap-1">
-            <Check className="w-3.5 h-3.5" /> 来院確認済み
-          </p>
+          <div className="mb-2.5 flex items-center justify-center gap-1.5 h-9 rounded-xl bg-green-50 text-green-700 text-sm font-medium">
+            <Check className="w-4 h-4" /> 来院確認済み
+          </div>
         )}
         {canModify && (
           <div className="flex gap-2">
             {session?.loggedIn && (
-              <button onClick={() => openReschedule(appt)} className="flex-1 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center gap-1" data-testid={`button-reschedule-${appt.id}`}>
-                <CalendarClock className="w-3.5 h-3.5" /> 日時を変更
+              <button onClick={() => openReschedule(appt)} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors flex items-center justify-center gap-1.5" data-testid={`button-reschedule-${appt.id}`}>
+                <CalendarClock className="w-4 h-4" /> 日時を変更
               </button>
             )}
-            <button onClick={() => { setCancelTarget(appt.id); setCancelReason(""); }} className="flex-1 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors" data-testid={`button-cancel-${appt.id}`}>
+            <button onClick={() => { setCancelTarget(appt.id); setCancelReason(""); }} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors" data-testid={`button-cancel-${appt.id}`}>
               キャンセル
             </button>
           </div>
