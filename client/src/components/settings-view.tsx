@@ -21,7 +21,6 @@ import { FollowUpTab, ReviewTab, TreatmentPlansTab } from "@/components/settings
 import { useAuth } from "@/hooks/use-auth";
 import { useClinicAddons } from "@/hooks/use-clinic-addons";
 import { usePlan } from "@/hooks/use-plan";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, X, Copy, Check, RefreshCw, Calendar, Smartphone, Download, QrCode, Lock, GripVertical, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, ChevronRight, ChevronLeft, X, Copy, Check, RefreshCw, Calendar, Smartphone, Download, QrCode, Lock, GripVertical, CheckCircle, XCircle, Clock } from "lucide-react";
 import { format, parseISO, addMonths, subMonths, startOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -130,44 +129,184 @@ interface ReminderSettings {
 
 const DAY_NAMES = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
 
+// ─── Settings navigation config ──────────────────────────────────────────────
+interface SettingsNavItem {
+  id: string;
+  label: string;
+  description: string;
+}
+interface SettingsNavGroup {
+  label: string;
+  items: SettingsNavItem[];
+}
+
+const SETTINGS_NAV: SettingsNavGroup[] = [
+  {
+    label: "医院運営",
+    items: [
+      { id: "clinic", label: "クリニック情報", description: "医院の基本情報と患者向け予約ページ" },
+      { id: "staff", label: "スタッフ", description: "スタッフの登録と権限・ログイン設定" },
+      { id: "services", label: "診療メニュー", description: "提供する診療メニューと料金・所要時間" },
+    ],
+  },
+  {
+    label: "予約・スケジュール",
+    items: [
+      { id: "hours", label: "診療時間・休診日", description: "診療時間と休診日の設定" },
+      { id: "general", label: "予約ルール", description: "予約枠・確認・QRチェックインなどの予約動作" },
+      { id: "calendar", label: "カレンダー連携", description: "外部カレンダーへの予約の取り込み（購読URL）" },
+    ],
+  },
+  {
+    label: "患者コミュニケーション",
+    items: [
+      { id: "reminders", label: "リマインダー", description: "予約前のリマインド送信設定" },
+      { id: "followup", label: "フォローアップ", description: "診療後の自動フォロー・リコール" },
+      { id: "review", label: "口コミ誘導", description: "来院後の口コミ依頼と不満の吸収" },
+    ],
+  },
+  {
+    label: "自費診療",
+    items: [
+      { id: "plans", label: "治療プラン", description: "自費診療の比較プラン管理" },
+    ],
+  },
+  {
+    label: "システム",
+    items: [
+      { id: "export", label: "データ出力", description: "予約・患者データのエクスポート" },
+      { id: "account", label: "アカウント", description: "ログイン情報とアカウント管理" },
+    ],
+  },
+];
+
+const SETTINGS_NAV_ITEMS: SettingsNavItem[] = SETTINGS_NAV.flatMap(g => g.items);
+
+function SettingsPageContent({ id, clinicSlug }: { id: string; clinicSlug?: string }) {
+  switch (id) {
+    case "clinic": return <ClinicTab />;
+    case "staff": return <StaffTab />;
+    case "services": return <ServicesTab />;
+    case "hours": return (
+      <div className="space-y-6">
+        <HoursTab />
+        <HolidaysTab />
+      </div>
+    );
+    case "general": return <GeneralTab />;
+    case "calendar": return <CalendarIntegrationTab />;
+    case "reminders": return <ReminderTab />;
+    case "followup": return <FollowUpTab />;
+    case "review": return <ReviewTab clinicSlug={clinicSlug} />;
+    case "plans": return <TreatmentPlansTab />;
+    case "export": return <ExportTab />;
+    case "account": return <AccountTab />;
+    default: return null;
+  }
+}
+
 export function SettingsView() {
   const { data: clinic } = useQuery<{ slug?: string | null }>({ queryKey: ["/api/clinic"] });
+  const [active, setActive] = useState("clinic");
+  // モバイルの「設定ホーム」表示制御。null のときは一覧、それ以外は該当ページ。
+  const [mobilePage, setMobilePage] = useState<string | null>(null);
+
+  const activeItem = SETTINGS_NAV_ITEMS.find(i => i.id === active) ?? SETTINGS_NAV_ITEMS[0];
+  const mobileItem = mobilePage ? SETTINGS_NAV_ITEMS.find(i => i.id === mobilePage) : null;
+  const clinicSlug = clinic?.slug ?? undefined;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 md:px-6 py-4 border-b border-border bg-background">
         <h1 className="text-2xl font-bold tracking-tight">設定</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">クリニックの設定を管理します</p>
       </div>
-      <div className="flex-1 overflow-auto p-4 md:p-6">
-        <Tabs defaultValue="clinic">
-          <TabsList className="mb-6 max-w-full justify-start overflow-x-auto md:flex-wrap md:h-auto [&>button]:shrink-0">
-            <TabsTrigger value="clinic">クリニック情報</TabsTrigger>
-            <TabsTrigger value="staff">スタッフ</TabsTrigger>
-            <TabsTrigger value="services">診療メニュー</TabsTrigger>
-            <TabsTrigger value="hours">診療時間</TabsTrigger>
-            <TabsTrigger value="holidays">休診日</TabsTrigger>
-            <TabsTrigger value="general">一般設定</TabsTrigger>
-            <TabsTrigger value="reminders">リマインダー</TabsTrigger>
-            <TabsTrigger value="followup">フォローアップ</TabsTrigger>
-            <TabsTrigger value="review">口コミ誘導</TabsTrigger>
-            <TabsTrigger value="plans">自費プラン</TabsTrigger>
-            <TabsTrigger value="calendar">カレンダー連携</TabsTrigger>
-            <TabsTrigger value="export">データエクスポート</TabsTrigger>
-            <TabsTrigger value="account">アカウント</TabsTrigger>
-          </TabsList>
-          <TabsContent value="clinic"><ClinicTab /></TabsContent>
-          <TabsContent value="staff"><StaffTab /></TabsContent>
-          <TabsContent value="services"><ServicesTab /></TabsContent>
-          <TabsContent value="hours"><HoursTab /></TabsContent>
-          <TabsContent value="holidays"><HolidaysTab /></TabsContent>
-          <TabsContent value="general"><GeneralTab /></TabsContent>
-          <TabsContent value="reminders"><ReminderTab /></TabsContent>
-          <TabsContent value="followup"><FollowUpTab /></TabsContent>
-          <TabsContent value="review"><ReviewTab clinicSlug={clinic?.slug ?? undefined} /></TabsContent>
-          <TabsContent value="plans"><TreatmentPlansTab /></TabsContent>
-          <TabsContent value="calendar"><CalendarIntegrationTab /></TabsContent>
-          <TabsContent value="export"><ExportTab /></TabsContent>
-          <TabsContent value="account"><AccountTab /></TabsContent>
-        </Tabs>
+
+      {/* ─── Desktop: left sidebar + content ─── */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
+        <nav
+          className="w-60 shrink-0 border-r border-border overflow-y-auto p-3 space-y-4"
+          data-testid="settings-sidebar"
+        >
+          {SETTINGS_NAV.map(group => (
+            <div key={group.label}>
+              <p className="text-xs font-medium text-muted-foreground px-3 py-2">{group.label}</p>
+              <div className="space-y-0.5">
+                {group.items.map(item => {
+                  const isActive = item.id === active;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActive(item.id)}
+                      data-testid={`settings-nav-${item.id}`}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        isActive
+                          ? "bg-muted text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold tracking-tight">{activeItem.label}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{activeItem.description}</p>
+            </div>
+            <SettingsPageContent id={active} clinicSlug={clinicSlug} />
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Mobile: settings-home list / drilldown ─── */}
+      <div className="md:hidden flex-1 overflow-auto">
+        {mobileItem ? (
+          <div className="p-4">
+            <button
+              onClick={() => setMobilePage(null)}
+              data-testid="settings-mobile-back"
+              className="flex items-center gap-0.5 text-sm text-primary mb-4"
+            >
+              <ChevronLeft className="h-4 w-4" />設定
+            </button>
+            <div className="mb-5">
+              <h2 className="text-xl font-bold tracking-tight">{mobileItem.label}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{mobileItem.description}</p>
+            </div>
+            <SettingsPageContent id={mobileItem.id} clinicSlug={clinicSlug} />
+          </div>
+        ) : (
+          <div className="p-4 space-y-6" data-testid="settings-mobile-home">
+            {SETTINGS_NAV.map(group => (
+              <div key={group.label}>
+                <p className="text-xs font-medium text-muted-foreground px-1 pb-2">{group.label}</p>
+                <div className="rounded-lg border border-border overflow-hidden bg-card divide-y divide-border">
+                  {group.items.map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => setMobilePage(item.id)}
+                      data-testid={`settings-mobile-nav-${item.id}`}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -287,21 +426,29 @@ function ClinicTab() {
               <Label className="mb-1.5 block">クリニック紹介</Label>
               <Textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3} />
             </div>
-            <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5">
-              <Label className="text-xs text-muted-foreground block">患者向け予約ページURL</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={bookingUrl}
-                  readOnly
-                  className="font-mono text-xs bg-background"
-                  data-testid="input-booking-url-clinic"
-                  onClick={e => (e.target as HTMLInputElement).select()}
-                />
-                <Button variant="outline" size="icon" onClick={handleCopyUrl} data-testid="button-copy-booking-url-clinic">
-                  {urlCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                </Button>
+            <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
+              <Label className="text-xs text-muted-foreground block">患者向け予約ページ</Label>
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                <div className="shrink-0 self-center sm:self-start p-3 bg-white border-2 border-gray-200 rounded-xl shadow-inner">
+                  <QRCodeSVG value={bookingUrl} size={120} level="M" data-testid="qr-booking-url-clinic" />
+                </div>
+                <div className="flex-1 space-y-1.5 min-w-0">
+                  <Label className="text-xs text-muted-foreground block">予約ページURL</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={bookingUrl}
+                      readOnly
+                      className="font-mono text-xs bg-background"
+                      data-testid="input-booking-url-clinic"
+                      onClick={e => (e.target as HTMLInputElement).select()}
+                    />
+                    <Button variant="outline" size="icon" onClick={handleCopyUrl} data-testid="button-copy-booking-url-clinic">
+                      {urlCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">このURLやQRコードを患者さんに共有すると、オンライン予約ができます。</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">このURLを患者さんに共有すると、オンライン予約ができます。</p>
             </div>
             <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} data-testid="button-save-clinic">
               {saveMutation.isPending ? "保存中..." : "保存"}
@@ -1649,12 +1796,7 @@ function HolidaysTab() {
 // ─── Calendar Integration Tab ─────────────────────────────────────────────────
 function CalendarIntegrationTab() {
   const [copied, setCopied] = useState(false);
-  const [qrCopied, setQrCopied] = useState(false);
-  const { data: clinic } = useQuery<{ slug?: string | null }>({ queryKey: ["/api/clinic"] });
   const icsUrl = `${window.location.origin}/api/calendar.ics`;
-  const bookingUrl = clinic?.slug
-    ? `${window.location.origin}/book/${clinic.slug}`
-    : `${window.location.origin}/booking`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(icsUrl).then(() => {
@@ -1663,72 +1805,8 @@ function CalendarIntegrationTab() {
     });
   };
 
-  const handleCopyBookingUrl = () => {
-    navigator.clipboard.writeText(bookingUrl).then(() => {
-      setQrCopied(true);
-      setTimeout(() => setQrCopied(false), 2000);
-    });
-  };
-
-  const handleDownloadQR = () => {
-    const svg = document.getElementById("booking-qr-svg");
-    if (!svg) return;
-    const serializer = new XMLSerializer();
-    const svgStr = serializer.serializeToString(svg);
-    const blob = new Blob([svgStr], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "booking-qr.svg";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="space-y-4">
-      {/* Booking QR Code */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <QrCode className="h-5 w-5" />患者向け予約ページ QRコード
-          </CardTitle>
-          <CardDescription>QRコードをスキャンすると予約ページに直接アクセスできます。印刷して受付や院内に掲示できます。</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="bg-white p-4 rounded-xl border shadow-sm">
-              <QRCodeSVG
-                id="booking-qr-svg"
-                value={bookingUrl}
-                size={160}
-                level="M"
-                includeMargin={false}
-                data-testid="booking-qr-code"
-              />
-            </div>
-            <div className="flex-1 space-y-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">予約ページURL</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={bookingUrl}
-                    readOnly
-                    className="font-mono text-xs"
-                    data-testid="input-booking-url"
-                    onClick={e => (e.target as HTMLInputElement).select()}
-                  />
-                  <Button variant="outline" size="icon" onClick={handleCopyBookingUrl} data-testid="button-copy-booking-url">
-                    {qrCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              <Button variant="outline" onClick={handleDownloadQR} data-testid="button-download-qr">
-                <Download className="h-4 w-4 mr-2" />QRコードをダウンロード
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
       {/* iCal subscription */}
       <Card>
         <CardHeader>
