@@ -25,6 +25,19 @@ const BOTTOM_NAV = [
   { id: "settings" as ViewType, icon: Settings, label: "設定" },
 ];
 
+const VIEW_TITLES: Record<ViewType, string> = {
+  dashboard: "ダッシュボード",
+  calendar: "カレンダー",
+  patients: "患者一覧",
+  records: "診療メモ",
+  reports: "レポート",
+  settings: "設定",
+  recall: "リコール管理",
+  support: "お問い合わせ",
+  shiftboard: "シフト表",
+  attendance: "出退勤",
+};
+
 export default function Home() {
   const [activeView, setActiveView] = useState<ViewType>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -103,11 +116,17 @@ export default function Home() {
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <header className="md:hidden flex items-center gap-2 px-3 h-14 border-b bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 shrink-0 sticky top-0 z-40">
-            <Button variant="ghost" size="icon" className="shrink-0 rounded-xl" onClick={() => setSidebarOpen(true)} data-testid="button-open-sidebar">
+          <header className="md:hidden flex items-center gap-2.5 px-3 h-14 border-b border-border bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 shrink-0 sticky top-0 z-40">
+            <Button variant="ghost" size="icon" className="shrink-0 rounded-xl active:scale-95" onClick={() => setSidebarOpen(true)} data-testid="button-open-sidebar">
               <Menu className="w-5 h-5" />
             </Button>
-            <span className="font-semibold text-base truncate flex-1 tracking-tight">{clinic?.name ?? "Arche"}</span>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">A</span>
+              <div className="min-w-0 leading-tight">
+                <p className="font-semibold text-sm truncate tracking-tight">{VIEW_TITLES[activeView]}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{clinic?.name ?? "Arche"}</p>
+              </div>
+            </div>
           </header>
 
           <main className="flex-1 overflow-hidden flex flex-col pb-16 md:pb-0">
