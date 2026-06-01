@@ -741,7 +741,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   useEffect(() => {
     const t = calcNowTop();
     if (t !== null && scrollRef.current) {
-      scrollRef.current.scrollLeft = Math.max(0, (t / SLOT_HEIGHT) * 60 - 240);
+      scrollRef.current.scrollLeft = Math.max(0, (t / SLOT_HEIGHT) * 56 - 240);
     }
   }, []);
 
@@ -803,10 +803,10 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   }
 
   // ── 横タイムライン台帳の寸法（時間=横／行=スタッフ・ユニット）──────────────
-  const SLOT_WIDTH = 60;   // 30分あたりの横幅(px)
-  const ROW_HEIGHT = 64;   // 1行(スタッフ/ユニット)の高さ(px)
-  const LABEL_WIDTH = 104;  // 左側の行ラベル幅(px)
-  const HEADER_HEIGHT = 36; // 上部の時刻ヘッダー高さ(px)
+  const SLOT_WIDTH = 56;    // 30分あたりの横幅(px)
+  const ROW_HEIGHT = 84;    // 1行(スタッフ/ユニット)の高さ(px)
+  const LABEL_WIDTH = 128;  // 左側の行ラベル幅(px)
+  const HEADER_HEIGHT = 40; // 上部の時刻ヘッダー高さ(px)
   const trackWidth = timeSlots.length * SLOT_WIDTH;
 
   // ── ドラッグ移動（上下=担当/ユニット変更、左右=時間変更）─────────────────────
@@ -1038,80 +1038,102 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   }
 
   const nowLeft = nowTop === null ? null : (nowTop / SLOT_HEIGHT) * SLOT_WIDTH;
+  const rowsHeight = Math.max(columns.length, 1) * ROW_HEIGHT;
+  const lunchIdx = timeSlots.map((s, i) => (getSlotStatus(s, dayHours) === "lunch" ? i : -1)).filter(i => i >= 0);
 
   return (
     <div className="h-full flex flex-col bg-background">
       {summaryBar}
 
       <div className="overflow-auto flex-1" ref={scrollRef}>
-        <div className="relative" style={{ width: LABEL_WIDTH + trackWidth }}>
-          {/* 時刻ヘッダー（上部固定・横スクロール追従） */}
-          <div className="sticky top-0 z-30 flex bg-background border-b border-border" style={{ height: HEADER_HEIGHT }}>
-            <div className="sticky left-0 z-40 shrink-0 bg-muted/50 border-r border-border flex items-center justify-center text-xs font-medium text-muted-foreground" style={{ width: LABEL_WIDTH }}>
+        <div className="relative flex flex-col min-h-full" style={{ width: LABEL_WIDTH + trackWidth }}>
+          {/* 時刻ヘッダー（上部固定・正時のみ表示） */}
+          <div className="sticky top-0 z-30 flex shrink-0 bg-background border-b border-border" style={{ height: HEADER_HEIGHT }}>
+            <div className="sticky left-0 z-40 shrink-0 bg-background border-r border-border flex items-center justify-center text-xs font-semibold text-muted-foreground" style={{ width: LABEL_WIDTH }}>
               {axis === "chair" ? "ユニット" : "担当"}
             </div>
             <div className="relative" style={{ width: trackWidth }}>
-              {timeSlots.map((slot, i) => (
+              {timeSlots.map((slot, i) => isHourStart(slot) ? (
                 <div
                   key={slot}
-                  className={`absolute top-0 bottom-0 border-r flex items-center justify-center text-xs font-mono ${isHourStart(slot) ? "border-border/60 text-foreground font-semibold" : "border-border/30 text-muted-foreground/50"}`}
-                  style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }}
+                  className="absolute top-0 bottom-0 flex items-center pl-2 text-sm font-semibold text-foreground border-l border-border/70"
+                  style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH * 2 }}
                 >
-                  {isHourStart(slot) ? slot : slot.slice(3)}
+                  {slot}
                 </div>
-              ))}
+              ) : null)}
             </div>
           </div>
 
           {/* 本体：左ラベル列 + 右トラック領域 */}
-          <div className="flex">
+          <div className="flex flex-1 min-h-0">
             {/* 行ラベル（左固定・横スクロール追従） */}
             <div className="sticky left-0 z-20 shrink-0 bg-background border-r border-border" style={{ width: LABEL_WIDTH }}>
               {columns.length === 0 ? (
-                <div className="p-3 text-sm text-center text-muted-foreground flex items-center justify-center" style={{ height: ROW_HEIGHT }}>
+                <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height: ROW_HEIGHT }}>
                   {axis === "chair" ? "ユニットなし" : "スタッフなし"}
                 </div>
               ) : columns.map(col => (
                 <div
                   key={col.key}
-                  className={`flex flex-col justify-center px-2.5 border-b border-border/60 ${col.accent ? "bg-amber-50 dark:bg-amber-900/20" : "bg-muted/30"}`}
+                  className={`flex items-center gap-2.5 px-3 border-b border-border ${col.accent ? "bg-amber-50 dark:bg-amber-900/20" : ""}`}
                   style={{ height: ROW_HEIGHT }}
                 >
-                  <div className={`text-sm font-semibold leading-tight truncate ${col.accent ? "text-amber-700 dark:text-amber-300" : ""}`}>{col.label}</div>
-                  <div className={`text-[11px] truncate ${col.accent ? "text-amber-500" : "text-muted-foreground"}`}>{col.sub}</div>
+                  <div className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${col.accent ? "bg-amber-200 text-amber-800 dark:bg-amber-800 dark:text-amber-100" : "bg-primary/15 text-primary"}`}>
+                    {col.kind === "chair" ? col.key : col.label.slice(0, 1)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className={`text-sm font-semibold leading-tight truncate ${col.accent ? "text-amber-700 dark:text-amber-300" : ""}`}>{col.label}</div>
+                    <div className={`text-[11px] truncate ${col.accent ? "text-amber-500" : "text-muted-foreground"}`}>{col.sub}</div>
+                  </div>
                 </div>
               ))}
             </div>
 
-            {/* トラック領域（ドラッグ計算の基準要素） */}
-            <div className="relative" ref={gridRef} style={{ width: trackWidth, height: Math.max(columns.length, 1) * ROW_HEIGHT }}>
-              {/* 背景セル（行 × 時間スロット） */}
-              {columns.length === 0 ? (
-                timeSlots.map((slot, i) => {
-                  const st = getSlotStatus(slot, dayHours);
-                  return <div key={slot} className={`absolute top-0 bottom-0 border-r border-border/30 ${st === "closed" ? "bg-muted/40" : st === "lunch" ? "bg-muted/30" : ""}`} style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }} />;
-                })
-              ) : columns.map((col, ri) => (
-                <div key={col.key}>
+            {/* トラック領域（ドラッグ計算の基準要素・全高に伸ばす） */}
+            <div className="relative shrink-0" ref={gridRef} style={{ width: trackWidth, minHeight: rowsHeight }}>
+              {/* 縦の時間グリッド（全高） */}
+              {timeSlots.map((slot, i) => {
+                const st = getSlotStatus(slot, dayHours);
+                const hour = isHourStart(slot);
+                const hh = parseInt(slot, 10);
+                return (
+                  <div
+                    key={slot}
+                    className={`absolute top-0 bottom-0 ${hour ? "border-l border-border/60" : "border-l border-border/15"} ${st === "closed" ? "bg-muted/30" : st === "lunch" ? "bg-muted/20" : hour && hh % 2 === 1 ? "bg-muted/[0.04]" : ""}`}
+                    style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }}
+                  />
+                );
+              })}
+
+              {/* 昼休みラベル（帯の中央に1つ） */}
+              {lunchIdx.length > 0 && (
+                <div
+                  className="absolute z-[5] flex items-center justify-center pointer-events-none"
+                  style={{ left: lunchIdx[0] * SLOT_WIDTH, width: lunchIdx.length * SLOT_WIDTH, top: 0, height: rowsHeight }}
+                >
+                  <span className="text-xs font-medium text-muted-foreground/50">昼休み</span>
+                </div>
+              )}
+
+              {/* 行の背景＋クリックで予約セル */}
+              {columns.map((col, ri) => (
+                <div
+                  key={col.key}
+                  className={`absolute left-0 border-b border-border ${col.accent ? "bg-amber-50/20 dark:bg-amber-900/5" : ""}`}
+                  style={{ top: ri * ROW_HEIGHT, height: ROW_HEIGHT, width: trackWidth }}
+                >
                   {timeSlots.map((slot, i) => {
                     const st = getSlotStatus(slot, dayHours);
-                    const isClosed = st === "closed";
-                    const isLunch = st === "lunch";
-                    const clickable = !isClosed && !isLunch && calendarMode !== "view";
+                    const clickable = st === "open" && calendarMode !== "view";
                     return (
                       <div
                         key={slot}
-                        className={`absolute border-r border-b ${isHourStart(slot) ? "border-border/40" : "border-border/20"} ${isClosed ? "bg-muted/40 pointer-events-none" : isLunch ? (col.accent ? "bg-amber-50/40 dark:bg-amber-900/10" : "bg-muted/25") : col.accent ? "bg-amber-50/20 dark:bg-amber-900/5" : ""} ${clickable ? "cursor-pointer hover:bg-primary/5" : ""}`}
-                        style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH, top: ri * ROW_HEIGHT, height: ROW_HEIGHT }}
+                        className={`absolute top-0 bottom-0 ${clickable ? "cursor-pointer hover:bg-primary/10" : st === "closed" ? "pointer-events-none" : ""}`}
+                        style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }}
                         onClick={() => clickable && onSlotClick(dateStr, slot, col.kind === "staff" ? col.key : undefined)}
                         data-testid={clickable ? `slot-${col.key}-${slot}` : undefined}
-                      >
-                        {isLunch && i % 4 === 0 && (
-                          <div className="h-full flex items-center justify-center pointer-events-none">
-                            <span className="text-[10px] text-muted-foreground/40 whitespace-nowrap">昼休み</span>
-                          </div>
-                        )}
-                      </div>
+                      />
                     );
                   })}
                 </div>
@@ -1120,16 +1142,16 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
               {/* 現在時刻ライン（縦・全行を貫く） */}
               {nowLeft !== null && nowLeft >= 0 && nowLeft <= trackWidth && (
                 <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: nowLeft }}>
-                  <div className="w-0.5 h-full bg-red-500 opacity-80" />
-                  <div className="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-red-500" />
+                  <div className="w-0.5 h-full bg-red-500" />
+                  <div className="absolute -left-[5px] -top-1 w-3 h-3 rounded-full bg-red-500 shadow" />
                 </div>
               )}
 
               {/* ドラッグ先ゴースト */}
               {drag && (
                 <div
-                  className="absolute z-30 rounded border-2 border-dashed border-primary bg-primary/10 pointer-events-none"
-                  style={{ left: drag.slotIndex * SLOT_WIDTH + 1, width: drag.durSlots * SLOT_WIDTH - 2, top: drag.rowIndex * ROW_HEIGHT + 2, height: ROW_HEIGHT - 4 }}
+                  className="absolute z-30 rounded-md border-2 border-dashed border-primary bg-primary/10 pointer-events-none"
+                  style={{ left: drag.slotIndex * SLOT_WIDTH + 1, width: drag.durSlots * SLOT_WIDTH - 2, top: drag.rowIndex * ROW_HEIGHT + 3, height: ROW_HEIGHT - 6 }}
                 />
               )}
 
@@ -1141,8 +1163,8 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                   const e = appt.endTime ? timeToMins(appt.endTime.slice(0, 5)) - startHour * 60 : s + SLOT_MINUTES;
                   const left = (s / SLOT_MINUTES) * SLOT_WIDTH;
                   const width = Math.max(SLOT_WIDTH - 2, ((e - s) / SLOT_MINUTES) * SLOT_WIDTH - 2);
-                  const top = ri * ROW_HEIGHT + vOff * ROW_HEIGHT + 1;
-                  const height = vH * ROW_HEIGHT - 2;
+                  const top = ri * ROW_HEIGHT + vOff * (ROW_HEIGHT - 6) + 3;
+                  const height = vH * (ROW_HEIGHT - 6);
                   const dimmed = drag?.apptId === appt.id;
                   return (
                     <div
