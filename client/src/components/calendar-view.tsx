@@ -390,20 +390,30 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
   const range = dateRange();
   const { data: allAppointments = [], isLoading } = useQuery<Appointment[]>({
     queryKey: ["/api/appointments", range],
-    queryFn: () => fetch(`/api/appointments?startDate=${range.startDate}&endDate=${range.endDate}`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetch(`/api/appointments?startDate=${range.startDate}&endDate=${range.endDate}`, { credentials: "include" });
+      if (!r.ok) throw new Error(`予約の取得に失敗しました (${r.status})`);
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
   });
   const { data: allStaff = [] } = useQuery<Staff[]>({ queryKey: ["/api/staff"] });
-  // showInCalendar=false のスタッフをカレンダー列から除外
-  const staff = allStaff.filter(s => s.showInCalendar !== false);
+  // showInCalendar=false のスタッフをカレンダー列から除外（応答が配列でない場合も安全に）
+  const staff = (Array.isArray(allStaff) ? allStaff : []).filter(s => s.showInCalendar !== false);
 
   // 承認済みシフト取得（非常勤・契約スタッフの出勤日特定に使用）
   const shiftMonth = format(currentDate, "yyyy-MM");
   const { data: approvedShifts = [] } = useQuery<ShiftRecord[]>({
     queryKey: ["/api/shifts", shiftMonth],
-    queryFn: () => fetch(`/api/shifts?month=${shiftMonth}`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetch(`/api/shifts?month=${shiftMonth}`, { credentials: "include" });
+      if (!r.ok) throw new Error(`シフトの取得に失敗しました (${r.status})`);
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    },
   });
   const approvedShiftSet = new Set<string>(
-    approvedShifts.filter(s => s.status === "approved").map(s => `${s.staffId}:${s.date}`)
+    (Array.isArray(approvedShifts) ? approvedShifts : []).filter(s => s.status === "approved").map(s => `${s.staffId}:${s.date}`)
   );
 
   // 日ビュー: 非常勤・契約スタッフはシフト承認済みの日のみ表示
@@ -413,10 +423,11 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     return approvedShiftSet.has(`${s.id}:${currentDateStr}`);
   });
 
-  // スタッフフィルター適用
+  // スタッフフィルター適用（応答が配列でない場合も安全に）
+  const safeAppointments = Array.isArray(allAppointments) ? allAppointments : [];
   const appointments = filterStaffId
-    ? allAppointments.filter(a => a.staffId === filterStaffId)
-    : allAppointments;
+    ? safeAppointments.filter(a => a.staffId === filterStaffId)
+    : safeAppointments;
 
   const navigate = (dir: 1 | -1) => {
     if (viewMode === "day") setCurrentDate(prev => addDays(prev, dir));
@@ -735,7 +746,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   const timeToMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   const isHourStart = (slot: string) => slot.endsWith(":00");
 
-  const todayAppts = appointments.filter(a => isSameDay(parseISO(a.date), currentDate));
+  const todayAppts = (Array.isArray(appointments) ? appointments : []).filter(a => isSameDay(parseISO(a.date), currentDate));
   const activeAppts = todayAppts.filter(a => a.status !== "cancelled");
   const morningAppts = activeAppts.filter(a => parseInt(a.startTime) < 13);
   const afternoonAppts = activeAppts.filter(a => parseInt(a.startTime) >= 13);
@@ -1204,7 +1215,7 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
           const isDayOff = !dayHours || dayHours.isClosed || isHolidayClosed;
           const clinicHoliday = clinicHolidays.find(h => h.date === dateStr);
           const isPartialHoliday = clinicHoliday && clinicHoliday.startTime;
-          const dayAppts = appointments.filter(a => isSameDay(parseISO(a.date), day)).sort((a, b) => a.startTime.localeCompare(b.startTime));
+          const dayAppts = (Array.isArray(appointments) ? appointments : []).filter(a => isSameDay(parseISO(a.date), day)).sort((a, b) => a.startTime.localeCompare(b.startTime));
           const isToday = isSameDay(day, new Date());
           const isSat = i === 6;
           const isSun = i === 0;
@@ -1358,7 +1369,7 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
             const isDayOff = !dayHours || dayHours.isClosed || isHolidayClosed;
             const clinicHoliday = clinicHolidays.find(h => h.date === dateStr);
             const isPartialHoliday = clinicHoliday && clinicHoliday.startTime;
-            const dayAppts = appointments.filter(a => a.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
+            const dayAppts = (Array.isArray(appointments) ? appointments : []).filter(a => a.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
             const isToday = isSameDay(date, new Date());
             const isSun = dow === 0;
             const isSat = dow === 6;
