@@ -888,6 +888,8 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   const startDrag = (e: React.PointerEvent, appt: Appointment) => {
     if (isMobile || e.button !== 0) return;
     e.stopPropagation();
+    e.preventDefault();
+    try { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); } catch {}
     const s = timeToMins(appt.startTime.slice(0, 5));
     const en = appt.endTime ? timeToMins(appt.endTime.slice(0, 5)) : s + SLOT_MINUTES;
     const durSlots = Math.max(1, Math.round((en - s) / SLOT_MINUTES));
@@ -1061,7 +1063,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
       {summaryBar}
 
       <div className="overflow-auto flex-1" ref={scrollRef}>
-        <div className="relative flex flex-col min-h-full" style={{ width: LABEL_WIDTH + trackWidth }}>
+        <div className="relative flex flex-col min-h-full select-none [-webkit-user-select:none] [-webkit-touch-callout:none]" style={{ width: LABEL_WIDTH + trackWidth }}>
           {/* 時刻ヘッダー（上部固定・正時のみ表示） */}
           <div className="sticky top-0 z-30 flex shrink-0 bg-background border-b border-border" style={{ height: HEADER_HEIGHT }}>
             <div className="sticky left-0 z-40 shrink-0 bg-background border-r border-border flex items-center justify-center text-xs font-semibold text-muted-foreground" style={{ width: LABEL_WIDTH }}>
