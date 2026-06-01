@@ -700,8 +700,20 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const [nowTop, setNowTop] = useState<number | null>(null);
+  const [viewH, setViewH] = useState(0);
   const [holidayPopoverOpen, setHolidayPopoverOpen] = useState(false);
   const isToday = isSameDay(currentDate, new Date());
+
+  // 表示領域の高さを測り、行の高さ算出に使う（少人数でも縦を埋めるため）
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => setViewH(el.clientHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // スタッフフィルター適用：担当選択時はその列だけ表示
   const staff = filterStaffId ? allStaff.filter(s => s.id === filterStaffId) : allStaff;
@@ -741,7 +753,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   useEffect(() => {
     const t = calcNowTop();
     if (t !== null && scrollRef.current) {
-      scrollRef.current.scrollLeft = Math.max(0, (t / SLOT_HEIGHT) * 56 - 240);
+      scrollRef.current.scrollLeft = Math.max(0, (t / SLOT_HEIGHT) * 88 - 240);
     }
   }, []);
 
@@ -803,10 +815,13 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   }
 
   // ── 横タイムライン台帳の寸法（時間=横／行=スタッフ・ユニット）──────────────
-  const SLOT_WIDTH = 56;    // 30分あたりの横幅(px)
-  const ROW_HEIGHT = 84;    // 1行(スタッフ/ユニット)の高さ(px)
-  const LABEL_WIDTH = 128;  // 左側の行ラベル幅(px)
+  const SLOT_WIDTH = 88;    // 30分あたりの横幅(px)
+  const LABEL_WIDTH = 132;  // 左側の行ラベル幅(px)
   const HEADER_HEIGHT = 40; // 上部の時刻ヘッダー高さ(px)
+  // 行の高さは画面高さと行数から動的に決定（少人数なら縦を程よく埋め、多人数ならスクロール）
+  const ROW_HEIGHT = columns.length > 0
+    ? Math.max(96, Math.min(160, Math.floor(((viewH || 640) - HEADER_HEIGHT) / columns.length)))
+    : 120;
   const trackWidth = timeSlots.length * SLOT_WIDTH;
 
   // ── ドラッグ移動（上下=担当/ユニット変更、左右=時間変更）─────────────────────
@@ -1066,7 +1081,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
           </div>
 
           {/* 本体：左ラベル列 + 右トラック領域 */}
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 items-start">
             {/* 行ラベル（左固定・横スクロール追従） */}
             <div className="sticky left-0 z-20 shrink-0 bg-background border-r border-border" style={{ width: LABEL_WIDTH }}>
               {columns.length === 0 ? (
@@ -1090,8 +1105,8 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
               ))}
             </div>
 
-            {/* トラック領域（ドラッグ計算の基準要素・全高に伸ばす） */}
-            <div className="relative shrink-0" ref={gridRef} style={{ width: trackWidth, minHeight: rowsHeight }}>
+            {/* トラック領域（ドラッグ計算の基準要素・行の合計高さちょうど） */}
+            <div className="relative shrink-0" ref={gridRef} style={{ width: trackWidth, height: rowsHeight }}>
               {/* 縦の時間グリッド（全高） */}
               {timeSlots.map((slot, i) => {
                 const st = getSlotStatus(slot, dayHours);
