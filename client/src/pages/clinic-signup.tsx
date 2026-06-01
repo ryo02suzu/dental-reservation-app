@@ -170,13 +170,13 @@ export default function ClinicSignupPage() {
               <p className="text-xs text-amber-700 mt-1">管理者画面にログインして、スタッフや診療メニューを設定してください</p>
             </div>
             <div className="flex flex-col gap-3">
-              <Button asChild data-testid="button-open-booking">
+              <Button asChild className="h-12 text-base active:scale-95 transition-transform" data-testid="button-open-booking">
                 <a href={done.bookingUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="w-4 h-4 mr-2" />
                   予約ページを確認する
                 </a>
               </Button>
-              <Button variant="outline" asChild data-testid="button-go-admin">
+              <Button variant="outline" asChild className="h-12 text-base active:scale-95 transition-transform" data-testid="button-go-admin">
                 <Link href="/login">
                   管理者画面へログイン
                 </Link>
@@ -215,6 +215,7 @@ export default function ClinicSignupPage() {
                 onChange={e => handleNameChange(e.target.value)}
                 placeholder="例：さくら歯科クリニック"
                 data-testid="input-clinic-name"
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
@@ -230,6 +231,7 @@ export default function ClinicSignupPage() {
                   onChange={e => handleSlugChange(e.target.value)}
                   placeholder="sakura-dental"
                   data-testid="input-slug"
+                  className="h-11"
                 />
               </div>
               {slug && (
@@ -264,6 +266,7 @@ export default function ClinicSignupPage() {
                   onChange={e => setPhone(e.target.value)}
                   placeholder="03-1234-5678"
                   data-testid="input-phone"
+                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
@@ -275,6 +278,7 @@ export default function ClinicSignupPage() {
                   onChange={e => setEmail(e.target.value)}
                   placeholder="info@example.com"
                   data-testid="input-email"
+                  className="h-11"
                 />
               </div>
             </div>
@@ -289,7 +293,7 @@ export default function ClinicSignupPage() {
                   placeholder="1234567（ハイフン不要）"
                   maxLength={7}
                   data-testid="input-postal-code"
-                  className="max-w-[200px]"
+                  className="h-11 max-w-[200px]"
                 />
                 {postalLookingUp && (
                   <span className="text-xs text-gray-400 flex items-center gap-1">
@@ -308,7 +312,7 @@ export default function ClinicSignupPage() {
                   onChange={e => setAddress(e.target.value)}
                   placeholder="郵便番号を入力すると自動入力されます"
                   data-testid="input-address"
-                  className="pl-9"
+                  className="h-11 pl-9"
                 />
               </div>
               {address && (
@@ -332,6 +336,7 @@ export default function ClinicSignupPage() {
                 onChange={e => setAdminUsername(e.target.value)}
                 placeholder="admin"
                 data-testid="input-admin-username"
+                className="h-11"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -344,6 +349,7 @@ export default function ClinicSignupPage() {
                   onChange={e => setAdminPassword(e.target.value)}
                   placeholder="6文字以上"
                   data-testid="input-admin-password"
+                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
@@ -355,6 +361,7 @@ export default function ClinicSignupPage() {
                   onChange={e => setAdminPasswordConfirm(e.target.value)}
                   placeholder="パスワードを再入力"
                   data-testid="input-admin-password-confirm"
+                  className="h-11"
                 />
               </div>
             </div>

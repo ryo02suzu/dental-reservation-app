@@ -243,9 +243,9 @@ function TodayView() {
                       )}
                     </div>
                     <button onClick={() => setEditingRecord(r)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 text-gray-400 hover:text-gray-600 shrink-0 transition-colors"
                       data-testid={`button-edit-attendance-${r.staffId}`}>
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Edit2 className="w-4 h-4" />
                     </button>
                     <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${isBreak ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-pulse"}`} />
                   </div>
@@ -280,9 +280,9 @@ function TodayView() {
                       <span className="font-mono font-bold text-gray-700">{elapsed(r.clockIn, r.clockOut)}</span>
                     </div>
                     <button onClick={() => setEditingRecord(r)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                      className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 text-gray-400 hover:text-gray-600 shrink-0 transition-colors"
                       data-testid={`button-edit-done-${r.staffId}`}>
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Edit2 className="w-4 h-4" />
                     </button>
                   </div>
                 );
@@ -313,10 +313,25 @@ function TodayView() {
           </div>
         )}
 
-        {isLoading && (
+        {isLoading && records.length === 0 && (
+          <div className="space-y-1.5 pt-1">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-white rounded-xl border px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gray-100 animate-pulse shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 w-24 bg-gray-100 rounded animate-pulse" />
+                  <div className="h-2.5 w-16 bg-gray-100 rounded animate-pulse" />
+                </div>
+                <div className="h-5 w-16 bg-gray-100 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!isLoading && records.length === 0 && notClockedIn.length === 0 && (
           <div className="text-center py-10 text-gray-400">
-            <Clock className="w-8 h-8 mx-auto mb-2 animate-spin opacity-30" />
-            <p className="text-sm">読み込み中...</p>
+            <Users className="w-9 h-9 mx-auto mb-2 opacity-25" />
+            <p className="text-sm">本日の出退勤記録はありません</p>
           </div>
         )}
       </div>
@@ -364,24 +379,24 @@ function EditAttendanceModal({ record, staffList, onClose }: { record: Attendanc
         <p className="text-sm text-gray-500 mb-4">{staff?.name} — {record.date}</p>
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">出勤時刻</label>
+            <label className="text-sm font-medium text-gray-600 block mb-1.5">出勤時刻</label>
             <input type="time" value={clockIn} onChange={e => setClockIn(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm" data-testid="input-edit-clock-in" />
+              className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-clock-in" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">退勤時刻</label>
+            <label className="text-sm font-medium text-gray-600 block mb-1.5">退勤時刻</label>
             <input type="time" value={clockOut} onChange={e => setClockOut(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm" data-testid="input-edit-clock-out" />
+              className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-clock-out" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">休憩開始</label>
+            <label className="text-sm font-medium text-gray-600 block mb-1.5">休憩開始</label>
             <input type="time" value={breakStart} onChange={e => setBreakStart(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm" data-testid="input-edit-break-start" />
+              className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-break-start" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 block mb-1">休憩終了</label>
+            <label className="text-sm font-medium text-gray-600 block mb-1.5">休憩終了</label>
             <input type="time" value={breakEnd} onChange={e => setBreakEnd(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm" data-testid="input-edit-break-end" />
+              className="w-full h-10 border rounded-lg px-3 text-sm" data-testid="input-edit-break-end" />
           </div>
         </div>
         <div className="flex gap-2 mt-5">
@@ -427,11 +442,11 @@ function MonthlyReport() {
     <div className="flex-1 overflow-auto">
       <div className="p-4 md:p-6 space-y-4 max-w-5xl mx-auto">
         <div className="flex items-center justify-between">
-          <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="p-1.5 rounded-lg hover:bg-gray-100" data-testid="btn-report-prev">
+          <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors shrink-0" data-testid="btn-report-prev">
             <ChevronLeft className="w-5 h-5 text-gray-500" />
           </button>
           <h2 className="text-lg font-bold text-gray-900">{format(monthBase, "yyyy年M月", { locale: ja })} 給与レポート</h2>
-          <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="p-1.5 rounded-lg hover:bg-gray-100" data-testid="btn-report-next">
+          <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors shrink-0" data-testid="btn-report-next">
             <ChevronRight className="w-5 h-5 text-gray-500" />
           </button>
         </div>
@@ -448,13 +463,21 @@ function MonthlyReport() {
         </div>
 
         {isLoading ? (
-          <div className="text-center py-10 text-gray-400">
-            <Clock className="w-8 h-8 mx-auto mb-2 animate-spin opacity-30" />
-            <p className="text-sm">読み込み中...</p>
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="bg-white rounded-xl border px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gray-100 animate-pulse shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3.5 w-24 bg-gray-100 rounded animate-pulse" />
+                  <div className="h-2.5 w-16 bg-gray-100 rounded animate-pulse" />
+                </div>
+                <div className="h-4 w-20 bg-gray-100 rounded animate-pulse" />
+              </div>
+            ))}
           </div>
         ) : staffSummary.length === 0 ? (
           <div className="text-center py-10 text-gray-400">
-            <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <FileText className="w-9 h-9 mx-auto mb-2 opacity-25" />
             <p className="text-sm">データがありません</p>
           </div>
         ) : (

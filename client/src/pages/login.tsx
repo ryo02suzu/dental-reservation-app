@@ -76,16 +76,16 @@ export default function LoginPage() {
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit((data) => loginMutation.mutate({ ...data, rememberMe }))}
-                className="space-y-4"
+                className="space-y-5"
               >
                 <FormField
                   control={form.control}
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ユーザー名</FormLabel>
+                      <FormLabel className="text-sm mb-1.5 block">ユーザー名</FormLabel>
                       <FormControl>
-                        <Input placeholder="admin" {...field} data-testid="input-username" />
+                        <Input placeholder="admin" {...field} data-testid="input-username" className="h-12" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -96,7 +96,7 @@ export default function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>パスワード</FormLabel>
+                      <FormLabel className="text-sm mb-1.5 block">パスワード</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
@@ -104,7 +104,7 @@ export default function LoginPage() {
                             placeholder="••••••••"
                             {...field}
                             data-testid="input-password"
-                            className="pr-10"
+                            className="h-12 pr-12"
                           />
                           <button
                             type="button"
@@ -130,13 +130,13 @@ export default function LoginPage() {
                   ログイン状態を保持する
                 </label>
                 {loginMutation.isError && (
-                  <p className="text-sm text-destructive text-center">
+                  <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive text-center">
                     ユーザー名またはパスワードが正しくありません
                   </p>
                 )}
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full h-12 text-base active:scale-95 transition-transform"
                   disabled={loginMutation.isPending}
                   data-testid="button-login"
                 >

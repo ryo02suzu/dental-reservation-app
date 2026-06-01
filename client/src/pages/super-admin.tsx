@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -372,17 +373,34 @@ export default function SuperAdminPage() {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                        <div className="p-4 pb-3 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-5 w-16 rounded-full" />
+                            <Skeleton className="h-6 w-20 rounded-full" />
+                          </div>
+                          <Skeleton className="h-5 w-40" />
+                          <Skeleton className="h-3 w-32" />
+                          <Skeleton className="h-9 w-full rounded-lg" />
+                        </div>
+                        <div className="border-t bg-gray-50 px-4 py-2.5">
+                          <Skeleton className="h-9 w-full rounded-md" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : !clinics?.length ? (
                   <div className="text-center py-12 text-gray-500">
                     <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>医院が登録されていません</p>
+                    <p className="text-sm">医院が登録されていません</p>
                     <Button className="mt-4" asChild><Link href="/signup">最初の医院を登録する</Link></Button>
                   </div>
                 ) : !filteredClinics.length ? (
                   <div className="text-center py-12 text-gray-500">
                     <Search className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                    <p>「{clinicSearch}」に一致する医院がありません</p>
+                    <p className="text-sm">「{clinicSearch}」に一致する医院がありません</p>
                     <Button variant="outline" className="mt-4" onClick={() => setClinicSearch("")}>検索をクリア</Button>
                   </div>
                 ) : (
@@ -586,7 +604,14 @@ export default function SuperAdminPage() {
               </CardHeader>
               <CardContent>
                 {addonsLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="border rounded-xl bg-white p-4 shadow-sm space-y-2">
+                        <Skeleton className="h-5 w-32" />
+                        <Skeleton className="h-3 w-full" />
+                      </div>
+                    ))}
+                  </div>
                 ) : !addonDefs.length ? (
                   <div className="text-center py-10 text-gray-400">
                     <Puzzle className="w-10 h-10 mx-auto mb-2 text-gray-300" />

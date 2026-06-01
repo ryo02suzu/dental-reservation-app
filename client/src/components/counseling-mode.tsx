@@ -4,7 +4,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, Check, Loader2, Eraser, ChevronLeft } from "lucide-react";
+import { X, Check, Loader2, Eraser, ChevronLeft, Stethoscope } from "lucide-react";
 import type { TreatmentPlan, ClinicSettings } from "@shared/schema";
 
 interface CounselingModeProps {
@@ -38,84 +38,85 @@ export function CounselingMode({ patient, initialCategory, onClose }: Counseling
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
       {/* ヘッダー */}
-      <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
-        <div className="flex items-center gap-3">
+      <div className="shrink-0 flex items-center justify-between px-5 md:px-8 py-4 border-b border-border bg-background">
+        <div className="flex items-center gap-3 min-w-0">
           {step === "consent" && (
-            <Button size="icon" variant="ghost" onClick={() => setStep("compare")}><ChevronLeft className="w-5 h-5" /></Button>
+            <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={() => setStep("compare")}><ChevronLeft className="w-5 h-5" /></Button>
           )}
-          <div>
+          <div className="min-w-0">
             <p className="text-sm text-muted-foreground">カウンセリング</p>
-            <p className="font-bold text-lg">{patient.name} 様</p>
+            <p className="font-bold text-lg md:text-xl tracking-tight truncate">{patient.name} 様</p>
           </div>
         </div>
-        <Button size="icon" variant="ghost" onClick={onClose} data-testid="close-counseling"><X className="w-6 h-6" /></Button>
+        <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0" onClick={onClose} data-testid="close-counseling"><X className="w-6 h-6" /></Button>
       </div>
 
       {step === "compare" && (
         <div className="flex-1 overflow-auto p-5 md:p-8">
           {/* カテゴリ切替 */}
-          <div className="flex flex-wrap gap-2 mb-6 justify-center">
+          <div className="flex flex-wrap gap-2 mb-8 justify-center">
             <button
               onClick={() => setCategory("all")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${category === "all" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"}`}
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors active:scale-95 ${category === "all" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"}`}
             >すべて</button>
             {categories.map(c => (
               <button
                 key={c}
                 onClick={() => setCategory(c)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition ${category === c ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"}`}
+                className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors active:scale-95 ${category === c ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"}`}
               >{CATEGORY_LABELS[c] || c}</button>
             ))}
           </div>
 
           {visible.length === 0 ? (
-            <div className="text-center text-muted-foreground py-16">
-              <p>表示できる治療プランがありません。</p>
-              <p className="text-sm mt-1">設定 → 自費プラン から登録してください。</p>
+            <div className="text-center py-16 text-muted-foreground">
+              <Stethoscope className="h-10 w-10 mx-auto mb-3 opacity-25" />
+              <p className="text-base">表示できる治療プランがありません</p>
+              <p className="text-sm mt-1.5">設定 → 自費プラン から登録してください。</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
               {visible.map(p => (
                 <div
                   key={p.id}
-                  className={`relative rounded-2xl border-2 p-6 flex flex-col ${p.isRecommended ? "border-primary shadow-lg" : "border-border"} ${p.isInsurance ? "bg-muted/30" : "bg-card"}`}
+                  className={`relative rounded-2xl border-2 p-6 md:p-7 flex flex-col transition-shadow ${p.isRecommended ? "border-primary shadow-lg" : "border-border"} ${p.isInsurance ? "bg-muted/30" : "bg-card"}`}
                 >
                   {p.isRecommended && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2">おすすめ</Badge>
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 text-xs">おすすめ</Badge>
                   )}
-                  <div className="text-center mb-4">
-                    <h3 className="text-xl font-bold">{p.name}</h3>
-                    {p.material && <p className="text-sm text-muted-foreground mt-0.5">{p.material}</p>}
+                  <div className="text-center mb-5">
+                    <h3 className="text-xl md:text-2xl font-bold tracking-tight">{p.name}</h3>
+                    {p.material && <p className="text-sm text-muted-foreground mt-1">{p.material}</p>}
                   </div>
-                  <div className="text-center mb-4">
-                    <span className="text-3xl font-extrabold">¥{(p.price ?? 0).toLocaleString()}</span>
-                    {p.isInsurance && <span className="text-sm text-muted-foreground ml-1">(保険)</span>}
-                    {p.durationLabel && <p className="text-xs text-muted-foreground mt-1">治療期間: {p.durationLabel}</p>}
+                  <div className="text-center mb-5 pb-5 border-b border-border">
+                    <span className="text-4xl font-extrabold tabular-nums leading-none">¥{(p.price ?? 0).toLocaleString()}</span>
+                    {p.isInsurance && <span className="text-sm text-muted-foreground ml-1.5">(保険)</span>}
+                    {p.durationLabel && <p className="text-xs text-muted-foreground mt-2">治療期間: {p.durationLabel}</p>}
                   </div>
-                  {p.description && <p className="text-sm text-muted-foreground mb-4 text-center">{p.description}</p>}
-                  <div className="space-y-3 flex-1">
+                  {p.description && <p className="text-sm text-muted-foreground leading-relaxed mb-5 text-center">{p.description}</p>}
+                  <div className="space-y-4 flex-1">
                     {(p.merits ?? []).length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-emerald-600 mb-1">メリット</p>
-                        <ul className="space-y-1">
+                        <p className="text-xs font-semibold text-emerald-600 mb-1.5">メリット</p>
+                        <ul className="space-y-1.5">
                           {(p.merits ?? []).map((m, i) => (
-                            <li key={i} className="text-sm flex items-start gap-1.5"><Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />{m}</li>
+                            <li key={i} className="text-sm leading-relaxed flex items-start gap-2"><Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />{m}</li>
                           ))}
                         </ul>
                       </div>
                     )}
                     {(p.demerits ?? []).length > 0 && (
                       <div>
-                        <p className="text-xs font-semibold text-amber-600 mb-1">注意点</p>
-                        <ul className="space-y-1">
+                        <p className="text-xs font-semibold text-amber-600 mb-1.5">注意点</p>
+                        <ul className="space-y-1.5">
                           {(p.demerits ?? []).map((m, i) => (
-                            <li key={i} className="text-sm flex items-start gap-1.5 text-muted-foreground"><span className="text-amber-500 shrink-0">•</span>{m}</li>
+                            <li key={i} className="text-sm leading-relaxed flex items-start gap-2 text-muted-foreground"><span className="text-amber-500 shrink-0 mt-0.5">•</span>{m}</li>
                           ))}
                         </ul>
                       </div>
                     )}
                   </div>
-                  <Button className="w-full mt-5" variant={p.isRecommended ? "default" : "outline"} onClick={() => choosePlan(p)} data-testid={`choose-plan-${p.id}`}>
+                  <Button className="w-full mt-6 h-12 text-base font-semibold active:scale-95" variant={p.isRecommended ? "default" : "outline"} onClick={() => choosePlan(p)} data-testid={`choose-plan-${p.id}`}>
                     このプランで決定
                   </Button>
                 </div>
@@ -227,27 +228,27 @@ function ConsentForm({ patient, plan, clinicName, disclaimer, onDone }: {
 
   return (
     <div className="flex-1 overflow-auto p-5 md:p-8">
-      <div ref={sheetRef} className="max-w-2xl mx-auto bg-card border rounded-2xl p-6 md:p-8 shadow-sm">
-        <h2 className="text-2xl font-bold text-center mb-1">治療同意書</h2>
-        <p className="text-center text-sm text-muted-foreground mb-6">{clinicName}</p>
+      <div ref={sheetRef} className="max-w-2xl mx-auto bg-card border rounded-2xl p-6 md:p-10 shadow-sm">
+        <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-center mb-1.5">治療同意書</h2>
+        <p className="text-center text-sm text-muted-foreground mb-8">{clinicName}</p>
 
-        <table className="w-full text-sm mb-6">
+        <table className="w-full text-sm mb-8">
           <tbody>
-            <tr className="border-b"><td className="py-2.5 font-medium text-muted-foreground w-32">患者氏名</td><td className="py-2.5 font-semibold">{patient.name}</td></tr>
-            <tr className="border-b"><td className="py-2.5 font-medium text-muted-foreground">日付</td><td className="py-2.5">{today}</td></tr>
-            <tr className="border-b"><td className="py-2.5 font-medium text-muted-foreground">治療内容</td><td className="py-2.5 font-semibold">{plan.name}{plan.material ? `（${plan.material}）` : ""}</td></tr>
-            <tr className="border-b"><td className="py-2.5 font-medium text-muted-foreground">費用</td><td className="py-2.5 font-bold text-lg">¥{(plan.price ?? 0).toLocaleString()}</td></tr>
+            <tr className="border-b border-border"><td className="py-3 font-medium text-muted-foreground w-32">患者氏名</td><td className="py-3 font-semibold">{patient.name}</td></tr>
+            <tr className="border-b border-border"><td className="py-3 font-medium text-muted-foreground">日付</td><td className="py-3">{today}</td></tr>
+            <tr className="border-b border-border"><td className="py-3 font-medium text-muted-foreground">治療内容</td><td className="py-3 font-semibold">{plan.name}{plan.material ? `（${plan.material}）` : ""}</td></tr>
+            <tr className="border-b border-border"><td className="py-3 font-medium text-muted-foreground">費用</td><td className="py-3 font-bold text-lg tabular-nums">¥{(plan.price ?? 0).toLocaleString()}</td></tr>
           </tbody>
         </table>
 
-        <div className="bg-muted/40 rounded-lg p-4 mb-6">
+        <div className="bg-muted/40 rounded-lg p-5 mb-8">
           <p className="text-xs font-semibold text-muted-foreground mb-2">同意事項</p>
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{defaultDisclaimer}</p>
         </div>
 
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-medium">ご署名</p>
-          <Button size="sm" variant="ghost" onClick={clearSig} className="h-7 text-xs"><Eraser className="w-3.5 h-3.5 mr-1" />消す</Button>
+          <Button size="sm" variant="ghost" onClick={clearSig} className="h-8 text-xs"><Eraser className="w-3.5 h-3.5 mr-1" />消す</Button>
         </div>
         <canvas
           ref={canvasRef}
@@ -255,13 +256,13 @@ function ConsentForm({ patient, plan, clinicName, disclaimer, onDone }: {
           onPointerMove={move}
           onPointerUp={end}
           onPointerLeave={end}
-          className="w-full h-44 border-2 border-dashed rounded-lg bg-white touch-none cursor-crosshair"
+          className="w-full h-48 md:h-56 border-2 border-dashed rounded-xl bg-white touch-none cursor-crosshair"
           data-testid="signature-canvas"
         />
-        <p className="text-xs text-muted-foreground mt-1 text-center">上の枠内に指またはタッチペンでご署名ください</p>
+        <p className="text-xs text-muted-foreground mt-2 text-center">上の枠内に指またはタッチペンでご署名ください</p>
 
-        <Button className="w-full mt-6 h-12 text-base" onClick={submit} disabled={saving} data-testid="submit-consent">
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Check className="w-5 h-5 mr-1" />同意する</>}
+        <Button className="w-full mt-8 h-14 text-base font-semibold active:scale-95" onClick={submit} disabled={saving} data-testid="submit-consent">
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Check className="w-5 h-5 mr-1.5" />同意する</>}
         </Button>
       </div>
     </div>

@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Star, Plus, Trash2, Pencil, MessageCircle, Copy, ExternalLink } from "lucide-react";
+import { Star, Plus, Trash2, Pencil, MessageCircle, Copy, ExternalLink, Inbox } from "lucide-react";
 import type { FollowUpTemplate, ReviewSettings, ReviewResponse, TreatmentPlan, Service } from "@shared/schema";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -62,12 +62,14 @@ export function FollowUpTab() {
         {isLoading ? <Skeleton className="h-40" /> : (
           <div className="space-y-3">
             {(!templates || templates.length === 0) && !editing && (
-              <p className="text-sm text-muted-foreground py-6 text-center">
-                まだテンプレートがありません。「テンプレート追加」から、メニュー別の自動フォロー設定を作成してください。
-              </p>
+              <div className="text-center py-10 text-muted-foreground">
+                <MessageCircle className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                <p className="text-sm">まだテンプレートがありません</p>
+                <p className="text-xs mt-1">「テンプレート追加」からメニュー別の自動フォロー設定を作成してください。</p>
+              </div>
             )}
             {templates?.map(t => (
-              <div key={t.id} className="border rounded-lg p-3 flex items-start justify-between gap-3">
+              <div key={t.id} className="border rounded-lg p-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{t.name || serviceName(t.serviceId)}</span>
@@ -92,13 +94,13 @@ export function FollowUpTab() {
               <div className="border-2 border-primary/30 rounded-lg p-4 space-y-4 bg-muted/20">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="mb-1.5 block">テンプレート名</Label>
-                    <Input value={editing.name ?? ""} onChange={e => setEditing(p => ({ ...p!, name: e.target.value }))} placeholder="例: 抜歯後フォロー" />
+                    <Label className="text-sm mb-1.5 block">テンプレート名</Label>
+                    <Input className="h-10" value={editing.name ?? ""} onChange={e => setEditing(p => ({ ...p!, name: e.target.value }))} placeholder="例: 抜歯後フォロー" />
                   </div>
                   <div>
-                    <Label className="mb-1.5 block">対象メニュー</Label>
+                    <Label className="text-sm mb-1.5 block">対象メニュー</Label>
                     <Select value={editing.serviceId ?? "all"} onValueChange={v => setEditing(p => ({ ...p!, serviceId: v === "all" ? null : v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">既定（すべてのメニュー）</SelectItem>
                         {services?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -106,9 +108,9 @@ export function FollowUpTab() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="mb-1.5 block">種別</Label>
+                    <Label className="text-sm mb-1.5 block">種別</Label>
                     <Select value={editing.kind ?? "checkup"} onValueChange={v => setEditing(p => ({ ...p!, kind: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="surgical">外科・抜歯系（翌日に容体確認）</SelectItem>
                         <SelectItem value="checkup">検診・クリーニング系（お礼＋リコール）</SelectItem>
@@ -131,16 +133,16 @@ export function FollowUpTab() {
                     <div className="pl-2 space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="mb-1.5 block text-xs">完了から何時間後</Label>
-                          <Input type="number" min={0} value={editing.followUpDelayHours ?? 24} onChange={e => setEditing(p => ({ ...p!, followUpDelayHours: Number(e.target.value) }))} />
+                          <Label className="text-sm mb-1.5 block">完了から何時間後</Label>
+                          <Input type="number" min={0} className="h-10" value={editing.followUpDelayHours ?? 24} onChange={e => setEditing(p => ({ ...p!, followUpDelayHours: Number(e.target.value) }))} />
                         </div>
                         <div>
-                          <Label className="mb-1.5 block text-xs">送信時刻</Label>
-                          <Input type="time" value={editing.followUpSendAtTime ?? "18:00"} onChange={e => setEditing(p => ({ ...p!, followUpSendAtTime: e.target.value }))} />
+                          <Label className="text-sm mb-1.5 block">送信時刻</Label>
+                          <Input type="time" className="h-10" value={editing.followUpSendAtTime ?? "18:00"} onChange={e => setEditing(p => ({ ...p!, followUpSendAtTime: e.target.value }))} />
                         </div>
                       </div>
                       <div>
-                        <Label className="mb-1.5 block text-xs">メッセージ（空欄なら既定文を使用。{"{patientName}"} {"{clinicName}"} が使えます）</Label>
+                        <Label className="text-sm mb-1.5 block">メッセージ（空欄なら既定文を使用。{"{patientName}"} {"{clinicName}"} が使えます）</Label>
                         <Textarea rows={3} value={editing.followUpMessage ?? ""} onChange={e => setEditing(p => ({ ...p!, followUpMessage: e.target.value }))}
                           placeholder="昨日はお疲れ様でした。お痛みや出血は落ち着きましたか？" />
                       </div>
@@ -158,16 +160,16 @@ export function FollowUpTab() {
                     <div className="pl-2 space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="mb-1.5 block text-xs">何ヶ月後</Label>
-                          <Input type="number" min={1} value={editing.recallDelayMonths ?? 6} onChange={e => setEditing(p => ({ ...p!, recallDelayMonths: Number(e.target.value) }))} />
+                          <Label className="text-sm mb-1.5 block">何ヶ月後</Label>
+                          <Input type="number" min={1} className="h-10" value={editing.recallDelayMonths ?? 6} onChange={e => setEditing(p => ({ ...p!, recallDelayMonths: Number(e.target.value) }))} />
                         </div>
                         <div>
-                          <Label className="mb-1.5 block text-xs">送信時刻</Label>
-                          <Input type="time" value={editing.recallSendAtTime ?? "10:00"} onChange={e => setEditing(p => ({ ...p!, recallSendAtTime: e.target.value }))} />
+                          <Label className="text-sm mb-1.5 block">送信時刻</Label>
+                          <Input type="time" className="h-10" value={editing.recallSendAtTime ?? "10:00"} onChange={e => setEditing(p => ({ ...p!, recallSendAtTime: e.target.value }))} />
                         </div>
                       </div>
                       <div>
-                        <Label className="mb-1.5 block text-xs">リコールメッセージ（空欄なら既定文）</Label>
+                        <Label className="text-sm mb-1.5 block">リコールメッセージ（空欄なら既定文）</Label>
                         <Textarea rows={3} value={editing.recallMessage ?? ""} onChange={e => setEditing(p => ({ ...p!, recallMessage: e.target.value }))}
                           placeholder="定期検診の時期になりました。お口の健康維持のためご予約をお待ちしております。" />
                       </div>
@@ -176,8 +178,8 @@ export function FollowUpTab() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={() => saveMutation.mutate(editing)} disabled={saveMutation.isPending || !editing.name}>保存</Button>
-                  <Button variant="outline" onClick={() => setEditing(null)}>キャンセル</Button>
+                  <Button className="h-10" onClick={() => saveMutation.mutate(editing)} disabled={saveMutation.isPending || !editing.name}>保存</Button>
+                  <Button className="h-10" variant="outline" onClick={() => setEditing(null)}>キャンセル</Button>
                 </div>
               </div>
             )}
@@ -225,14 +227,14 @@ export function ReviewTab({ clinicSlug }: { clinicSlug?: string }) {
           {isLoading ? <Skeleton className="h-64" /> : (
             <div className="space-y-5 max-w-xl">
               {reviewUrl && (
-                <div className="bg-muted/40 border rounded-lg p-3">
-                  <Label className="text-xs text-muted-foreground">患者用アンケートURL（QRコードやLINEに設置）</Label>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <Input readOnly value={reviewUrl} className="text-sm" />
-                    <Button size="icon" variant="outline" onClick={() => { navigator.clipboard.writeText(reviewUrl); toast({ title: "URLをコピーしました" }); }}>
+                <div className="bg-muted/40 border rounded-lg p-4">
+                  <Label className="text-sm mb-1.5 block text-muted-foreground">患者用アンケートURL（QRコードやLINEに設置）</Label>
+                  <div className="flex items-center gap-2">
+                    <Input readOnly value={reviewUrl} className="h-10 text-sm" />
+                    <Button size="icon" variant="outline" className="h-10 w-10 shrink-0" onClick={() => { navigator.clipboard.writeText(reviewUrl); toast({ title: "URLをコピーしました" }); }}>
                       <Copy className="w-4 h-4" />
                     </Button>
-                    <Button size="icon" variant="outline" onClick={() => window.open(reviewUrl, "_blank")}>
+                    <Button size="icon" variant="outline" className="h-10 w-10 shrink-0" onClick={() => window.open(reviewUrl, "_blank")}>
                       <ExternalLink className="w-4 h-4" />
                     </Button>
                   </div>
@@ -243,33 +245,33 @@ export function ReviewTab({ clinicSlug }: { clinicSlug?: string }) {
                 <Label htmlFor="rv-enabled">アンケートを受け付ける</Label>
               </div>
               <div>
-                <Label className="mb-1.5 block">Google誘導の閾値（この星数以上でGoogleへ）</Label>
+                <Label className="text-sm mb-1.5 block">Google誘導の閾値（この星数以上でGoogleへ）</Label>
                 <Select value={String(f.threshold ?? 4)} onValueChange={v => upd({ threshold: Number(v) })}>
-                  <SelectTrigger className="max-w-[200px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-10 max-w-[200px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {[3, 4, 5].map(n => <SelectItem key={n} value={String(n)}>★{n} 以上</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="mb-1.5 block">Googleマップ 口コミ投稿用URL</Label>
-                <Input value={f.googleReviewUrl ?? ""} onChange={e => upd({ googleReviewUrl: e.target.value })}
+                <Label className="text-sm mb-1.5 block">Googleマップ 口コミ投稿用URL</Label>
+                <Input className="h-10" value={f.googleReviewUrl ?? ""} onChange={e => upd({ googleReviewUrl: e.target.value })}
                   placeholder="https://g.page/r/..." />
-                <p className="text-xs text-muted-foreground mt-1">Googleビジネスプロフィールの「クチコミを書く」リンクを貼り付けてください。</p>
+                <p className="text-xs text-muted-foreground mt-1.5">Googleビジネスプロフィールの「クチコミを書く」リンクを貼り付けてください。</p>
               </div>
               <div>
-                <Label className="mb-1.5 block">見出し</Label>
-                <Input value={f.headline ?? ""} onChange={e => upd({ headline: e.target.value })} />
+                <Label className="text-sm mb-1.5 block">見出し</Label>
+                <Input className="h-10" value={f.headline ?? ""} onChange={e => upd({ headline: e.target.value })} />
               </div>
               <div>
-                <Label className="mb-1.5 block">高評価時のメッセージ</Label>
+                <Label className="text-sm mb-1.5 block">高評価時のメッセージ</Label>
                 <Textarea rows={2} value={f.positiveMessage ?? ""} onChange={e => upd({ positiveMessage: e.target.value })} />
               </div>
               <div>
-                <Label className="mb-1.5 block">低評価時のメッセージ（匿名フォームの案内）</Label>
+                <Label className="text-sm mb-1.5 block">低評価時のメッセージ（匿名フォームの案内）</Label>
                 <Textarea rows={2} value={f.negativeMessage ?? ""} onChange={e => upd({ negativeMessage: e.target.value })} />
               </div>
-              <Button onClick={() => saveMutation.mutate(f)} disabled={saveMutation.isPending}>保存</Button>
+              <Button className="h-10" onClick={() => saveMutation.mutate(f)} disabled={saveMutation.isPending}>保存</Button>
             </div>
           )}
         </CardContent>
@@ -282,11 +284,14 @@ export function ReviewTab({ clinicSlug }: { clinicSlug?: string }) {
         </CardHeader>
         <CardContent>
           {feedbacks.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">まだご意見はありません。</p>
+            <div className="text-center py-10 text-muted-foreground">
+              <Inbox className="h-9 w-9 mx-auto mb-2 opacity-25" />
+              <p className="text-sm">まだご意見はありません</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {feedbacks.map(r => (
-                <div key={r.id} className={`border rounded-lg p-3 ${!r.isRead ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200" : ""}`}>
+                <div key={r.id} className={`border rounded-lg p-4 ${!r.isRead ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200" : ""}`}>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-1">
                       {[1,2,3,4,5].map(v => <Star key={v} className={`w-3.5 h-3.5 ${v <= (r.rating ?? 0) ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />)}
@@ -351,10 +356,14 @@ export function TreatmentPlansTab() {
         {isLoading ? <Skeleton className="h-40" /> : (
           <div className="space-y-3">
             {(!plans || plans.length === 0) && !editing && (
-              <p className="text-sm text-muted-foreground py-6 text-center">まだプランがありません。「プラン追加」から登録してください。</p>
+              <div className="text-center py-10 text-muted-foreground">
+                <Inbox className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                <p className="text-sm">まだプランがありません</p>
+                <p className="text-xs mt-1">「プラン追加」から登録してください。</p>
+              </div>
             )}
             {plans?.map(p => (
-              <div key={p.id} className="border rounded-lg p-3 flex items-start justify-between gap-3">
+              <div key={p.id} className="border rounded-lg p-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">{p.name}</span>
@@ -377,25 +386,25 @@ export function TreatmentPlansTab() {
               <div className="border-2 border-primary/30 rounded-lg p-4 space-y-3 bg-muted/20">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="mb-1.5 block">プラン名</Label>
-                    <Input value={editing.name ?? ""} onChange={e => setEditing(p => ({ ...p!, name: e.target.value }))} placeholder="例: オールセラミック" />
+                    <Label className="text-sm mb-1.5 block">プラン名</Label>
+                    <Input className="h-10" value={editing.name ?? ""} onChange={e => setEditing(p => ({ ...p!, name: e.target.value }))} placeholder="例: オールセラミック" />
                   </div>
                   <div>
-                    <Label className="mb-1.5 block">材質</Label>
-                    <Input value={editing.material ?? ""} onChange={e => setEditing(p => ({ ...p!, material: e.target.value }))} placeholder="例: セラミック" />
+                    <Label className="text-sm mb-1.5 block">材質</Label>
+                    <Input className="h-10" value={editing.material ?? ""} onChange={e => setEditing(p => ({ ...p!, material: e.target.value }))} placeholder="例: セラミック" />
                   </div>
                   <div>
-                    <Label className="mb-1.5 block">価格（円）</Label>
-                    <Input type="number" min={0} value={editing.price ?? 0} onChange={e => setEditing(p => ({ ...p!, price: Number(e.target.value) }))} />
+                    <Label className="text-sm mb-1.5 block">価格（円）</Label>
+                    <Input type="number" min={0} className="h-10" value={editing.price ?? 0} onChange={e => setEditing(p => ({ ...p!, price: Number(e.target.value) }))} />
                   </div>
                   <div>
-                    <Label className="mb-1.5 block">治療期間の目安</Label>
-                    <Input value={editing.durationLabel ?? ""} onChange={e => setEditing(p => ({ ...p!, durationLabel: e.target.value }))} placeholder="例: 2〜3週間" />
+                    <Label className="text-sm mb-1.5 block">治療期間の目安</Label>
+                    <Input className="h-10" value={editing.durationLabel ?? ""} onChange={e => setEditing(p => ({ ...p!, durationLabel: e.target.value }))} placeholder="例: 2〜3週間" />
                   </div>
                   <div>
-                    <Label className="mb-1.5 block">悩みカテゴリ</Label>
+                    <Label className="text-sm mb-1.5 block">悩みカテゴリ</Label>
                     <Select value={editing.category ?? "general"} onValueChange={v => setEditing(p => ({ ...p!, category: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="general">一般</SelectItem>
                         <SelectItem value="color">歯の色（ホワイトニング/審美）</SelectItem>
@@ -406,16 +415,16 @@ export function TreatmentPlansTab() {
                   </div>
                 </div>
                 <div>
-                  <Label className="mb-1.5 block">説明</Label>
+                  <Label className="text-sm mb-1.5 block">説明</Label>
                   <Textarea rows={2} value={editing.description ?? ""} onChange={e => setEditing(p => ({ ...p!, description: e.target.value }))} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="mb-1.5 block">メリット（1行に1つ）</Label>
+                    <Label className="text-sm mb-1.5 block">メリット（1行に1つ）</Label>
                     <Textarea rows={3} value={(editing.merits ?? []).join("\n")} onChange={e => setArr("merits", e.target.value)} placeholder="自然な見た目\n変色しにくい" />
                   </div>
                   <div>
-                    <Label className="mb-1.5 block">デメリット（1行に1つ）</Label>
+                    <Label className="text-sm mb-1.5 block">デメリット（1行に1つ）</Label>
                     <Textarea rows={3} value={(editing.demerits ?? []).join("\n")} onChange={e => setArr("demerits", e.target.value)} placeholder="自費診療\n強い衝撃で割れることがある" />
                   </div>
                 </div>
@@ -434,8 +443,8 @@ export function TreatmentPlansTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={() => saveMutation.mutate(editing)} disabled={saveMutation.isPending || !editing.name}>保存</Button>
-                  <Button variant="outline" onClick={() => setEditing(null)}>キャンセル</Button>
+                  <Button className="h-10" onClick={() => saveMutation.mutate(editing)} disabled={saveMutation.isPending || !editing.name}>保存</Button>
+                  <Button className="h-10" variant="outline" onClick={() => setEditing(null)}>キャンセル</Button>
                 </div>
               </div>
             )}

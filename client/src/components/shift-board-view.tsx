@@ -234,9 +234,9 @@ export function ShiftBoardView() {
       <div className="shrink-0 bg-white border-b px-4 md:px-6 py-3 space-y-2 print:py-1 print:px-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <button onClick={navPrev} className="p-1.5 rounded-lg hover:bg-muted print:hidden" data-testid="shiftboard-prev"><ChevronLeft className="w-5 h-5" /></button>
-            <span className="text-sm font-bold min-w-[160px] text-center">{headerLabel}</span>
-            <button onClick={navNext} className="p-1.5 rounded-lg hover:bg-muted print:hidden" data-testid="shiftboard-next"><ChevronRight className="w-5 h-5" /></button>
+            <button onClick={navPrev} className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted active:bg-accent/50 transition-colors print:hidden" data-testid="shiftboard-prev"><ChevronLeft className="w-5 h-5" /></button>
+            <span className="text-sm font-bold tracking-tight min-w-[160px] text-center tabular-nums">{headerLabel}</span>
+            <button onClick={navNext} className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted active:bg-accent/50 transition-colors print:hidden" data-testid="shiftboard-next"><ChevronRight className="w-5 h-5" /></button>
           </div>
           <div className="flex items-center gap-1.5 print:hidden">
             <div className="flex bg-muted rounded-lg p-0.5 mr-1">
@@ -269,7 +269,14 @@ export function ShiftBoardView() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="p-6 space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+        <div className="p-4 md:p-6 space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+      ) : visibleStaff.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center py-10 text-muted-foreground">
+            <Users className="h-9 w-9 mx-auto mb-2 opacity-25" />
+            <p className="text-sm">表示するスタッフがいません</p>
+          </div>
+        </div>
       ) : (
         <div className="flex-1 overflow-auto print:overflow-visible">
           <table className="border-collapse w-full min-w-[640px] print:min-w-0">
@@ -523,10 +530,10 @@ function MinStaffDlg({ current, onSave }: { current: { doctor: number; hygienist
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">平日に最低限必要な人数。不足日は赤くハイライトされます。</p>
       <div className="flex gap-4">
-        <div className="flex-1"><Label className="text-xs mb-1 block">ドクター</Label><Input type="number" min={0} max={10} value={d} onChange={e => setD(Number(e.target.value))} className="h-9" data-testid="input-min-doctor" /></div>
-        <div className="flex-1"><Label className="text-xs mb-1 block">衛生士</Label><Input type="number" min={0} max={10} value={h} onChange={e => setH(Number(e.target.value))} className="h-9" data-testid="input-min-hygienist" /></div>
+        <div className="flex-1"><Label className="text-sm mb-1.5 block">ドクター</Label><Input type="number" min={0} max={10} value={d} onChange={e => setD(Number(e.target.value))} className="h-10" data-testid="input-min-doctor" /></div>
+        <div className="flex-1"><Label className="text-sm mb-1.5 block">衛生士</Label><Input type="number" min={0} max={10} value={h} onChange={e => setH(Number(e.target.value))} className="h-10" data-testid="input-min-hygienist" /></div>
       </div>
-      <Button className="w-full" onClick={() => onSave({ doctor: d, hygienist: h })} data-testid="button-save-min-staff">保存</Button>
+      <Button className="w-full h-10" onClick={() => onSave({ doctor: d, hygienist: h })} data-testid="button-save-min-staff">保存</Button>
     </div>
   );
 }

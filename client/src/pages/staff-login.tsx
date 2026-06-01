@@ -39,30 +39,30 @@ export default function StaffLoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 to-amber-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm text-center">
-        <div className="mb-4">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+        <div className="mb-2">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
             {status === "loading" && <Loader2 className="w-8 h-8 text-primary animate-spin" />}
             {status === "success" && <CheckCircle2 className="w-8 h-8 text-primary" />}
             {status === "error" && <XCircle className="w-8 h-8 text-red-500" />}
           </div>
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-xl font-bold tracking-tight text-gray-900">
             {status === "loading" && "ログイン中..."}
             {status === "success" && `おかえりなさい、${staffName}さん`}
             {status === "error" && "ログインできません"}
           </h1>
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-gray-500 mt-2 leading-relaxed">
             {status === "loading" && "QRコードを確認しています"}
             {status === "success" && "スケジュール画面に移動します..."}
             {status === "error" && errorMsg}
           </p>
         </div>
         {status === "success" && (
-          <Button className="w-full mt-4" onClick={() => navigate("/my-schedule")}>
+          <Button className="w-full h-12 text-base mt-5 active:scale-95 transition-transform" onClick={() => navigate("/my-schedule")}>
             スケジュールを見る
           </Button>
         )}
         {status === "error" && (
-          <p className="text-sm text-muted-foreground mt-4">
+          <p className="text-sm text-muted-foreground mt-5 leading-relaxed">
             QRコードが古い場合は、院長に再発行を依頼してください
           </p>
         )}

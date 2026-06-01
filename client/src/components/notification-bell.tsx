@@ -140,15 +140,15 @@ export function NotificationBell({ collapsed, onViewChange }: { collapsed: boole
 
           <div className="max-h-80 overflow-y-auto divide-y divide-border">
             {notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <Bell className="h-8 w-8 mb-2 opacity-30" />
+              <div className="text-center py-10 text-muted-foreground">
+                <Bell className="h-9 w-9 mx-auto mb-2 opacity-25" />
                 <p className="text-sm">通知はありません</p>
               </div>
             ) : (
               notifications.map(n => (
                 <button
                   key={n.id}
-                  className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-accent transition-colors ${!n.isRead ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}
+                  className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-accent active:bg-accent/50 transition-colors ${!n.isRead ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}
                   onClick={() => {
                     setOpen(false);
                     if (onViewChange && n.type === "new_booking") {

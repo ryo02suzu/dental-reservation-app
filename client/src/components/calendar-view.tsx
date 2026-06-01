@@ -448,14 +448,14 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
       <div className="flex flex-col px-3 md:px-6 py-2 border-b border-border bg-background shrink-0 gap-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => navigate(-1)} data-testid="button-prev">
+            <Button size="icon" variant="outline" className="h-10 w-10 sm:h-9 sm:w-9 shrink-0 active:scale-95" onClick={() => navigate(-1)} data-testid="button-prev">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h2 className="text-sm md:text-base font-semibold text-center min-w-0 flex-1 truncate md:flex-none md:min-w-[220px]" data-testid="calendar-title">{headerTitle}</h2>
-            <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => navigate(1)} data-testid="button-next">
+            <h2 className="text-base md:text-lg font-bold tracking-tight text-center min-w-0 flex-1 truncate leading-tight md:flex-none md:min-w-[220px]" data-testid="calendar-title">{headerTitle}</h2>
+            <Button size="icon" variant="outline" className="h-10 w-10 sm:h-9 sm:w-9 shrink-0 active:scale-95" onClick={() => navigate(1)} data-testid="button-next">
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())} className="h-8 text-xs ml-0.5 shrink-0">今日</Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())} className="h-10 sm:h-9 text-xs ml-0.5 shrink-0 active:scale-95">今日</Button>
           </div>
           {/* カレンダーモード切替 */}
           <div className="flex border border-border rounded-md overflow-hidden shrink-0">
@@ -466,7 +466,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             ] as const).map(({ mode, icon: Icon, label }, idx) => (
               <button
                 key={mode}
-                className={`flex items-center gap-1.5 h-9 px-3 text-xs font-medium transition-colors ${idx > 0 ? "border-l border-border" : ""} ${calendarMode === mode ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                className={`flex items-center gap-1.5 h-10 sm:h-9 px-3 text-xs font-medium transition-colors active:scale-95 ${idx > 0 ? "border-l border-border" : ""} ${calendarMode === mode ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
                 onClick={() => setCalendarMode(mode)}
                 data-testid={`calendar-mode-${mode}`}
               >
@@ -483,7 +483,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             {(["day", "week", "month"] as const).map(mode => (
               <button
                 key={mode}
-                className={`px-2.5 md:px-3 py-1.5 text-xs md:text-sm font-medium transition-colors ${viewMode === mode ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                className={`px-3 md:px-3.5 h-10 sm:h-9 text-xs md:text-sm font-medium transition-colors active:scale-95 ${viewMode === mode ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
                 onClick={() => setViewMode(mode)}
                 data-testid={`view-${mode}`}
               >
@@ -498,7 +498,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
               <span className="text-xs text-muted-foreground mr-1 shrink-0">担当：</span>
               <div className="flex border border-border rounded-md overflow-x-auto max-w-full">
                 <button
-                  className={`shrink-0 px-2.5 py-1.5 text-xs font-medium transition-colors ${filterStaffId === null ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                  className={`shrink-0 px-3 h-10 sm:h-9 text-xs font-medium transition-colors active:scale-95 ${filterStaffId === null ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
                   onClick={() => setFilterStaffId(null)}
                   data-testid="filter-staff-all"
                 >
@@ -510,7 +510,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
                   return (
                     <button
                       key={s.id}
-                      className={`shrink-0 px-2.5 py-1.5 text-xs font-medium transition-colors border-l border-border ${filterStaffId === s.id ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                      className={`shrink-0 px-3 h-10 sm:h-9 text-xs font-medium transition-colors border-l border-border active:scale-95 ${filterStaffId === s.id ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
                       onClick={() => setFilterStaffId(s.id)}
                       data-testid={`filter-staff-${s.id}`}
                     >
@@ -531,7 +531,10 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {isLoading ? (
-          <div className="p-6 space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-16" />)}</div>
+          <div className="p-4 md:p-6 space-y-3">
+            <Skeleton className="h-10 w-full rounded-lg" />
+            {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+          </div>
         ) : viewMode === "day" ? (
           <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} onAppointmentClick={handleApptClick} onSlotClick={handleSlotClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} />
         ) : viewMode === "week" ? (
@@ -723,11 +726,11 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
           <span className="text-muted-foreground">この日は定休日です</span>
           <div className="ml-auto">{holidayButton}</div>
         </div>
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center text-muted-foreground">
-            <div className="text-4xl mb-3">🏥</div>
-            <p className="font-medium">定休日</p>
-            <p className="text-sm mt-1 opacity-60">診療時間設定で変更できます</p>
+            <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
+            <p className="text-sm font-medium">定休日</p>
+            <p className="text-xs mt-1 opacity-60">診療時間設定で変更できます</p>
           </div>
         </div>
       </div>
@@ -1324,10 +1327,10 @@ function SpotHolidayModal({
           {/* 時間帯指定（終日OFFの時のみ） */}
           {!allDay && (
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">開始時間</Label>
+              <div>
+                <Label className="mb-1.5 block text-sm">開始時間</Label>
                 <Select value={startTime} onValueChange={setStartTime}>
-                  <SelectTrigger data-testid="select-start-time">
+                  <SelectTrigger className="h-10" data-testid="select-start-time">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1335,10 +1338,10 @@ function SpotHolidayModal({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">終了時間</Label>
+              <div>
+                <Label className="mb-1.5 block text-sm">終了時間</Label>
                 <Select value={endTime} onValueChange={setEndTime}>
-                  <SelectTrigger data-testid="select-end-time">
+                  <SelectTrigger className="h-10" data-testid="select-end-time">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1350,8 +1353,8 @@ function SpotHolidayModal({
           )}
 
           {/* 理由 */}
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">理由（任意）</Label>
+          <div>
+            <Label className="mb-1.5 block text-sm">理由（任意）</Label>
             <Textarea
               value={reason}
               onChange={e => setReason(e.target.value)}
@@ -1361,10 +1364,11 @@ function SpotHolidayModal({
             />
           </div>
         </div>
-        <DialogFooter className="flex gap-2">
+        <DialogFooter className="gap-2">
           {existingHoliday && (
             <Button
               variant="destructive"
+              className="h-10 active:scale-95"
               onClick={() => deleteMutation.mutate(existingHoliday.id)}
               disabled={deleteMutation.isPending}
               data-testid="button-delete-holiday"
@@ -1373,6 +1377,7 @@ function SpotHolidayModal({
             </Button>
           )}
           <Button
+            className="h-10 active:scale-95"
             onClick={handleSave}
             disabled={createMutation.isPending}
             data-testid="button-save-holiday"

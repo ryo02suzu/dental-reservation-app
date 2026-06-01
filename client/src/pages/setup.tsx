@@ -111,7 +111,7 @@ export default function SetupPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 このウィザードでは、クリニックの基本情報の設定と、最初の管理者アカウントの作成を行います。
               </p>
               <div className="bg-primary/5 rounded-lg p-4 space-y-3">
@@ -136,9 +136,9 @@ export default function SetupPage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button 
-                onClick={() => setStep(2)} 
-                className="w-full"
+              <Button
+                onClick={() => setStep(2)}
+                className="w-full h-12 text-base active:scale-95 transition-transform"
                 data-testid="button-next"
               >
                 はじめる
@@ -164,12 +164,13 @@ export default function SetupPage() {
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>クリニック名 <span className="text-destructive">*</span></FormLabel>
+                        <FormLabel className="text-sm mb-1.5 block">クリニック名 <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="〇〇歯科医院" 
+                          <Input
+                            {...field}
+                            placeholder="〇〇歯科医院"
                             data-testid="input-clinic-name"
+                            className="h-12"
                           />
                         </FormControl>
                         <FormMessage />
@@ -181,13 +182,14 @@ export default function SetupPage() {
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>電話番号</FormLabel>
+                        <FormLabel className="text-sm mb-1.5 block">電話番号</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
+                          <Input
+                            {...field}
                             value={field.value ?? ""}
-                            placeholder="03-1234-5678" 
+                            placeholder="03-1234-5678"
                             data-testid="input-clinic-phone"
+                            className="h-12"
                           />
                         </FormControl>
                         <FormMessage />
@@ -199,13 +201,14 @@ export default function SetupPage() {
                     name="address"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>住所</FormLabel>
+                        <FormLabel className="text-sm mb-1.5 block">住所</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
+                          <Input
+                            {...field}
                             value={field.value ?? ""}
-                            placeholder="東京都渋谷区..." 
+                            placeholder="東京都渋谷区..."
                             data-testid="input-clinic-address"
+                            className="h-12"
                           />
                         </FormControl>
                         <FormMessage />
@@ -216,9 +219,9 @@ export default function SetupPage() {
               </Form>
             </CardContent>
             <CardFooter>
-              <Button 
-                onClick={clinicForm.handleSubmit(onClinicSubmit)} 
-                className="w-full"
+              <Button
+                onClick={clinicForm.handleSubmit(onClinicSubmit)}
+                className="w-full h-12 text-base active:scale-95 transition-transform"
                 data-testid="button-next"
                 disabled={!clinicForm.formState.isValid}
               >
@@ -245,12 +248,13 @@ export default function SetupPage() {
                     name="username"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>ユーザー名</FormLabel>
+                        <FormLabel className="text-sm mb-1.5 block">ユーザー名</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="admin" 
+                          <Input
+                            {...field}
+                            placeholder="admin"
                             data-testid="input-admin-username"
+                            className="h-12"
                           />
                         </FormControl>
                         <FormMessage />
@@ -262,12 +266,13 @@ export default function SetupPage() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>パスワード</FormLabel>
+                        <FormLabel className="text-sm mb-1.5 block">パスワード</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            type="password" 
+                          <Input
+                            {...field}
+                            type="password"
                             data-testid="input-admin-password"
+                            className="h-12"
                           />
                         </FormControl>
                         <FormMessage />
@@ -279,12 +284,13 @@ export default function SetupPage() {
                     name="confirmPassword"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>パスワード（確認）</FormLabel>
+                        <FormLabel className="text-sm mb-1.5 block">パスワード（確認）</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            type="password" 
+                          <Input
+                            {...field}
+                            type="password"
                             data-testid="input-admin-password-confirm"
+                            className="h-12"
                           />
                         </FormControl>
                         <FormMessage />
@@ -295,9 +301,9 @@ export default function SetupPage() {
               </Form>
             </CardContent>
             <CardFooter>
-              <Button 
-                onClick={adminForm.handleSubmit(onAdminSubmit)} 
-                className="w-full"
+              <Button
+                onClick={adminForm.handleSubmit(onAdminSubmit)}
+                className="w-full h-12 text-base active:scale-95 transition-transform"
                 data-testid="button-complete"
               >
                 セットアップを完了する

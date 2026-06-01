@@ -458,8 +458,8 @@ function AssistantView({ me, clinic }: { me: StaffMe; clinic: Clinic | undefined
           </div>
         ) : sorted.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
-            <Calendar className="w-12 h-12 mb-3 opacity-30" />
-            <p className="font-medium text-gray-500">本日の予約はありません</p>
+            <Calendar className="w-10 h-10 mb-3 opacity-25" />
+            <p className="text-sm font-medium text-gray-500">本日の予約はありません</p>
           </div>
         ) : (
           sorted.map(appt => (
@@ -952,11 +952,11 @@ function ShiftView({ me }: { me: StaffMe }) {
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Month nav */}
       <div className="bg-white border-b px-4 py-2 flex items-center justify-between sticky top-0 z-10">
-        <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="p-1.5 rounded-lg active:bg-gray-100" data-testid="btn-prev-month">
+        <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg active:bg-gray-100 transition-colors shrink-0" data-testid="btn-prev-month">
           <ChevronLeft className="w-5 h-5 text-gray-500" />
         </button>
-        <span className="text-sm font-bold text-gray-800">{format(monthBase, "yyyy年M月", { locale: ja })}</span>
-        <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="p-1.5 rounded-lg active:bg-gray-100" data-testid="btn-next-month">
+        <span className="text-sm font-bold tracking-tight text-gray-800 tabular-nums">{format(monthBase, "yyyy年M月", { locale: ja })}</span>
+        <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg active:bg-gray-100 transition-colors shrink-0" data-testid="btn-next-month">
           <ChevronRight className="w-5 h-5 text-gray-500" />
         </button>
       </div>
@@ -1094,8 +1094,8 @@ function ShiftView({ me }: { me: StaffMe }) {
           {isLoading ? (
             <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl border animate-pulse" />)}</div>
           ) : shifts.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <Calendar className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <div className="text-center py-10 text-gray-400">
+              <Calendar className="w-9 h-9 mx-auto mb-2 opacity-25" />
               <p className="text-sm">カレンダーで日付をタップして提出</p>
             </div>
           ) : (
@@ -1234,11 +1234,11 @@ function AttendanceHistoryView() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="bg-white border-b px-4 py-2 flex items-center justify-between sticky top-0 z-10">
-        <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="p-1.5 rounded-lg active:bg-gray-100" data-testid="btn-att-prev">
+        <button onClick={() => setMonthBase(d => subMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg active:bg-gray-100 transition-colors shrink-0" data-testid="btn-att-prev">
           <ChevronLeft className="w-5 h-5 text-gray-500" />
         </button>
-        <span className="text-sm font-bold text-gray-800">{format(monthBase, "yyyy年M月", { locale: ja })}</span>
-        <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="p-1.5 rounded-lg active:bg-gray-100" data-testid="btn-att-next">
+        <span className="text-sm font-bold tracking-tight text-gray-800 tabular-nums">{format(monthBase, "yyyy年M月", { locale: ja })}</span>
+        <button onClick={() => setMonthBase(d => addMonths(d, 1))} className="h-10 w-10 flex items-center justify-center rounded-lg active:bg-gray-100 transition-colors shrink-0" data-testid="btn-att-next">
           <ChevronRight className="w-5 h-5 text-gray-500" />
         </button>
       </div>
@@ -1354,8 +1354,8 @@ function AttendanceHistoryView() {
         {isLoading ? (
           <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl border animate-pulse" />)}</div>
         ) : records.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
-            <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <div className="text-center py-10 text-gray-400">
+            <Clock className="w-9 h-9 mx-auto mb-2 opacity-25" />
             <p className="text-sm">この月の打刻記録はありません</p>
           </div>
         ) : (
@@ -1501,7 +1501,7 @@ function DoctorHygienistView({ me, clinic }: { me: StaffMe; clinic: Clinic | und
           {(["day", "week", "shift", "attendance"] as const).map(v => (
             <button key={v} onClick={() => setView(v)}
               data-testid={`btn-view-${v}`}
-              className={`flex-1 py-1.5 rounded-lg text-sm font-semibold transition-colors ${view === v ? "bg-primary text-primary-foreground" : "bg-gray-100 text-gray-500"}`}>
+              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors active:scale-95 ${view === v ? "bg-primary text-primary-foreground" : "bg-gray-100 text-gray-500"}`}>
               {v === "day" ? "日" : v === "week" ? "週" : v === "shift" ? "シフト" : "勤怠"}
             </button>
           ))}
@@ -1516,13 +1516,15 @@ function DoctorHygienistView({ me, clinic }: { me: StaffMe; clinic: Clinic | und
         <div className="flex-1">
           <div className="bg-white border-b">
             <div className="flex items-center justify-between px-4 py-2">
-              <button onClick={() => { setWeekBase(d => subWeeks(d, 1)); setSelectedWeekDay(null); }} data-testid="btn-prev-week">
+              <button onClick={() => { setWeekBase(d => subWeeks(d, 1)); setSelectedWeekDay(null); }} data-testid="btn-prev-week"
+                className="h-10 w-10 flex items-center justify-center rounded-lg active:bg-gray-100 transition-colors shrink-0">
                 <ChevronLeft className="w-5 h-5 text-gray-500" />
               </button>
-              <span className="text-sm font-semibold text-gray-700">
+              <span className="text-sm font-semibold text-gray-700 text-center">
                 {format(weekBase, "M月d日", { locale: ja })} 〜 {format(weekEnd, "M月d日（E）", { locale: ja })}
               </span>
-              <button onClick={() => { setWeekBase(d => addWeeks(d, 1)); setSelectedWeekDay(null); }} data-testid="btn-next-week">
+              <button onClick={() => { setWeekBase(d => addWeeks(d, 1)); setSelectedWeekDay(null); }} data-testid="btn-next-week"
+                className="h-10 w-10 flex items-center justify-center rounded-lg active:bg-gray-100 transition-colors shrink-0">
                 <ChevronRight className="w-5 h-5 text-gray-500" />
               </button>
             </div>
@@ -1539,8 +1541,8 @@ function DoctorHygienistView({ me, clinic }: { me: StaffMe; clinic: Clinic | und
               <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 bg-white rounded-xl animate-pulse border" />)}</div>
             ) : weekAppts.length === 0 ? (
               <div className="text-center py-16 text-gray-400">
-                <Calendar className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                <p>この週の担当予約はありません</p>
+                <Calendar className="w-9 h-9 mx-auto mb-2 opacity-25" />
+                <p className="text-sm">この週の担当予約はありません</p>
               </div>
             ) : ((() => {
               const daysToShow = selectedWeekDay
@@ -1552,7 +1554,7 @@ function DoctorHygienistView({ me, clinic }: { me: StaffMe; clinic: Clinic | und
                 if (da.length === 0 && selectedWeekDay) {
                   return (
                     <div key={ds} className="text-center py-8 text-gray-400">
-                      <Calendar className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <Calendar className="w-9 h-9 mx-auto mb-2 opacity-25" />
                       <p className="text-sm">{getDayLabel(day)}の予約はありません</p>
                     </div>
                   );
@@ -1644,9 +1646,9 @@ function DoctorHygienistView({ me, clinic }: { me: StaffMe; clinic: Clinic | und
               </div>
             ) : dayAppts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
-                <Calendar className="w-12 h-12 mb-3 opacity-30" />
-                <p className="font-medium text-gray-500">予約はありません</p>
-                <p className="text-sm mt-1">この日の担当予約はありません</p>
+                <Calendar className="w-10 h-10 mb-3 opacity-25" />
+                <p className="text-sm font-medium text-gray-500">予約はありません</p>
+                <p className="text-xs mt-1">この日の担当予約はありません</p>
               </div>
             ) : (
               dayAppts.map(appt => (

@@ -89,34 +89,35 @@ export function ChairTimeline() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => subDays(d, 1))} data-testid="chair-prev-day">
+      <div className="flex items-center justify-between gap-2 px-4 md:px-6 py-3 border-b border-border bg-background shrink-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Button variant="outline" size="icon" className="h-10 w-10 sm:h-9 sm:w-9 shrink-0 active:scale-95" onClick={() => setCurrentDate(d => subDays(d, 1))} data-testid="chair-prev-day">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="text-center min-w-[160px]">
-            <div className={`text-sm font-semibold ${isToday ? "text-primary" : ""}`}>
+          <div className="text-center min-w-[140px] sm:min-w-[160px]">
+            <div className={`text-base font-bold tracking-tight leading-tight ${isToday ? "text-primary" : ""}`}>
               {format(currentDate, "M月d日（E）", { locale: ja })}
-              {isToday && <span className="ml-1.5 text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">今日</span>}
+              {isToday && <span className="ml-1.5 text-xs font-medium bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full align-middle">今日</span>}
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => setCurrentDate(d => addDays(d, 1))} data-testid="chair-next-day">
+          <Button variant="outline" size="icon" className="h-10 w-10 sm:h-9 sm:w-9 shrink-0 active:scale-95" onClick={() => setCurrentDate(d => addDays(d, 1))} data-testid="chair-next-day">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
           <Clock className="h-3.5 w-3.5" />
-          <span>{START_HOUR}:00 〜 {END_HOUR}:00</span>
-          <span className="text-muted-foreground/50">|</span>
-          <span>ユニット数: {chairs.length}</span>
+          <span className="hidden sm:inline">{START_HOUR}:00 〜 {END_HOUR}:00</span>
+          <span className="hidden sm:inline text-muted-foreground/50">|</span>
+          <span>ユニット {chairs.length}</span>
         </div>
       </div>
 
       {/* Timeline grid */}
       <div className="flex-1 overflow-auto">
         {isLoading ? (
-          <div className="p-4 space-y-2">
-            {[1, 2, 3].map(i => <Skeleton key={i} className="h-20" />)}
+          <div className="flex gap-2 p-4">
+            <Skeleton className="h-[480px] w-14 shrink-0 rounded-lg" />
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-[480px] flex-1 min-w-[140px] rounded-lg" />)}
           </div>
         ) : (
           <div className="flex min-w-max">
@@ -166,7 +167,7 @@ export function ChairTimeline() {
                     return (
                       <div
                         key={appt.id}
-                        className={`absolute inset-x-1 rounded-sm cursor-pointer overflow-hidden shadow-sm hover:shadow-md transition-shadow ${colorClass}`}
+                        className={`absolute inset-x-1 rounded cursor-pointer overflow-hidden shadow-sm hover:shadow-md active:brightness-95 transition-all ${colorClass}`}
                         style={{ top, height }}
                         onClick={() => handleApptClick(appt)}
                         data-testid={`chair-appt-${appt.id}`}
