@@ -260,6 +260,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   };
 
   // Demo auto-login routes (no auth required)
+  // 本番では無効化（無認証でセッションを発行するため、開発環境専用にする）
+  app.use("/api/demo", (req, res, next) => {
+    if (process.env.NODE_ENV === "production") return res.sendStatus(404);
+    next();
+  });
   const DEMO_PATIENT_ID = "c6dc53f7-a749-415f-8532-7452fbe7f82b";
   app.get("/api/demo/admin", async (req, res) => {
     try {
