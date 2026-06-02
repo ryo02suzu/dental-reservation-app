@@ -254,7 +254,6 @@ export async function seedDatabase() {
 
     // 管理者パスワードは環境変数から（ソースにハッシュをハードコードしない）
     const superAdminPw = await seedPassword("SUPER_ADMIN_PASSWORD", "Sourirette（スーパー管理者）");
-    const sakuraAdminPw = await seedPassword("SAKURA_ADMIN_PASSWORD", "sakura-demo 管理者");
     const imaizumiAdminPw = await seedPassword("IMAIZUMI_ADMIN_PASSWORD", "imaizumi 管理者");
 
     // Sourirette スーパー管理者
@@ -266,71 +265,6 @@ export async function seedDatabase() {
         ${superAdminPw},
         NULL,
         true
-      )
-      ON CONFLICT (id) DO NOTHING
-    `);
-
-    // sakura-demo クリニック
-    await db.execute(sql`
-      INSERT INTO clinics (id, name, slug, phone, email, address, plan_type, is_active)
-      VALUES (
-        'f9853962-5b78-4671-a421-7e5328827c72',
-        'Souriretteデンタルクリニック',
-        'sakura-demo',
-        '03-1234-5678',
-        'info@sakura-dental.jp',
-        '東京都渋谷区桜丘町1-2-3',
-        'professional',
-        true
-      )
-      ON CONFLICT (id) DO NOTHING
-    `);
-
-    await db.execute(sql`
-      INSERT INTO business_hours (id, clinic_id, day_of_week, open_time, close_time, is_closed)
-      VALUES
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 0, '09:00', '13:00', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 1, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 2, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 3, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 4, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 5, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 6, '09:00', '13:00', false)
-    `);
-
-    await db.execute(sql`
-      INSERT INTO clinic_settings (id, clinic_id, clinic_name, chairs_count, booking_advance_days, booking_buffer_minutes, allow_double_booking, max_concurrent_appointments, enable_patient_confirmation, confirmation_deadline_hours, enable_qr_checkin, require_appointment_approval, slot_interval_minutes)
-      VALUES (
-        'b4392bc3-16dd-4b1b-a229-96fe3efea814',
-        'f9853962-5b78-4671-a421-7e5328827c72',
-        'さくら歯科クリニック', 6, 60, 15, false, 2, true, 24, false, false, 30
-      )
-      ON CONFLICT (id) DO NOTHING
-    `);
-
-    await db.execute(sql`
-      INSERT INTO reminder_settings (id, clinic_id, enable_email, enable_sms, enable_line, reminder_hours_before)
-      VALUES (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', true, false, false, 24)
-    `);
-
-    await db.execute(sql`
-      INSERT INTO services (id, clinic_id, name, description, duration, price, category, is_active)
-      VALUES
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '定期検診・クリーニング', '歯石除去・歯面清掃・フッ素塗布', 30, 3300, '予防', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '虫歯治療', '視診・X線検査・レジン充填', 45, 5500, '治療', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 'ホワイトニング（オフィス）', '院内照射型ホワイトニング', 90, 33000, '審美', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '歯周病治療', 'スケーリング・ルートプレーニング', 60, 4400, '治療', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '矯正相談', '歯並び・矯正方法のカウンセリング', 30, 0, '相談', true)
-    `);
-
-    await db.execute(sql`
-      INSERT INTO users (id, username, password, clinic_id, is_super_admin)
-      VALUES (
-        '2e5d32b7-7846-4db3-ad90-dd5c6730172c',
-        'sakura-demo',
-        ${sakuraAdminPw},
-        'f9853962-5b78-4671-a421-7e5328827c72',
-        false
       )
       ON CONFLICT (id) DO NOTHING
     `);

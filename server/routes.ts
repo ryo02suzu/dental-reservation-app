@@ -1198,14 +1198,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/public/my-appointments", async (req, res) => {
     try {
-      const { phone } = req.query as { phone: string };
-      if (!phone) return res.status(400).json({ message: "phone required" });
-
-      const patient = await storage.getPatientByPhone(phone);
+      // A案: 電話番号だけの照会は廃止（他人の予約を電話番号の総当たりで覗ける問題を解消）。
+      // ログイン済み患者のみ、自分の予約を取得できる。
+      const patientId = (req.session as any).patientId;
+      if (!patientId) return res.status(401).json({ message: "ログインしてください" });
+      const patient = await storage.getPatientById(patientId);
       if (!patient) return res.json([]);
-
-      const all = await storage.getAppointments();
-      const mine = all.filter(a => a.patientId === patient.id);
+      const mine = await storage.getAppointments({ clinicId: patient.clinicId, patientId: patient.id });
       res.json(mine);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2062,17 +2061,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!clinicId) return res.status(400).json({ message: "QRコードが無効または期限切れです。再スキャンしてください" });
       const member = await storage.getStaffById(staffId);
       if (!member || member.clinicId !== clinicId) return res.status(400).json({ message: "スタッフが見つかりません" });
-      if (member.pin) {
-        const rlKey = `${clinicId}:${staffId}`;
-        if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
-        if (!pin) return res.status(400).json({ message: "PINを入力してください" });
-        if (!pinMatches(pin, member.pin)) {
-          recordPinFailure(rlKey);
-          logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
-          return res.status(400).json({ message: "PINが正しくありません" });
-        }
-        clearPinAttempts(rlKey);
+      // PINは全スタッフ必須（未設定なら打刻不可。なりすまし打刻を防止）
+      const rlKey = `${clinicId}:${staffId}`;
+      if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
+      if (!member.pin) return res.status(400).json({ message: "PINが未設定です。管理者にPINの設定を依頼してください" });
+      if (!pin) return res.status(400).json({ message: "PINを入力してください" });
+      if (!pinMatches(pin, member.pin)) {
+        recordPinFailure(rlKey);
+        logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
+        return res.status(400).json({ message: "PINが正しくありません" });
       }
+      clearPinAttempts(rlKey);
       const today = new Date().toISOString().slice(0, 10);
       const existing = await storage.getAttendanceByStaff(staffId, today);
       if (existing) return res.status(400).json({ message: "本日は既に打刻済みです" });
@@ -2090,17 +2089,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!clinicId) return res.status(400).json({ message: "QRコードが無効または期限切れです。再スキャンしてください" });
       const member = await storage.getStaffById(staffId);
       if (!member || member.clinicId !== clinicId) return res.status(400).json({ message: "スタッフが見つかりません" });
-      if (member.pin) {
-        const rlKey = `${clinicId}:${staffId}`;
-        if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
-        if (!pin) return res.status(400).json({ message: "PINを入力してください" });
-        if (!pinMatches(pin, member.pin)) {
-          recordPinFailure(rlKey);
-          logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
-          return res.status(400).json({ message: "PINが正しくありません" });
-        }
-        clearPinAttempts(rlKey);
+      // PINは全スタッフ必須（未設定なら打刻不可。なりすまし打刻を防止）
+      const rlKey = `${clinicId}:${staffId}`;
+      if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
+      if (!member.pin) return res.status(400).json({ message: "PINが未設定です。管理者にPINの設定を依頼してください" });
+      if (!pin) return res.status(400).json({ message: "PINを入力してください" });
+      if (!pinMatches(pin, member.pin)) {
+        recordPinFailure(rlKey);
+        logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
+        return res.status(400).json({ message: "PINが正しくありません" });
       }
+      clearPinAttempts(rlKey);
       const today = new Date().toISOString().slice(0, 10);
       const existing = await storage.getAttendanceByStaff(staffId, today);
       if (!existing || !existing.clockIn) return res.status(400).json({ message: "出勤打刻がありません" });

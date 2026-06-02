@@ -464,21 +464,10 @@ export default function MyAppointmentsPage() {
             <p className="text-sm text-gray-500 mt-1.5">予約の確認・変更ができます</p>
           </div>
 
-          <a
-            href="/api/demo/patient"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-medium mb-6 transition-opacity hover:opacity-85 border"
-            style={{ backgroundColor: `${BEIGE}18`, borderColor: `${BEIGE}60`, color: BEIGE }}
-            data-testid="button-demo-patient"
-          >
-            <span className="text-base">🦷</span>
-            デモ患者として体験する
-          </a>
-
           <div className="flex border-b border-gray-200 mb-6">
             {([
               { key: "login",   label: "ログイン",   icon: <LogIn className="w-3.5 h-3.5" /> },
               { key: "register", label: "新規登録",  icon: <UserPlus className="w-3.5 h-3.5" /> },
-              { key: "lookup",  label: "電話で検索", icon: <Search className="w-3.5 h-3.5" /> },
             ] as { key: AuthTab; label: string; icon: JSX.Element }[]).map(tab => (
               <button
                 key={tab.key}
@@ -493,19 +482,6 @@ export default function MyAppointmentsPage() {
           </div>
 
           <AnimatePresence mode="wait">
-            {authTab === "lookup" && (
-              <motion.div key="lookup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                <p className="text-xs text-gray-500">予約時の電話番号で過去の予約を確認できます</p>
-                <div className="space-y-2">
-                  <Label htmlFor="search-phone" className="text-sm text-gray-700 flex items-center gap-2"><Phone className="w-4 h-4" /> 電話番号</Label>
-                  <Input id="search-phone" type="tel" placeholder="090-1234-5678" value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => e.key === "Enter" && setSearchPhone(phone)} className="border-gray-200" data-testid="input-search-phone" />
-                </div>
-                <button onClick={() => setSearchPhone(phone)} disabled={phone.trim().length < 10} className="w-full py-3 rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-40" style={{ backgroundColor: BEIGE }} data-testid="button-search">
-                  予約を検索する
-                </button>
-              </motion.div>
-            )}
-
             {authTab === "login" && !showReset && (
               <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 <div className="space-y-2">
