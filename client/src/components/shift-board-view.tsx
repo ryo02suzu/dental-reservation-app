@@ -231,19 +231,19 @@ export function ShiftBoardView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden print:overflow-visible">
       {/* Header */}
-      <div className="shrink-0 bg-white border-b px-4 md:px-6 py-3 space-y-2 print:py-1 print:px-2">
+      <div className="shrink-0 bg-card border-b px-4 md:px-6 py-3 space-y-2 print:py-1 print:px-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <button onClick={navPrev} className="p-1.5 rounded-lg hover:bg-muted print:hidden" data-testid="shiftboard-prev"><ChevronLeft className="w-5 h-5" /></button>
-            <span className="text-sm font-bold min-w-[160px] text-center">{headerLabel}</span>
-            <button onClick={navNext} className="p-1.5 rounded-lg hover:bg-muted print:hidden" data-testid="shiftboard-next"><ChevronRight className="w-5 h-5" /></button>
+            <button onClick={navPrev} aria-label="前へ" className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted active:bg-accent/50 transition-colors print:hidden" data-testid="shiftboard-prev"><ChevronLeft className="w-5 h-5" /></button>
+            <span className="text-sm font-bold tracking-tight min-w-[160px] text-center tabular-nums">{headerLabel}</span>
+            <button onClick={navNext} aria-label="次へ" className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted active:bg-accent/50 transition-colors print:hidden" data-testid="shiftboard-next"><ChevronRight className="w-5 h-5" /></button>
           </div>
           <div className="flex items-center gap-1.5 print:hidden">
             <div className="flex bg-muted rounded-lg p-0.5 mr-1">
               <button onClick={() => setViewMode("week")} data-testid="btn-view-week"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${isWeek ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>週</button>
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${isWeek ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>週</button>
               <button onClick={() => setViewMode("month")} data-testid="btn-view-month"
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${!isWeek ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>月</button>
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${!isWeek ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}>月</button>
             </div>
             {requestedCount > 0 && (
               <Button size="sm" onClick={() => batchMut.mutate()} disabled={batchMut.isPending} data-testid="button-batch-approve"
@@ -269,13 +269,20 @@ export function ShiftBoardView() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="p-6 space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+        <div className="p-4 md:p-6 space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
+      ) : visibleStaff.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center py-10 text-muted-foreground">
+            <Users className="h-9 w-9 mx-auto mb-2 opacity-25" />
+            <p className="text-sm">表示するスタッフがいません</p>
+          </div>
+        </div>
       ) : (
         <div className="flex-1 overflow-auto print:overflow-visible">
-          <table className="border-collapse w-full">
-            <thead className="sticky top-0 z-20 bg-white print:relative">
+          <table className="border-collapse w-full min-w-[640px] print:min-w-0">
+            <thead className="sticky top-0 z-20 bg-card print:relative">
               <tr>
-                <th className="sticky left-0 z-30 bg-white border-b-2 border-r px-3 py-2 text-left min-w-[150px] w-[150px]">
+                <th className="sticky left-0 z-30 bg-card border-b-2 border-r px-3 py-2 text-left min-w-[150px] w-[150px]">
                   <span className="text-xs font-bold text-muted-foreground">スタッフ</span>
                 </th>
                 {days.map(d => {
@@ -309,7 +316,7 @@ export function ShiftBoardView() {
                     </th>
                   );
                 })}
-                <th className="sticky right-0 z-30 bg-white border-b-2 border-l px-2 py-2 text-center min-w-[70px] w-[70px] print:min-w-[50px]">
+                <th className="sticky right-0 z-30 bg-card border-b-2 border-l px-2 py-2 text-center min-w-[70px] w-[70px] print:min-w-[50px]">
                   <span className="text-xs font-bold text-muted-foreground">合計</span>
                 </th>
               </tr>
@@ -320,7 +327,7 @@ export function ShiftBoardView() {
                 const summary = staffSummary[staff.id] || { approved: 0, requested: 0, hours: 0 };
                 return (
                   <tr key={staff.id} className="group">
-                    <td className={`sticky left-0 z-10 bg-white border-b border-r px-3 py-2 ${role.bg}`}>
+                    <td className={`sticky left-0 z-10 bg-card border-b border-r px-3 py-2 ${role.bg}`}>
                       <div className="flex items-center gap-2">
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${role.dot}`}>
                           {role.label}
@@ -348,38 +355,38 @@ export function ShiftBoardView() {
                       const isOpen = openCell === cellKey;
 
                       return (
-                        <td key={ds} className={`border-b border-r p-0.5 ${isWeek ? "" : ""} ${isHol && !entry ? "bg-gray-100/60" : today ? "bg-primary/[0.03]" : ""}`}>
+                        <td key={ds} className={`border-b border-r p-0.5 ${isWeek ? "" : ""} ${isHol && !entry ? "bg-muted/60" : today ? "bg-primary/[0.03]" : ""}`}>
                           <Popover open={isOpen} onOpenChange={o => { if (!o) setOpenCell(null); }}>
                             <PopoverTrigger asChild>
                               <button
                                 onClick={() => setOpenCell(isOpen ? null : cellKey)}
                                 className={`w-full rounded-md transition-all relative ${isWeek ? "h-[52px]" : "h-9"} ${
-                                  !entry && !isHol ? "hover:bg-gray-100 hover:ring-1 hover:ring-gray-200" : ""
+                                  !entry && !isHol ? "hover:bg-accent hover:ring-1 hover:ring-border" : ""
                                 }`}
                                 data-testid={`cell-${staff.id}-${ds}`}
                               >
                                 {isHol && !entry ? (
-                                  <span className="text-[10px] text-gray-400 font-medium">休</span>
+                                  <span className="text-[10px] text-muted-foreground font-medium">休</span>
                                 ) : entry ? (
                                   <div className={`w-full h-full rounded-md flex flex-col items-center justify-center px-0.5 ${
                                     entry.status === "approved"
                                       ? patColor ? patColor.bg : "bg-emerald-100"
-                                      : "bg-white border-2 border-dashed " + (patColor ? patColor.border : "border-amber-300")
+                                      : "bg-card border-2 border-dashed " + (patColor ? patColor.border : "border-amber-300")
                                   }`}>
                                     {pat ? (
                                       <>
-                                        <span className={`text-[11px] font-bold leading-tight ${isWeek ? "text-xs" : ""} ${patColor?.text ?? "text-gray-700"}`}>{pat.name}</span>
-                                        {isWeek && <span className={`text-[9px] leading-tight ${patColor?.text ?? "text-gray-500"} opacity-70`}>{pat.startTime.slice(0,5)}-{pat.endTime.slice(0,5)}</span>}
+                                        <span className={`text-[11px] font-bold leading-tight ${isWeek ? "text-xs" : ""} ${patColor?.text ?? "text-foreground"}`}>{pat.name}</span>
+                                        {isWeek && <span className={`text-[9px] leading-tight ${patColor?.text ?? "text-muted-foreground"} opacity-70`}>{pat.startTime.slice(0,5)}-{pat.endTime.slice(0,5)}</span>}
                                       </>
                                     ) : (
-                                      <span className="text-[10px] font-bold text-gray-600">出勤</span>
+                                      <span className="text-[10px] font-bold text-muted-foreground">出勤</span>
                                     )}
                                     {entry.status === "requested" && (
                                       <span className="text-[8px] text-amber-600 font-bold leading-none">申請</span>
                                     )}
                                   </div>
                                 ) : (
-                                  <Plus className={`mx-auto text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity ${isWeek ? "w-5 h-5" : "w-3 h-3"}`} />
+                                  <Plus className={`mx-auto text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ${isWeek ? "w-5 h-5" : "w-3 h-3"}`} />
                                 )}
                                 {hasAppts && entry && (
                                   <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-blue-500 rounded-full" title="予約あり" />
@@ -410,7 +417,7 @@ export function ShiftBoardView() {
                         </td>
                       );
                     })}
-                    <td className="sticky right-0 z-10 bg-white border-b border-l px-2 py-1 text-center">
+                    <td className="sticky right-0 z-10 bg-card border-b border-l px-2 py-1 text-center">
                       <div className="text-xs font-bold">{summary.approved}<span className="text-[10px] text-muted-foreground font-normal">日</span></div>
                       {summary.hours > 0 && <div className="text-[10px] text-muted-foreground">{summary.hours.toFixed(0)}h</div>}
                       {summary.requested > 0 && <div className="text-[10px] text-amber-600 font-semibold">+{summary.requested}申請</div>}
@@ -463,9 +470,9 @@ function CellActions({
               const c = patternColorMap[p.id];
               return (
                 <button key={p.id} onClick={() => onQuickAssign(p.id)} disabled={isAdding}
-                  className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors hover:shadow-sm ${c?.bg ?? "bg-gray-100"} ${c?.border ?? "border-gray-200"}`}
+                  className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors hover:shadow-sm ${c?.bg ?? "bg-muted"} ${c?.border ?? "border-border"}`}
                   data-testid={`quick-assign-${p.id}`}>
-                  <span className={`text-xs font-bold ${c?.text ?? "text-gray-700"}`}>{p.name}</span>
+                  <span className={`text-xs font-bold ${c?.text ?? "text-foreground"}`}>{p.name}</span>
                   <span className="text-[9px] text-muted-foreground">{p.startTime.slice(0,5)}-{p.endTime.slice(0,5)}</span>
                 </button>
               );
@@ -509,7 +516,7 @@ function CellActions({
               data-testid={`reject-${entry.id}`}><XCircle className="w-3 h-3 mr-0.5" />却下</Button>
           </>
         )}
-        <Button size="sm" variant="ghost" className="h-7 px-2 text-gray-400 hover:text-red-500" onClick={() => onDelete(entry)}
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-red-500" onClick={() => onDelete(entry)}
           data-testid={`delete-${entry.id}`}><Trash2 className="w-3 h-3" /></Button>
       </div>
     </div>
@@ -523,10 +530,10 @@ function MinStaffDlg({ current, onSave }: { current: { doctor: number; hygienist
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">平日に最低限必要な人数。不足日は赤くハイライトされます。</p>
       <div className="flex gap-4">
-        <div className="flex-1"><Label className="text-xs mb-1 block">ドクター</Label><Input type="number" min={0} max={10} value={d} onChange={e => setD(Number(e.target.value))} className="h-9" data-testid="input-min-doctor" /></div>
-        <div className="flex-1"><Label className="text-xs mb-1 block">衛生士</Label><Input type="number" min={0} max={10} value={h} onChange={e => setH(Number(e.target.value))} className="h-9" data-testid="input-min-hygienist" /></div>
+        <div className="flex-1"><Label className="text-sm mb-1.5 block">ドクター</Label><Input type="number" min={0} max={10} value={d} onChange={e => setD(Number(e.target.value))} className="h-10" data-testid="input-min-doctor" /></div>
+        <div className="flex-1"><Label className="text-sm mb-1.5 block">衛生士</Label><Input type="number" min={0} max={10} value={h} onChange={e => setH(Number(e.target.value))} className="h-10" data-testid="input-min-hygienist" /></div>
       </div>
-      <Button className="w-full" onClick={() => onSave({ doctor: d, hygienist: h })} data-testid="button-save-min-staff">保存</Button>
+      <Button className="w-full h-10" onClick={() => onSave({ doctor: d, hygienist: h })} data-testid="button-save-min-staff">保存</Button>
     </div>
   );
 }

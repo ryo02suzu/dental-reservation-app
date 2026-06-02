@@ -59,12 +59,12 @@ export function SupportView() {
 
   return (
     <div className="flex flex-col h-full overflow-auto">
-      <div className="px-4 md:px-6 py-4 border-b border-border bg-background">
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-background shrink-0">
         <h1 className="text-xl font-bold tracking-tight">お問い合わせ・サポート</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Sourirette サポートチームへご連絡ください</p>
       </div>
 
-      <div className="flex-1 p-4 md:p-6 space-y-6 max-w-2xl">
+      <div className="flex-1 overflow-auto p-4 md:p-6 space-y-5 md:space-y-6 max-w-2xl w-full">
         {submitted ? (
           <Card>
             <CardContent className="pt-10 pb-10 text-center space-y-4">
@@ -75,7 +75,7 @@ export function SupportView() {
                 <h2 className="text-lg font-semibold">お問い合わせを受け付けました</h2>
                 <p className="text-sm text-muted-foreground mt-1">担当者より2営業日以内にご連絡いたします。</p>
               </div>
-              <Button variant="outline" onClick={() => { setSubmitted(false); setSubject(""); setMessage(""); }}>
+              <Button variant="outline" className="h-10 active:scale-95" onClick={() => { setSubmitted(false); setSubject(""); setMessage(""); }}>
                 別の件で問い合わせる
               </Button>
             </CardContent>
@@ -83,8 +83,8 @@ export function SupportView() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageCircle className="w-5 h-5" />
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageCircle className="w-4 h-4" />
                 お問い合わせフォーム
               </CardTitle>
               <CardDescription>
@@ -95,19 +95,19 @@ export function SupportView() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-sm">医院名</Label>
-                    <Input value={clinic?.name ?? ""} disabled className="bg-muted/50 text-muted-foreground" />
+                    <Label className="text-sm mb-1.5 block">医院名</Label>
+                    <Input value={clinic?.name ?? ""} disabled className="h-10 bg-muted/50 text-muted-foreground" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-sm">ユーザー名</Label>
-                    <Input value={user?.username ?? ""} disabled className="bg-muted/50 text-muted-foreground" />
+                    <Label className="text-sm mb-1.5 block">ユーザー名</Label>
+                    <Input value={user?.username ?? ""} disabled className="h-10 bg-muted/50 text-muted-foreground" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-sm">お問い合わせ種別 <span className="text-destructive">*</span></Label>
+                  <Label className="text-sm mb-1.5 block">お問い合わせ種別 <span className="text-destructive">*</span></Label>
                   <Select onValueChange={setSubject}>
-                    <SelectTrigger data-testid="select-support-subject">
+                    <SelectTrigger className="h-10" data-testid="select-support-subject">
                       <SelectValue placeholder="種別を選択してください" />
                     </SelectTrigger>
                     <SelectContent>
@@ -117,7 +117,7 @@ export function SupportView() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-sm">お問い合わせ内容 <span className="text-destructive">*</span></Label>
+                  <Label className="text-sm mb-1.5 block">お問い合わせ内容 <span className="text-destructive">*</span></Label>
                   <Textarea
                     data-testid="input-support-message"
                     placeholder="詳細をご記入ください"
@@ -131,7 +131,7 @@ export function SupportView() {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full"
+                  className="w-full h-10 active:scale-95"
                   data-testid="button-submit-support"
                 >
                   {isLoading ? (

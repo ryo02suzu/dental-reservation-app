@@ -2,16 +2,17 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { type Express } from "express";
 import session from "express-session";
+import rateLimit from "express-rate-limit";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { type User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
-import { Pool } from "pg";
+import { createPool } from "./db-config";
 
 const scryptAsync = promisify(scrypt);
 const PostgresStore = connectPg(session);
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createPool();
 
 // セッション署名鍵を解決する。
 // 本番では SESSION_SECRET 必須（未設定なら起動失敗）。開発では未設定時に
@@ -29,6 +30,21 @@ function resolveSessionSecret(): string {
     "[auth] SESSION_SECRET is not set — generating an ephemeral development secret. Sessions will not persist across restarts.",
   );
   return randomBytes(32).toString("hex");
+}
+
+const REMEMBER_ME_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30日
+
+// 「ログイン状態を保持する」チェックに応じてセッションCookieの寿命を切り替える。
+//  - remember あり: 30日間有効な永続Cookie（ブラウザを閉じても維持）
+//  - remember なし: ブラウザを閉じると失効するセッションCookie
+// 各ログインエンドポイント（管理者/患者）から認証成功後に呼び出す。
+export function applyRememberMe(req: any, remember: unknown): void {
+  if (!req?.session?.cookie) return;
+  if (remember) {
+    req.session.cookie.maxAge = REMEMBER_ME_MAX_AGE_MS;
+  } else {
+    req.session.cookie.expires = false;
+  }
 }
 
 async function hashPassword(password: string) {
@@ -96,7 +112,17 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
+  // 管理者ログインの総当たり対策（正規利用は数回／攻撃のみ遮断）
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { message: "ログイン試行が多すぎます。15分後に再度お試しください。" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.post("/api/login", loginLimiter, passport.authenticate("local"), (req, res) => {
+    applyRememberMe(req, (req.body as any)?.rememberMe);
     res.status(200).json(req.user);
   });
 

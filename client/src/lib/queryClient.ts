@@ -46,8 +46,10 @@ export const queryClient = new QueryClient({
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      // 画面切替（設定→カレンダー等）で常に最新を取り直し、設定変更を即反映する
+      refetchOnWindowFocus: true,
+      refetchOnMount: "always",
+      staleTime: 30 * 1000,
       retry: false,
     },
     mutations: {

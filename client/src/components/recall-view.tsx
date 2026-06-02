@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ja } from "date-fns/locale";
-import { Bell, Calendar, Settings2, Loader2, SendHorizonal, CheckCircle2, AlertCircle, Mail, MailX, Lock } from "lucide-react";
+import { Bell, Calendar, Settings2, Loader2, SendHorizonal, CheckCircle2, AlertCircle, Mail, MailX, Lock, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { usePlan } from "@/hooks/use-plan";
@@ -75,6 +75,7 @@ export function RecallView() {
   const [nextRecallDate, setNextRecallDate] = useState("");
   const [recallInterval, setRecallInterval] = useState(6);
   const [filter, setFilter] = useState<"all" | "unsent" | "sent">("all");
+  const [search, setSearch] = useState("");
 
   const { data: recallPatients = [], isLoading } = useQuery<Patient[]>({
     queryKey: ["/api/recall"],
@@ -126,9 +127,14 @@ export function RecallView() {
   const unsentCount = recallPatients.filter(p => !p.lastRecallSentAt).length;
   const sentCount = recallPatients.filter(p => !!p.lastRecallSentAt).length;
 
+  const q = search.trim().toLowerCase();
   const filtered = recallPatients.filter(p => {
-    if (filter === "unsent") return !p.lastRecallSentAt;
-    if (filter === "sent") return !!p.lastRecallSentAt;
+    if (filter === "unsent" && p.lastRecallSentAt) return false;
+    if (filter === "sent" && !p.lastRecallSentAt) return false;
+    if (q) {
+      const hay = `${p.name} ${p.phone ?? ""} ${p.email ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
     return true;
   });
 
@@ -144,14 +150,15 @@ export function RecallView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-6 py-4 border-b border-border bg-background">
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-background shrink-0">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">リコール管理</h1>
+            <h1 className="text-xl font-bold tracking-tight">リコール管理</h1>
             <p className="text-muted-foreground text-sm mt-0.5">定期検診の案内が必要な患者一覧</p>
           </div>
           {unsentCount > 0 && (
             <Button
+              className="h-10 active:scale-95"
               onClick={() => {
                 if (confirm(`未送信の${unsentCount}名にリコール通知を一括送信しますか？`)) bulkSendMutation.mutate();
               }}
@@ -169,7 +176,7 @@ export function RecallView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -182,21 +189,33 @@ export function RecallView() {
                   次回の定期検診予定日が近づいている、または過ぎている患者様です。
                 </CardDescription>
               </div>
-              <div className="flex border border-border rounded-md overflow-hidden shrink-0">
-                {([
-                  { key: "all", label: `すべて (${recallPatients.length})` },
-                  { key: "unsent", label: `未送信 (${unsentCount})` },
-                  { key: "sent", label: `送信済み (${sentCount})` },
-                ] as const).map(({ key, label }) => (
-                  <button
-                    key={key}
-                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${filter === key ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
-                    onClick={() => setFilter(key)}
-                    data-testid={`recall-filter-${key}`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                <div className="relative w-full sm:w-56">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    className="pl-8 h-9"
+                    placeholder="患者名・電話・メールで検索"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    data-testid="input-recall-search"
+                  />
+                </div>
+                <div className="flex border border-border rounded-md overflow-hidden">
+                  {([
+                    { key: "all", label: `すべて (${recallPatients.length})` },
+                    { key: "unsent", label: `未送信 (${unsentCount})` },
+                    { key: "sent", label: `送信済み (${sentCount})` },
+                  ] as const).map(({ key, label }) => (
+                    <button
+                      key={key}
+                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${filter === key ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
+                      onClick={() => setFilter(key)}
+                      data-testid={`recall-filter-${key}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -206,10 +225,11 @@ export function RecallView() {
                 {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
             ) : filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Calendar className="h-12 w-12 mb-3 opacity-20" />
-                <p>
-                  {filter === "unsent" ? "未送信の患者様はいません" :
+              <div className="text-center py-10 text-muted-foreground">
+                <Calendar className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                <p className="text-sm">
+                  {q ? `「${search}」に一致する患者様はいません` :
+                   filter === "unsent" ? "未送信の患者様はいません" :
                    filter === "sent" ? "送信済みの患者様はいません" :
                    "現在、案内対象の患者様はいません"}
                 </p>
@@ -219,10 +239,10 @@ export function RecallView() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>患者名</TableHead>
-                    <TableHead>最終来院</TableHead>
+                    <TableHead className="hidden md:table-cell">最終来院</TableHead>
                     <TableHead>次回予定</TableHead>
                     <TableHead>通知状況</TableHead>
-                    <TableHead>メール</TableHead>
+                    <TableHead className="hidden sm:table-cell">メール</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -233,7 +253,7 @@ export function RecallView() {
                     return (
                       <TableRow key={p.id} data-testid={`recall-row-${p.id}`}>
                         <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                           {p.lastVisitDate ? format(parseISO(p.lastVisitDate), "yyyy/MM/dd") : "—"}
                         </TableCell>
                         <TableCell>
@@ -262,7 +282,7 @@ export function RecallView() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           {p.email ? (
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Mail className="h-3 w-3 text-green-500 shrink-0" />
@@ -290,12 +310,14 @@ export function RecallView() {
                               </Button>
                             )}
                             <Button
-                              size="sm"
+                              size="icon"
                               variant="ghost"
+                              className="h-10 w-10 sm:h-9 sm:w-9 active:scale-95"
+                              aria-label="リコール設定"
                               onClick={() => openSettings(p)}
                               data-testid={`button-recall-settings-${p.id}`}
                             >
-                              <Settings2 className="h-3.5 w-3.5" />
+                              <Settings2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -315,22 +337,24 @@ export function RecallView() {
             <DialogTitle>リコール設定: {selectedPatient?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="next-date">次回リコール予定日</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="next-date" className="text-sm">次回リコール予定日</Label>
               <Input
                 id="next-date"
                 type="date"
+                className="h-10"
                 value={nextRecallDate}
                 onChange={(e) => setNextRecallDate(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="interval">リコール間隔（ヶ月）</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="interval" className="text-sm">リコール間隔（ヶ月）</Label>
               <Input
                 id="interval"
                 type="number"
                 min="1"
                 max="24"
+                className="h-10"
                 value={recallInterval}
                 onChange={(e) => setRecallInterval(parseInt(e.target.value) || 6)}
               />

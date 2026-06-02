@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { user, loginMutation } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   const { data: setupStatus } = useQuery<{ setupNeeded: boolean }>({
     queryKey: ["/api/auth/setup-needed"],
@@ -31,7 +33,14 @@ export default function LoginPage() {
   });
 
   useEffect(() => {
-    if (user) setLocation("/admin");
+    if (!user) return;
+    // 運営(スーパー管理者)はArche Console(全医院一覧)へ、
+    // 医院管理者は自院の管理画面へ振り分ける。
+    if ((user as any).isSuperAdmin) {
+      setLocation("/super-admin");
+    } else {
+      setLocation("/admin");
+    }
   }, [user, setLocation]);
 
   useEffect(() => {
@@ -66,17 +75,17 @@ export default function LoginPage() {
           <CardContent>
             <Form {...form}>
               <form
-                onSubmit={form.handleSubmit((data) => loginMutation.mutate(data))}
-                className="space-y-4"
+                onSubmit={form.handleSubmit((data) => loginMutation.mutate({ ...data, rememberMe }))}
+                className="space-y-5"
               >
                 <FormField
                   control={form.control}
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ユーザー名</FormLabel>
+                      <FormLabel className="text-sm mb-1.5 block">ユーザー名</FormLabel>
                       <FormControl>
-                        <Input placeholder="admin" {...field} data-testid="input-username" />
+                        <Input placeholder="admin" {...field} data-testid="input-username" className="h-12" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -87,7 +96,7 @@ export default function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>パスワード</FormLabel>
+                      <FormLabel className="text-sm mb-1.5 block">パスワード</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Input
@@ -95,7 +104,7 @@ export default function LoginPage() {
                             placeholder="••••••••"
                             {...field}
                             data-testid="input-password"
-                            className="pr-10"
+                            className="h-12 pr-12"
                           />
                           <button
                             type="button"
@@ -112,14 +121,22 @@ export default function LoginPage() {
                     </FormItem>
                   )}
                 />
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                  <Checkbox
+                    checked={rememberMe}
+                    onCheckedChange={(v) => setRememberMe(v === true)}
+                    data-testid="checkbox-remember-me"
+                  />
+                  ログイン状態を保持する
+                </label>
                 {loginMutation.isError && (
-                  <p className="text-sm text-destructive text-center">
+                  <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive text-center">
                     ユーザー名またはパスワードが正しくありません
                   </p>
                 )}
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full h-12 text-base active:scale-95 transition-transform"
                   disabled={loginMutation.isPending}
                   data-testid="button-login"
                 >

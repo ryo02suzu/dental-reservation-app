@@ -272,11 +272,11 @@ function TopPage({ onBookClick, loggedIn }: { onBookClick: () => void; loggedIn:
   ];
 
   return (
-    <div className="flex flex-col items-center pt-12 pb-8 px-4">
+    <div className="flex flex-col items-center pt-12 md:pt-16 pb-10 px-4">
       {/* 予約する button */}
       <button
         onClick={onBookClick}
-        className="w-full max-w-xs py-4 rounded-full text-white font-medium text-base shadow-sm transition-opacity hover:opacity-90 mb-12"
+        className="w-full max-w-xs h-14 rounded-full text-white font-medium text-base shadow-sm transition-all hover:opacity-90 active:scale-95 mb-12 md:mb-14"
         style={{ backgroundColor: primary }}
         data-testid="button-book-top"
       >
@@ -286,23 +286,23 @@ function TopPage({ onBookClick, loggedIn }: { onBookClick: () => void; loggedIn:
       {/* マイページメニュー */}
       <div className="w-full max-w-lg">
         <div className="mb-3">
-          <h2 className="text-sm font-semibold text-gray-700 mb-1">マイページメニュー</h2>
+          <h2 className="text-sm font-semibold text-gray-700 mb-1.5">マイページメニュー</h2>
           <div className="h-px" style={{ backgroundColor: border }} />
         </div>
-        <div className="space-y-0 rounded-lg overflow-hidden border" style={{ borderColor: border }}>
+        <div className="space-y-0 rounded-xl overflow-hidden border" style={{ borderColor: border }}>
           {menuItems.map((item, i) => (
             <button
               key={item.label}
               onClick={item.action}
-              className="w-full flex items-center justify-between px-4 py-4 bg-white hover:bg-gray-50 transition-colors text-sm text-gray-700 border-b last:border-0"
+              className="w-full flex items-center justify-between px-4 py-4 min-h-[56px] bg-white hover:bg-gray-50 active:bg-gray-50 transition-colors text-sm text-gray-700 border-b last:border-0"
               style={{ borderColor: border }}
               data-testid={`menu-${i}`}
             >
-              <span className="flex items-center gap-3">
-                <item.icon className="w-4 h-4" style={{ color: primary }} />
+              <span className="flex items-center gap-3 font-medium">
+                <item.icon className="w-4 h-4 shrink-0" style={{ color: primary }} />
                 {item.label}
               </span>
-              <ChevronRight className="w-4 h-4 text-gray-300" />
+              <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
             </button>
           ))}
         </div>
@@ -346,13 +346,15 @@ function LoginPage({
     onError: (err: Error) => toast({ title: err.message, variant: "destructive" }),
   });
 
+  const [rememberMe, setRememberMe] = useState(true);
+
   const loginMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/patient/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ phone, password, clinicId: clinicInfo?.clinic.id }),
+        body: JSON.stringify({ phone, password, clinicId: clinicInfo?.clinic.id, rememberMe }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
       return res.json();
@@ -366,19 +368,19 @@ function LoginPage({
   });
 
   return (
-    <div className="flex flex-col items-center pt-10 px-4 pb-8">
+    <div className="flex flex-col items-center pt-10 px-4 pb-10">
       <div className="w-full max-w-md">
         <h2 className="text-base font-semibold text-gray-800 mb-3">ログイン</h2>
         <div className="h-px mb-5" style={{ backgroundColor: border }} />
 
-        <div className="space-y-3 mb-6">
+        <div className="space-y-3 mb-5">
           <div>
             <Input
               type="tel"
               placeholder="電話番号"
               value={phone}
               onChange={e => setPhone(e.target.value)}
-              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
               data-testid="input-login-phone"
             />
           </div>
@@ -388,21 +390,31 @@ function LoginPage({
               placeholder="パスワード"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm pr-10"
+              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base pr-11"
               data-testid="input-login-password"
             />
             <button
               type="button"
               onClick={() => setShowPw(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label={showPw ? "パスワードを隠す" : "パスワードを表示"}
             >
               {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
+        <label className="flex items-center gap-2 text-sm text-gray-500 mb-5 cursor-pointer select-none">
+          <Checkbox
+            checked={rememberMe}
+            onCheckedChange={(v) => setRememberMe(v === true)}
+            data-testid="checkbox-remember-me"
+          />
+          ログイン状態を保持する
+        </label>
+
         <button
-          className="w-full py-3.5 rounded-full text-white font-medium text-sm disabled:opacity-40 transition-opacity hover:opacity-90 mb-4"
+          className="w-full h-12 rounded-full text-white font-medium text-base disabled:opacity-40 transition-all hover:opacity-90 active:scale-95 mb-4"
           style={{ backgroundColor: primary }}
           disabled={!phone || !password || loginMutation.isPending}
           onClick={() => loginMutation.mutate()}
@@ -438,7 +450,7 @@ function LoginPage({
               <button
                 onClick={() => guestDemoMutation.mutate()}
                 disabled={guestDemoMutation.isPending}
-                className="w-full py-3 rounded-full border text-sm font-medium transition-opacity hover:opacity-70 disabled:opacity-40"
+                className="w-full h-12 rounded-full border text-sm font-medium transition-all hover:opacity-70 active:scale-95 disabled:opacity-40"
                 style={{ borderColor: border, color: "#6b7280" }}
                 data-testid="button-demo-guest"
               >
@@ -499,7 +511,7 @@ function RegisterPage({
   });
 
   return (
-    <div className="flex flex-col items-center pt-10 px-4 pb-8">
+    <div className="flex flex-col items-center pt-10 px-4 pb-10">
       <div className="w-full max-w-md">
         <h2 className="text-base font-semibold text-gray-800 mb-3">新規登録</h2>
         <div className="h-px mb-5" style={{ backgroundColor: border }} />
@@ -522,7 +534,7 @@ function RegisterPage({
                   kanaReadingRef.current = "";
                 }
               }}
-              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
               data-testid="input-register-name"
             />
           </div>
@@ -532,7 +544,7 @@ function RegisterPage({
               placeholder="フリガナ（ヤマダ タロウ）"
               value={nameKana}
               onChange={e => setNameKana(e.target.value)}
-              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
               data-testid="input-register-name-kana"
             />
           </div>
@@ -546,7 +558,7 @@ function RegisterPage({
                 placeholder={field.placeholder}
                 value={field.value}
                 onChange={e => field.setter(e.target.value)}
-                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
                 data-testid={field.testId}
               />
             </div>
@@ -557,10 +569,10 @@ function RegisterPage({
               placeholder="パスワード（英数字8文字以上）"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm pr-10"
+              className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base pr-11"
               data-testid="input-register-password"
             />
-            <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? "パスワードを隠す" : "パスワードを表示"} className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
               {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
@@ -569,13 +581,13 @@ function RegisterPage({
             placeholder="パスワード（確認）"
             value={confirmPassword}
             onChange={e => setConfirmPassword(e.target.value)}
-            className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+            className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
             data-testid="input-register-confirm"
           />
         </div>
 
         <button
-          className="w-full py-3.5 rounded-full text-white font-medium text-sm disabled:opacity-40 transition-opacity hover:opacity-90 mb-4"
+          className="w-full h-12 rounded-full text-white font-medium text-base disabled:opacity-40 transition-all hover:opacity-90 active:scale-95 mb-4"
           style={{ backgroundColor: primary }}
           disabled={!name || !phone || !email || !password || !confirmPassword || registerMutation.isPending}
           onClick={() => registerMutation.mutate()}
@@ -634,7 +646,7 @@ function ResetPasswordPage({
   });
 
   return (
-    <div className="flex flex-col items-center pt-10 px-4 pb-8">
+    <div className="flex flex-col items-center pt-10 px-4 pb-10">
       <div className="w-full max-w-md">
         <h2 className="text-base font-semibold text-gray-800 mb-3">パスワードの再設定</h2>
         <div className="h-px mb-5" style={{ backgroundColor: border }} />
@@ -644,7 +656,7 @@ function ResetPasswordPage({
             <p className="text-sm text-gray-600">パスワードを変更しました。</p>
             <button
               onClick={onLogin}
-              className="w-full py-3.5 rounded-full text-white font-medium text-sm transition-opacity hover:opacity-90"
+              className="w-full h-12 rounded-full text-white font-medium text-base transition-all hover:opacity-90 active:scale-95"
               style={{ backgroundColor: primary }}
               data-testid="button-go-login-after-reset"
             >
@@ -653,14 +665,14 @@ function ResetPasswordPage({
           </div>
         ) : (
           <>
-            <p className="text-xs text-gray-400 mb-5">登録時の電話番号とお名前を入力して、新しいパスワードを設定してください。</p>
+            <p className="text-xs text-gray-400 mb-5 leading-relaxed">登録時の電話番号とお名前を入力して、新しいパスワードを設定してください。</p>
             <div className="space-y-3 mb-6">
               <Input
                 type="tel"
                 placeholder="電話番号"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
-                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
                 data-testid="input-reset-phone"
               />
               <Input
@@ -668,7 +680,7 @@ function ResetPasswordPage({
                 placeholder="お名前（登録時と同じ）"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
                 data-testid="input-reset-name"
               />
               <div className="relative">
@@ -677,10 +689,10 @@ function ResetPasswordPage({
                   placeholder="新しいパスワード（英数字8文字以上）"
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
-                  className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm pr-10"
+                  className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base pr-11"
                   data-testid="input-reset-new-password"
                 />
-                <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? "パスワードを隠す" : "パスワードを表示"} className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -689,12 +701,12 @@ function ResetPasswordPage({
                 placeholder="新しいパスワード（確認）"
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
-                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-sm"
+                className="border-[#E8E1D9] focus-visible:ring-[#C4B5A0]/30 focus-visible:border-[#C4B5A0] bg-white rounded-lg h-12 text-base"
                 data-testid="input-reset-confirm"
               />
             </div>
             <button
-              className="w-full py-3.5 rounded-full text-white font-medium text-sm disabled:opacity-40 transition-opacity hover:opacity-90 mb-4"
+              className="w-full h-12 rounded-full text-white font-medium text-base disabled:opacity-40 transition-all hover:opacity-90 active:scale-95 mb-4"
               style={{ backgroundColor: primary }}
               disabled={!phone || !name || !newPassword || !confirmPassword || resetMutation.isPending}
               onClick={() => resetMutation.mutate()}
@@ -741,24 +753,30 @@ function ServiceSelectStep({
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-2xl">
-      <h2 className="text-sm font-semibold text-gray-700 mb-1">予約メニュー選択</h2>
+      <h2 className="text-sm font-semibold text-gray-700 mb-1.5">予約メニュー選択</h2>
       <div className="w-10 h-0.5 mb-4" style={{ backgroundColor: primary }} />
 
-      <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 flex gap-2">
+      <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3 flex gap-2 leading-relaxed">
         <span className="shrink-0 mt-0.5">ℹ</span>
         <span>診療内容をお選びください。複数選択はできません。</span>
       </div>
 
       <p className="text-xs text-gray-400 mb-3">※メニューを選択してください。</p>
 
-      <div className="border rounded-lg overflow-hidden" style={{ borderColor: border }}>
+      {displayServices.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground">
+          <ClipboardList className="h-9 w-9 mx-auto mb-2 opacity-25" />
+          <p className="text-sm">ご予約いただけるメニューはありません</p>
+        </div>
+      ) : (
+      <div className="border rounded-xl overflow-hidden" style={{ borderColor: border }}>
         {displayServices.map((svc, i) => {
           const key = svc.id ?? svc.name;
           const isOpen = expanded === key;
           return (
             <div key={key} className="border-b last:border-0 bg-white" style={{ borderColor: border }}>
               <button
-                className="w-full flex items-center justify-between px-4 py-4 text-sm text-left hover:bg-gray-50/60 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-4 min-h-[56px] text-sm text-left hover:bg-gray-50/60 active:bg-gray-50/60 transition-colors"
                 onClick={() => setExpanded(isOpen ? null : key)}
                 data-testid={`service-item-${i}`}
               >
@@ -767,17 +785,17 @@ function ServiceSelectStep({
               </button>
               {isOpen && (
                 <div className="px-4 pb-4 bg-gray-50/40 border-t" style={{ borderColor: border }}>
-                  {svc.description && <p className="text-xs text-gray-500 mb-2 pt-3">{svc.description}</p>}
-                  <div className="flex items-center gap-3 mb-3">
+                  {svc.description && <p className="text-xs text-gray-500 mb-2.5 pt-3 leading-relaxed">{svc.description}</p>}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
                     <span className="flex items-center gap-1 text-xs text-gray-400">
-                      <Clock className="w-3 h-3" />所要時間 約{svc.duration}分
+                      <Clock className="w-3.5 h-3.5" />所要時間 約{svc.duration}分
                     </span>
                     {svc.price != null && svc.price > 0 && (
                       <span className="text-xs text-gray-400">{svc.price.toLocaleString()}円（税込）</span>
                     )}
                   </div>
                   <button
-                    className="w-full py-2.5 rounded-full text-white text-sm font-medium transition-opacity hover:opacity-90"
+                    className="w-full h-12 rounded-full text-white text-sm font-medium transition-all hover:opacity-90 active:scale-95"
                     style={{ backgroundColor: primary }}
                     onClick={() => onSelect(svc)}
                     data-testid={`button-select-service-${i}`}
@@ -790,6 +808,7 @@ function ServiceSelectStep({
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -859,28 +878,28 @@ function DateTimeGridStep({
 
   return (
     <div className="px-4 md:px-8 py-6">
-      <h2 className="text-sm font-semibold text-gray-700 mb-1">予約日時選択</h2>
+      <h2 className="text-sm font-semibold text-gray-700 mb-1.5">予約日時選択</h2>
       <div className="w-10 h-0.5 mb-4" style={{ backgroundColor: primary }} />
 
-      <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 flex gap-2">
+      <div className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4 flex gap-2 leading-relaxed">
         <span className="shrink-0 mt-0.5">ℹ</span>
         <span>次ページで入力いただく情報は、お手続きが中断された際のご案内や、予約完了に向けたサポートを目的として利用させていただく場合がございます。あらかじめご了承の上、次ページへお進みください。</span>
       </div>
 
       {/* Selected service summary */}
-      <div className="mb-4">
+      <div className="mb-5">
         <p className="text-xs text-gray-400 mb-1.5">
           選択中のメニュー
           <span className="ml-3">所要時間目安 {selectedService.duration}分</span>
         </p>
-        <div className="border rounded-lg p-3.5 bg-white" style={{ borderColor: border }}>
+        <div className="border rounded-xl p-4 bg-white" style={{ borderColor: border }}>
           <p className="text-sm font-semibold text-gray-800">{selectedService.name}</p>
-          {selectedService.description && <p className="text-xs text-gray-400 mt-1">{selectedService.description}</p>}
+          {selectedService.description && <p className="text-xs text-gray-400 mt-1 leading-relaxed">{selectedService.description}</p>}
           {selectedService.price != null && selectedService.price > 0 && (
             <p className="text-right text-xs text-gray-400 mt-1">{selectedService.price.toLocaleString()}円（税込）</p>
           )}
         </div>
-        <button onClick={onChangeMenu} className="text-xs mt-1.5 hover:opacity-70 transition-opacity" style={{ color: primary }}>
+        <button onClick={onChangeMenu} className="text-xs mt-2 hover:opacity-70 transition-opacity" style={{ color: primary }}>
           メニューを追加・変更する
         </button>
       </div>
@@ -890,17 +909,19 @@ function DateTimeGridStep({
         <button
           onClick={() => setWeekOffset(o => Math.max(0, o - 1))}
           disabled={weekOffset === 0}
-          className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 transition-colors"
+          className="h-10 w-10 sm:h-9 sm:w-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-100 disabled:opacity-30 transition-colors"
           data-testid="button-prev-week"
+          aria-label="前の週"
         >
           <ChevronLeft className="w-4 h-4 text-gray-600" />
         </button>
-        <span className="text-sm text-gray-700">{weekLabel}</span>
+        <span className="text-sm font-medium text-gray-700">{weekLabel}</span>
         <button
           onClick={() => setWeekOffset(o => Math.min(maxWeekOffset, o + 1))}
           disabled={weekOffset >= maxWeekOffset}
-          className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 transition-colors"
+          className="h-10 w-10 sm:h-9 sm:w-9 flex items-center justify-center rounded-lg hover:bg-gray-100 active:bg-gray-100 disabled:opacity-30 transition-colors"
           data-testid="button-next-week"
+          aria-label="次の週"
         >
           <ChevronRight className="w-4 h-4 text-gray-600" />
         </button>
@@ -952,13 +973,13 @@ function DateTimeGridStep({
                         {isClosed ? (
                           <span className="text-gray-200 text-xs select-none">—</span>
                         ) : isLoading ? (
-                          <span className="block w-4 h-1.5 rounded bg-gray-200 animate-pulse mx-auto" />
+                          <span className="block w-5 h-2 rounded bg-gray-200 animate-pulse mx-auto" />
                         ) : isAvail ? (
                           <button
                             onClick={() => onSelect(date, time)}
                             onMouseEnter={() => setHoveredCell(cellKey)}
                             onMouseLeave={() => setHoveredCell(null)}
-                            className="w-full h-7 flex items-center justify-center rounded-md transition-all text-sm font-medium active:scale-90 active:opacity-70"
+                            className="w-full h-9 flex items-center justify-center rounded-md transition-all text-sm font-medium active:scale-90 active:opacity-70"
                             style={{
                               color: hoveredCell === cellKey ? "white" : "#111827",
                               backgroundColor: hoveredCell === cellKey ? primary : `${primary}1A`,
@@ -1000,7 +1021,7 @@ function ConfirmStep({
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-2xl">
-      <div className="bg-[#FFF9F0] border border-[#F0E0B0] rounded-lg px-4 py-2.5 text-sm text-[#9A7A10] font-medium mb-5">
+      <div className="bg-[#FFF9F0] border border-[#F0E0B0] rounded-lg px-4 py-3 text-sm text-[#9A7A10] font-medium mb-5">
         まだ予約は完了していません。
       </div>
 
@@ -1010,11 +1031,11 @@ function ConfirmStep({
           <h3 className="text-sm font-semibold text-gray-700">予約内容</h3>
           <button onClick={onBack} className="text-xs hover:opacity-70 transition-opacity" style={{ color: primary }}>修正する</button>
         </div>
-        <div className="border rounded-lg p-4 bg-white space-y-3" style={{ borderColor: border }}>
+        <div className="border rounded-xl p-4 bg-white space-y-3" style={{ borderColor: border }}>
           <p className="text-xs text-gray-400">{clinicName}</p>
           <div>
             <p className="text-xs text-gray-400 mb-1">予約メニュー</p>
-            <div className="border rounded p-3" style={{ borderColor: border, backgroundColor: "#FAFAF9" }}>
+            <div className="border rounded-lg p-3" style={{ borderColor: border, backgroundColor: "#FAFAF9" }}>
               <p className="text-sm font-medium text-gray-800">{selectedService.name}</p>
               {selectedService.price != null && selectedService.price > 0 && (
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -1090,7 +1111,7 @@ function ConfirmStep({
 
       {/* Submit */}
       <button
-        className="w-full py-3.5 rounded-full text-white font-medium text-sm disabled:opacity-40 transition-opacity hover:opacity-90"
+        className="w-full h-12 rounded-full text-white font-medium text-base disabled:opacity-40 transition-all hover:opacity-90 active:scale-95"
         style={{ backgroundColor: primary }}
         disabled={!termsAgreed || isPending}
         onClick={onSubmit}
@@ -1153,7 +1174,7 @@ function SuccessStep({
         <p className="text-xs text-gray-400 mt-1">予約番号: {bookedAppointment?.appointment?.id?.slice(0, 8).toUpperCase()}</p>
       </div>
 
-      <div className="border rounded-lg p-4 mb-5 bg-white space-y-2.5" style={{ borderColor: border }}>
+      <div className="border rounded-xl p-4 mb-5 bg-white space-y-2.5" style={{ borderColor: border }}>
         <p className="text-xs text-gray-400 font-medium">{clinicName}</p>
         {[
           { label: "診療内容", value: selectedService.name },
@@ -1172,11 +1193,11 @@ function SuccessStep({
           <CheckCircle2 className="w-4 h-4 shrink-0" />問診票を送信しました。
         </div>
       ) : !showQ ? (
-        <button className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border text-sm text-gray-600 mb-4 hover:bg-gray-50 transition-colors bg-white" style={{ borderColor: border }} onClick={() => setShowQ(true)} data-testid="button-open-questionnaire">
+        <button className="w-full flex items-center justify-center gap-2 h-12 rounded-full border text-sm text-gray-600 mb-4 hover:bg-gray-50 active:bg-gray-50 transition-colors bg-white" style={{ borderColor: border }} onClick={() => setShowQ(true)} data-testid="button-open-questionnaire">
           <ClipboardList className="w-4 h-4" style={{ color: primary }} />問診票を事前に記入する（任意）
         </button>
       ) : (
-        <div className="border rounded-lg p-4 mb-4 bg-white space-y-3" style={{ borderColor: border }}>
+        <div className="border rounded-xl p-4 mb-4 bg-white space-y-3" style={{ borderColor: border }}>
           <div className="flex justify-between items-center">
             <span className="text-sm font-semibold text-gray-700 flex items-center gap-1"><ClipboardList className="w-4 h-4" style={{ color: primary }} />問診票</span>
             <button onClick={() => setShowQ(false)} className="text-xs text-gray-400">閉じる</button>
@@ -1186,8 +1207,8 @@ function SuccessStep({
             <Textarea value={qChief} onChange={e => setQChief(e.target.value)} placeholder="例: 右上の奥歯が痛い" rows={2} data-testid="input-q-complaint" className="border-[#E8E1D9] text-sm resize-none rounded-lg" />
           </div>
           <div className="flex gap-2">
-            <button className="flex-1 py-2 border rounded-full text-xs text-gray-500 hover:bg-gray-50 bg-white" style={{ borderColor: border }} onClick={() => setShowQ(false)}>スキップ</button>
-            <button className="flex-1 py-2 rounded-full text-xs text-white disabled:opacity-40" style={{ backgroundColor: primary }} disabled={questionnaireMutation.isPending} onClick={() => questionnaireMutation.mutate()} data-testid="button-submit-questionnaire">
+            <button className="flex-1 h-10 border rounded-full text-sm text-gray-500 hover:bg-gray-50 active:bg-gray-50 transition-colors bg-white" style={{ borderColor: border }} onClick={() => setShowQ(false)}>スキップ</button>
+            <button className="flex-1 h-10 rounded-full text-sm text-white disabled:opacity-40 transition-all hover:opacity-90 active:scale-95" style={{ backgroundColor: primary }} disabled={questionnaireMutation.isPending} onClick={() => questionnaireMutation.mutate()} data-testid="button-submit-questionnaire">
               {questionnaireMutation.isPending ? "送信中..." : "送信する"}
             </button>
           </div>
@@ -1196,11 +1217,11 @@ function SuccessStep({
 
       <div className="space-y-2">
         <Link href="/my-appointments">
-          <button className="w-full py-3 rounded-full border text-sm text-gray-600 hover:bg-gray-50 transition-colors bg-white" style={{ borderColor: border }} data-testid="button-my-appointments">
+          <button className="w-full h-12 rounded-full border text-sm font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors bg-white" style={{ borderColor: border }} data-testid="button-my-appointments">
             予約確認・変更はこちら
           </button>
         </Link>
-        <button className="w-full py-2.5 text-sm text-gray-400 hover:text-gray-600 transition-colors" onClick={onNewBooking} data-testid="button-new-booking">
+        <button className="w-full h-11 text-sm text-gray-400 hover:text-gray-600 transition-colors" onClick={onNewBooking} data-testid="button-new-booking">
           新しい予約をする
         </button>
       </div>
@@ -1375,7 +1396,7 @@ export default function BookingPage({ slug }: { slug?: string }) {
       {/* Step progress bar (for booking steps) */}
       {["service", "datetime", "confirm"].includes(view) && (
         <div
-          className="flex items-center gap-0 px-6 py-2 border-b text-xs"
+          className="flex items-center gap-0 px-4 md:px-8 py-3 border-b text-xs overflow-x-auto"
           style={{ borderColor: colors.border, backgroundColor: "white" }}
         >
           {[["service", "メニュー選択"], ["datetime", "日時選択"], ["confirm", "予約確定"]].map(([v, label], i) => {
@@ -1384,10 +1405,10 @@ export default function BookingPage({ slug }: { slug?: string }) {
             const isActive = view === v;
             const isDone = idx > i;
             return (
-              <div key={v} className="flex items-center">
+              <div key={v} className="flex items-center shrink-0">
                 <div className="flex items-center gap-1.5">
                   <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                     style={{
                       backgroundColor: isDone || isActive ? colors.primary : colors.border,
                       color: isDone || isActive ? "white" : "#AAA",
@@ -1395,9 +1416,9 @@ export default function BookingPage({ slug }: { slug?: string }) {
                   >
                     {isDone ? "✓" : i + 1}
                   </div>
-                  <span style={{ color: isActive ? "#2D2D2D" : "#AAA", fontWeight: isActive ? 600 : 400 }}>{label}</span>
+                  <span className="whitespace-nowrap" style={{ color: isActive ? "#2D2D2D" : "#AAA", fontWeight: isActive ? 600 : 400 }}>{label}</span>
                 </div>
-                {i < 2 && <ChevronRight className="w-3 h-3 text-gray-200 mx-2" />}
+                {i < 2 && <ChevronRight className="w-3 h-3 text-gray-200 mx-2 shrink-0" />}
               </div>
             );
           })}
@@ -1412,7 +1433,7 @@ export default function BookingPage({ slug }: { slug?: string }) {
               if (view === "confirm") setView("datetime");
               else if (view === "datetime") setView("service");
             }}
-            className="flex items-center gap-1 text-sm hover:opacity-70 transition-opacity"
+            className="flex items-center gap-1 h-10 -ml-1 pl-1 pr-2 rounded-lg text-sm hover:opacity-70 active:opacity-70 transition-opacity"
             style={{ color: colors.primary }}
           >
             <ChevronLeft className="w-4 h-4" />

@@ -50,7 +50,7 @@ function KpiCard({ title, icon: Icon, iconClass, value, sub, trend, onClick, act
 }) {
   return (
     <Card
-      className={`cursor-pointer transition-all duration-150 hover:shadow-md ${active ? "ring-2 ring-primary shadow-md" : ""}`}
+      className={`cursor-pointer transition-all duration-150 hover:shadow-md active:scale-[0.98] ${active ? "ring-2 ring-primary shadow-md" : ""}`}
       onClick={onClick}
     >
       <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
@@ -58,7 +58,7 @@ function KpiCard({ title, icon: Icon, iconClass, value, sub, trend, onClick, act
         <Icon className={`h-4 w-4 shrink-0 ${iconClass}`} />
       </CardHeader>
       <CardContent>
-        <div className={`text-3xl font-bold ${active ? "text-primary" : ""}`} data-testid={`report-${title}`}>{value}</div>
+        <div className={`text-2xl md:text-3xl font-bold tabular-nums leading-none ${active ? "text-primary" : ""}`} data-testid={`report-${title}`}>{value}</div>
         {trend && <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">{trend}</div>}
         {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
         {active && <p className="text-[10px] text-primary mt-1.5 font-medium">▼ 詳細を表示中</p>}
@@ -202,14 +202,16 @@ export function Reports() {
   if (isLoading) {
     return (
       <div className="flex flex-col h-full overflow-auto">
-        <div className="px-4 md:px-6 py-4 border-b border-border">
+        <div className="px-4 md:px-6 py-4 border-b border-border bg-background shrink-0">
           <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-4 w-48 mt-1.5" />
         </div>
-        <div className="p-4 md:p-6 space-y-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => <Skeleton key={i} className="h-28" />)}
+        <div className="p-4 md:p-6 space-y-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[1,2,3,4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
           </div>
-          <Skeleton className="h-64" />
+          <Skeleton className="h-9 w-64 rounded-lg" />
+          <Skeleton className="h-72 rounded-xl" />
         </div>
       </div>
     );
@@ -234,6 +236,7 @@ export function Reports() {
           <Button
             variant="outline"
             size="sm"
+            className="shrink-0 active:scale-95"
             onClick={() => exportCSV(data)}
             data-testid="button-export-csv"
           >
@@ -302,15 +305,15 @@ export function Reports() {
             <CardContent>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold text-blue-600">{tm.completedCount}</div>
+                  <div className="text-2xl font-bold tabular-nums text-blue-600">{tm.completedCount}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">診療完了</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-amber-600">{tm.totalAppointments - tm.completedCount - tm.cancelledCount}</div>
+                  <div className="text-2xl font-bold tabular-nums text-amber-600">{tm.totalAppointments - tm.completedCount - tm.cancelledCount}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">予約済（未来）</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-red-600">{tm.cancelledCount}</div>
+                  <div className="text-2xl font-bold tabular-nums text-red-600">{tm.cancelledCount}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">キャンセル</div>
                 </div>
               </div>
@@ -335,11 +338,11 @@ export function Reports() {
             <CardContent>
               <div className="grid grid-cols-2 gap-6">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600">{tm.newPatients}</div>
+                  <div className="text-3xl font-bold tabular-nums text-blue-600">{tm.newPatients}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">今月</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-muted-foreground">{lm.newPatients}</div>
+                  <div className="text-3xl font-bold tabular-nums text-muted-foreground">{lm.newPatients}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">先月</div>
                 </div>
               </div>
@@ -361,15 +364,15 @@ export function Reports() {
             <CardContent>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold text-red-600">{tm.cancellationRate}%</div>
+                  <div className="text-2xl font-bold tabular-nums text-red-600">{tm.cancellationRate}%</div>
                   <div className="text-xs text-muted-foreground mt-0.5">今月のキャンセル率</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-orange-600">{tm.cancelledCount}</div>
+                  <div className="text-2xl font-bold tabular-nums text-orange-600">{tm.cancelledCount}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">キャンセル件数</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-red-800">{tm.noShowCount}</div>
+                  <div className="text-2xl font-bold tabular-nums text-red-800">{tm.noShowCount}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">無断キャンセル</div>
                 </div>
               </div>
@@ -451,7 +454,10 @@ export function Reports() {
               </CardHeader>
               <CardContent>
                 {(data.monthlyTrend ?? []).every(m => m.appointments === 0) ? (
-                  <div className="text-center py-12 text-muted-foreground text-sm">データが蓄積されると推移グラフが表示されます</div>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <BarChart3 className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                    <p className="text-sm">データが蓄積されると推移グラフが表示されます</p>
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={data.monthlyTrend ?? []} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -487,7 +493,10 @@ export function Reports() {
                 </CardHeader>
                 <CardContent>
                   {data.treatmentTypeStats.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">データなし</p>
+                    <div className="text-center py-10 text-muted-foreground">
+                      <BarChart3 className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                      <p className="text-sm">データはありません</p>
+                    </div>
                   ) : (
                     <>
                       <ResponsiveContainer width="100%" height={180}>
@@ -528,7 +537,10 @@ export function Reports() {
                 </CardHeader>
                 <CardContent>
                   {data.timeSlotStats.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">データなし</p>
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Clock className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                      <p className="text-sm">データはありません</p>
+                    </div>
                   ) : (
                     <>
                       <ResponsiveContainer width="100%" height={200}>
@@ -591,7 +603,10 @@ export function Reports() {
               </CardHeader>
               <CardContent>
                 {data.staffCapacity.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">スタッフデータなし</p>
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Users className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                    <p className="text-sm">スタッフデータはありません</p>
+                  </div>
                 ) : (
                   <div className="space-y-5">
                     <ResponsiveContainer width="100%" height={Math.max(160, data.staffCapacity.length * 50)}>

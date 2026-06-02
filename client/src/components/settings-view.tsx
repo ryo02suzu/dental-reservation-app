@@ -17,10 +17,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { FollowUpTab, ReviewTab, TreatmentPlansTab } from "@/components/settings-features";
 import { useAuth } from "@/hooks/use-auth";
 import { useClinicAddons } from "@/hooks/use-clinic-addons";
 import { usePlan } from "@/hooks/use-plan";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, X, Copy, Check, RefreshCw, Calendar, Smartphone, Download, QrCode, Lock, GripVertical, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, ChevronRight, ChevronLeft, X, Copy, Check, RefreshCw, Calendar, Smartphone, Download, QrCode, Lock, GripVertical, CheckCircle, XCircle, Clock } from "lucide-react";
 import { format, parseISO, addMonths, subMonths, startOfMonth } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +57,7 @@ interface ClinicSettings {
 
 interface PlanInfo {
   planType: string;
-  limits: { maxStaff: number; maxMonthlyAppointments: number; canExport: boolean; canLine: boolean; canRecall: boolean; canReport: boolean; label: string; price: string };
+  limits: { maxStaff: number; maxMonthlyAppointments: number; canExport: boolean; canEmail: boolean; canSms: boolean; canLine: boolean; canRecall: boolean; canReport: boolean; label: string; price: string };
   usage: { staffCount: number; monthlyAppointments: number };
 }
 
@@ -118,43 +118,195 @@ interface ReminderSettings {
   reminderHoursBefore: number;
   lineChannelAccessToken?: string;
   lineChannelSecret?: string;
+  resendApiKey?: string;
+  resendFromEmail?: string;
+  twilioAccountSid?: string;
+  twilioAuthToken?: string;
+  twilioFromNumber?: string;
   autoReminderEnabled?: boolean;
   reminderSendTime?: string;
 }
 
 const DAY_NAMES = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
 
+// ─── Settings navigation config ──────────────────────────────────────────────
+interface SettingsNavItem {
+  id: string;
+  label: string;
+  description: string;
+}
+interface SettingsNavGroup {
+  label: string;
+  items: SettingsNavItem[];
+}
+
+const SETTINGS_NAV: SettingsNavGroup[] = [
+  {
+    label: "医院運営",
+    items: [
+      { id: "clinic", label: "クリニック情報", description: "医院の基本情報と患者向け予約ページ" },
+      { id: "staff", label: "スタッフ", description: "スタッフの登録と権限・ログイン設定" },
+      { id: "services", label: "診療メニュー", description: "提供する診療メニューと料金・所要時間" },
+    ],
+  },
+  {
+    label: "予約・スケジュール",
+    items: [
+      { id: "hours", label: "診療時間・休診日", description: "診療時間と休診日の設定" },
+      { id: "general", label: "予約ルール", description: "予約枠・確認・QRチェックインなどの予約動作" },
+      { id: "calendar", label: "カレンダー連携", description: "外部カレンダーへの予約の取り込み（購読URL）" },
+    ],
+  },
+  {
+    label: "患者コミュニケーション",
+    items: [
+      { id: "reminders", label: "リマインダー", description: "予約前のリマインド送信設定" },
+      { id: "followup", label: "フォローアップ", description: "診療後の自動フォロー・リコール" },
+      { id: "review", label: "口コミ誘導", description: "来院後の口コミ依頼と不満の吸収" },
+    ],
+  },
+  {
+    label: "自費診療",
+    items: [
+      { id: "plans", label: "治療プラン", description: "自費診療の比較プラン管理" },
+    ],
+  },
+  {
+    label: "システム",
+    items: [
+      { id: "export", label: "データ出力", description: "予約・患者データのエクスポート" },
+      { id: "account", label: "アカウント", description: "ログイン情報とアカウント管理" },
+    ],
+  },
+];
+
+const SETTINGS_NAV_ITEMS: SettingsNavItem[] = SETTINGS_NAV.flatMap(g => g.items);
+
+function SettingsPageContent({ id, clinicSlug }: { id: string; clinicSlug?: string }) {
+  switch (id) {
+    case "clinic": return <ClinicTab />;
+    case "staff": return <StaffTab />;
+    case "services": return <ServicesTab />;
+    case "hours": return (
+      <div className="space-y-6">
+        <HoursTab />
+        <HolidaysTab />
+      </div>
+    );
+    case "general": return <GeneralTab />;
+    case "calendar": return <CalendarIntegrationTab />;
+    case "reminders": return <ReminderTab />;
+    case "followup": return <FollowUpTab />;
+    case "review": return <ReviewTab clinicSlug={clinicSlug} />;
+    case "plans": return <TreatmentPlansTab />;
+    case "export": return <ExportTab />;
+    case "account": return <AccountTab />;
+    default: return null;
+  }
+}
+
 export function SettingsView() {
+  const { data: clinic } = useQuery<{ slug?: string | null }>({ queryKey: ["/api/clinic"] });
+  const [active, setActive] = useState("clinic");
+  // モバイルの「設定ホーム」表示制御。null のときは一覧、それ以外は該当ページ。
+  const [mobilePage, setMobilePage] = useState<string | null>(null);
+
+  const activeItem = SETTINGS_NAV_ITEMS.find(i => i.id === active) ?? SETTINGS_NAV_ITEMS[0];
+  const mobileItem = mobilePage ? SETTINGS_NAV_ITEMS.find(i => i.id === mobilePage) : null;
+  const clinicSlug = clinic?.slug ?? undefined;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-4 md:px-6 py-4 border-b border-border bg-background">
         <h1 className="text-2xl font-bold tracking-tight">設定</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">クリニックの設定を管理します</p>
       </div>
-      <div className="flex-1 overflow-auto p-4 md:p-6">
-        <Tabs defaultValue="clinic">
-          <TabsList className="mb-6 flex-wrap h-auto">
-            <TabsTrigger value="clinic">クリニック情報</TabsTrigger>
-            <TabsTrigger value="staff">スタッフ</TabsTrigger>
-            <TabsTrigger value="services">診療メニュー</TabsTrigger>
-            <TabsTrigger value="hours">診療時間</TabsTrigger>
-            <TabsTrigger value="holidays">休診日</TabsTrigger>
-            <TabsTrigger value="general">一般設定</TabsTrigger>
-            <TabsTrigger value="reminders">リマインダー</TabsTrigger>
-            <TabsTrigger value="calendar">カレンダー連携</TabsTrigger>
-            <TabsTrigger value="export">データエクスポート</TabsTrigger>
-            <TabsTrigger value="account">アカウント</TabsTrigger>
-          </TabsList>
-          <TabsContent value="clinic"><ClinicTab /></TabsContent>
-          <TabsContent value="staff"><StaffTab /></TabsContent>
-          <TabsContent value="services"><ServicesTab /></TabsContent>
-          <TabsContent value="hours"><HoursTab /></TabsContent>
-          <TabsContent value="holidays"><HolidaysTab /></TabsContent>
-          <TabsContent value="general"><GeneralTab /></TabsContent>
-          <TabsContent value="reminders"><ReminderTab /></TabsContent>
-          <TabsContent value="calendar"><CalendarIntegrationTab /></TabsContent>
-          <TabsContent value="export"><ExportTab /></TabsContent>
-          <TabsContent value="account"><AccountTab /></TabsContent>
-        </Tabs>
+
+      {/* ─── Desktop: left sidebar + content ─── */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
+        <nav
+          className="w-60 shrink-0 border-r border-border overflow-y-auto p-3 space-y-4"
+          data-testid="settings-sidebar"
+        >
+          {SETTINGS_NAV.map(group => (
+            <div key={group.label}>
+              <p className="text-xs font-medium text-muted-foreground px-3 py-2">{group.label}</p>
+              <div className="space-y-0.5">
+                {group.items.map(item => {
+                  const isActive = item.id === active;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActive(item.id)}
+                      data-testid={`settings-nav-${item.id}`}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        isActive
+                          ? "bg-muted text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold tracking-tight">{activeItem.label}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{activeItem.description}</p>
+            </div>
+            <SettingsPageContent id={active} clinicSlug={clinicSlug} />
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Mobile: settings-home list / drilldown ─── */}
+      <div className="md:hidden flex-1 overflow-auto">
+        {mobileItem ? (
+          <div className="p-4">
+            <button
+              onClick={() => setMobilePage(null)}
+              data-testid="settings-mobile-back"
+              className="flex items-center gap-0.5 text-sm text-primary mb-4"
+            >
+              <ChevronLeft className="h-4 w-4" />設定
+            </button>
+            <div className="mb-5">
+              <h2 className="text-xl font-bold tracking-tight">{mobileItem.label}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{mobileItem.description}</p>
+            </div>
+            <SettingsPageContent id={mobileItem.id} clinicSlug={clinicSlug} />
+          </div>
+        ) : (
+          <div className="p-4 space-y-6" data-testid="settings-mobile-home">
+            {SETTINGS_NAV.map(group => (
+              <div key={group.label}>
+                <p className="text-xs font-medium text-muted-foreground px-1 pb-2">{group.label}</p>
+                <div className="rounded-lg border border-border overflow-hidden bg-card divide-y divide-border">
+                  {group.items.map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => setMobilePage(item.id)}
+                      data-testid={`settings-mobile-nav-${item.id}`}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -186,8 +338,8 @@ function ExportTab() {
           <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800" data-testid="export-plan-locked">
             <Lock className="w-5 h-5 mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold text-sm">スターター以上のプランで利用できます</p>
-              <p className="text-xs mt-0.5">データエクスポート機能をご利用いただくには、スタータープランへのアップグレードが必要です。</p>
+              <p className="font-semibold text-sm">スタンダード以上のプランで利用できます</p>
+              <p className="text-xs mt-0.5">データエクスポート機能をご利用いただくには、スタンダードプランへのアップグレードが必要です。</p>
             </div>
           </div>
         )}
@@ -274,21 +426,29 @@ function ClinicTab() {
               <Label className="mb-1.5 block">クリニック紹介</Label>
               <Textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3} />
             </div>
-            <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5">
-              <Label className="text-xs text-muted-foreground block">患者向け予約ページURL</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={bookingUrl}
-                  readOnly
-                  className="font-mono text-xs bg-background"
-                  data-testid="input-booking-url-clinic"
-                  onClick={e => (e.target as HTMLInputElement).select()}
-                />
-                <Button variant="outline" size="icon" onClick={handleCopyUrl} data-testid="button-copy-booking-url-clinic">
-                  {urlCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                </Button>
+            <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
+              <Label className="text-xs text-muted-foreground block">患者向け予約ページ</Label>
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                <div className="shrink-0 self-center sm:self-start p-3 bg-white border-2 border-border rounded-xl shadow-inner">
+                  <QRCodeSVG value={bookingUrl} size={120} level="M" data-testid="qr-booking-url-clinic" />
+                </div>
+                <div className="flex-1 space-y-1.5 min-w-0">
+                  <Label className="text-xs text-muted-foreground block">予約ページURL</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={bookingUrl}
+                      readOnly
+                      className="font-mono text-xs bg-background"
+                      data-testid="input-booking-url-clinic"
+                      onClick={e => (e.target as HTMLInputElement).select()}
+                    />
+                    <Button variant="outline" size="icon" onClick={handleCopyUrl} data-testid="button-copy-booking-url-clinic">
+                      {urlCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">このURLやQRコードを患者さんに共有すると、オンライン予約ができます。</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">このURLを患者さんに共有すると、オンライン予約ができます。</p>
             </div>
             <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} data-testid="button-save-clinic">
               {saveMutation.isPending ? "保存中..." : "保存"}
@@ -857,7 +1017,7 @@ function StaffTab() {
               </div>
               <div><Label className="mb-1.5 block">打刻PIN（4桁）</Label>
                 <Input type="text" inputMode="numeric" maxLength={4} value={form.pin} onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 4); setForm(p => ({ ...p, pin: v })); }} placeholder="1234" data-testid="input-pin" />
-                <p className="text-[10px] text-gray-400 mt-1">QR出勤時の本人確認用</p>
+                <p className="text-[10px] text-muted-foreground mt-1">QR出勤時の本人確認用</p>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
@@ -888,7 +1048,7 @@ function StaffTab() {
             {staffLoginUrl ? (
               <>
                 <div className="flex justify-center py-2">
-                  <div className="p-4 bg-white border-2 border-gray-200 rounded-xl shadow-inner">
+                  <div className="p-4 bg-white border-2 border-border rounded-xl shadow-inner">
                     <QRCodeSVG value={staffLoginUrl} size={180} level="M" />
                   </div>
                 </div>
@@ -922,11 +1082,11 @@ function StaffTab() {
               </>
             ) : (
               <div className="text-center py-6 space-y-4">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                  <QrCode className="w-8 h-8 text-gray-400" />
+                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
+                  <QrCode className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-700">QRコードが未発行です</p>
+                  <p className="font-medium text-foreground">QRコードが未発行です</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     ボタンを押してQRコードを発行してください
                   </p>
@@ -1241,6 +1401,9 @@ function ServicesTab() {
       <Dialog open={isTemplateDialogOpen} onOpenChange={v => !v && setIsTemplateDialogOpen(false)}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader><DialogTitle>メニュー名候補の管理</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            ここで追加した候補は、診療メニューを「追加」する際の入力補助として表示されます。実際に予約で使うには、候補を選んでメニューとして登録してください。
+          </p>
           <div className="space-y-5">
             {/* Add new custom */}
             <div className="p-3 border border-border rounded-md bg-muted/20 space-y-3">
@@ -1384,14 +1547,14 @@ function HoursTab() {
 
   const toggleMorning = (dayOfWeek: number, enabled: boolean) => {
     setLocalHours(prev => prev.map(h => h.dayOfWeek === dayOfWeek
-      ? { ...h, openTime: enabled ? "09:00" : null, closeTime: enabled ? "12:30" : null }
+      ? { ...h, openTime: enabled ? "09:00" : undefined, closeTime: enabled ? "12:30" : undefined }
       : h
     ));
   };
 
   const toggleAfternoon = (dayOfWeek: number, enabled: boolean) => {
     setLocalHours(prev => prev.map(h => h.dayOfWeek === dayOfWeek
-      ? { ...h, afternoonOpenTime: enabled ? "14:00" : null, afternoonCloseTime: enabled ? "18:00" : null }
+      ? { ...h, afternoonOpenTime: enabled ? "14:00" : undefined, afternoonCloseTime: enabled ? "18:00" : undefined }
       : h
     ));
   };
@@ -1406,8 +1569,6 @@ function HoursTab() {
     ));
   };
 
-  const COL = "40px 48px 1fr 1fr 32px";
-
   return (
     <Card>
       <CardHeader>
@@ -1415,53 +1576,59 @@ function HoursTab() {
         <CardDescription>午前・午後それぞれのトグルで診療時間帯を設定できます。平日の複製はコピーアイコンから。</CardDescription>
       </CardHeader>
       <CardContent className="p-0 pb-5">
-        {isLoading ? <Skeleton className="mx-5 h-64" /> : (
-          <div className="mx-5 rounded-xl border border-border overflow-hidden">
-            {/* ヘッダー行 */}
-            <div
-              className="grid items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground"
-              style={{ gridTemplateColumns: COL }}
-            >
-              <span>曜日</span>
-              <span>診療</span>
-              <span className="flex items-center gap-1.5"><span className="w-8 shrink-0" />午前</span>
-              <span className="flex items-center gap-1.5"><span className="w-8 shrink-0" />午後</span>
-              <span />
-            </div>
-
-            {/* データ行 */}
-            {localHours.map((h, idx) => (
+        {isLoading ? <Skeleton className="mx-3 md:mx-5 h-64" /> : (
+          <div className="mx-3 md:mx-5 rounded-xl border border-border overflow-hidden divide-y divide-border/60">
+            {localHours.map((h) => (
               <div
                 key={h.dayOfWeek}
-                className={`grid items-center gap-3 px-4 py-3 transition-colors border-b last:border-0 border-border/60
-                  ${h.isClosed ? "bg-muted/20" : "bg-card hover:bg-muted/10"}`}
-                style={{ gridTemplateColumns: COL }}
+                className={`px-3 md:px-4 py-3 transition-colors ${h.isClosed ? "bg-muted/20" : "bg-card"}`}
               >
-                {/* 曜日 */}
-                <span className={`text-sm font-bold tabular-nums
-                  ${h.dayOfWeek === 0 ? "text-red-500" : h.dayOfWeek === 6 ? "text-blue-500" : "text-foreground"}`}>
-                  {DAY_NAMES[h.dayOfWeek]}
-                </span>
+                {/* 上段: 曜日 + 診療スイッチ + コピー */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`text-sm font-bold whitespace-nowrap
+                      ${h.dayOfWeek === 0 ? "text-red-500" : h.dayOfWeek === 6 ? "text-blue-500" : "text-foreground"}`}>
+                      {DAY_NAMES[h.dayOfWeek]}
+                    </span>
+                    <Switch
+                      checked={!h.isClosed}
+                      onCheckedChange={v => update(h.dayOfWeek, "isClosed", !v)}
+                      data-testid={`switch-day-${h.dayOfWeek}`}
+                    />
+                    {h.isClosed && <span className="text-xs text-muted-foreground/60 italic">休診日</span>}
+                  </div>
 
-                {/* 診療スイッチ */}
-                <Switch
-                  checked={!h.isClosed}
-                  onCheckedChange={v => update(h.dayOfWeek, "isClosed", !v)}
-                  data-testid={`switch-day-${h.dayOfWeek}`}
-                />
+                  {/* 平日一括複製 */}
+                  {h.dayOfWeek >= 1 && h.dayOfWeek <= 5 && (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => applyToWeekdays(h.dayOfWeek)}
+                            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            data-testid={`button-apply-weekdays-${h.dayOfWeek}`}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="text-xs">平日全てに適用</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </div>
 
-                {/* 午前・午後 */}
-                {h.isClosed ? (
-                  <span className="text-xs text-muted-foreground/50 col-span-2 italic">休診日</span>
-                ) : (
-                  <>
+                {/* 下段: 午前・午後（営業日のみ） */}
+                {!h.isClosed && (
+                  <div className="mt-3 space-y-2.5">
                     {/* 午前 */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Switch
                         checked={!!h.openTime}
                         onCheckedChange={v => toggleMorning(h.dayOfWeek, v)}
                         data-testid={`switch-morning-${h.dayOfWeek}`}
                       />
+                      <span className="text-xs font-medium text-muted-foreground w-8 shrink-0">午前</span>
                       {h.openTime ? (
                         <div className="flex items-center gap-1">
                           <TimeSelect value={h.openTime} onChange={v => update(h.dayOfWeek, "openTime", v)} testId={`select-open-${h.dayOfWeek}`} />
@@ -1474,12 +1641,13 @@ function HoursTab() {
                     </div>
 
                     {/* 午後 */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Switch
                         checked={!!h.afternoonOpenTime}
                         onCheckedChange={v => toggleAfternoon(h.dayOfWeek, v)}
                         data-testid={`switch-afternoon-${h.dayOfWeek}`}
                       />
+                      <span className="text-xs font-medium text-muted-foreground w-8 shrink-0">午後</span>
                       {h.afternoonOpenTime ? (
                         <div className="flex items-center gap-1">
                           <TimeSelect value={h.afternoonOpenTime} onChange={v => update(h.dayOfWeek, "afternoonOpenTime", v)} testId={`select-af-open-${h.dayOfWeek}`} />
@@ -1490,32 +1658,13 @@ function HoursTab() {
                         <span className="text-xs text-muted-foreground">なし</span>
                       )}
                     </div>
-                  </>
+                  </div>
                 )}
-
-                {/* 平日一括複製 */}
-                {h.dayOfWeek >= 1 && h.dayOfWeek <= 5 ? (
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => applyToWeekdays(h.dayOfWeek)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          data-testid={`button-apply-weekdays-${h.dayOfWeek}`}
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="text-xs">平日全てに適用</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : <span />}
               </div>
             ))}
           </div>
         )}
-        <div className="px-5 pt-4">
+        <div className="px-3 md:px-5 pt-4">
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="button-save-hours">
             {saveMutation.isPending ? "保存中..." : "保存"}
           </Button>
@@ -1576,7 +1725,7 @@ function HolidaysTab() {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Japan public holiday import */}
-        <div className="flex items-center gap-2 p-3 border border-border rounded-md bg-muted/20">
+        <div className="flex flex-wrap items-center gap-2 p-3 border border-border rounded-md bg-muted/20">
           <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm flex-1">国民の祝日を自動取得</span>
           <Select value={String(importYear)} onValueChange={v => setImportYear(parseInt(v))}>
@@ -1647,12 +1796,7 @@ function HolidaysTab() {
 // ─── Calendar Integration Tab ─────────────────────────────────────────────────
 function CalendarIntegrationTab() {
   const [copied, setCopied] = useState(false);
-  const [qrCopied, setQrCopied] = useState(false);
-  const { data: clinic } = useQuery<{ slug?: string | null }>({ queryKey: ["/api/clinic"] });
   const icsUrl = `${window.location.origin}/api/calendar.ics`;
-  const bookingUrl = clinic?.slug
-    ? `${window.location.origin}/book/${clinic.slug}`
-    : `${window.location.origin}/booking`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(icsUrl).then(() => {
@@ -1661,72 +1805,8 @@ function CalendarIntegrationTab() {
     });
   };
 
-  const handleCopyBookingUrl = () => {
-    navigator.clipboard.writeText(bookingUrl).then(() => {
-      setQrCopied(true);
-      setTimeout(() => setQrCopied(false), 2000);
-    });
-  };
-
-  const handleDownloadQR = () => {
-    const svg = document.getElementById("booking-qr-svg");
-    if (!svg) return;
-    const serializer = new XMLSerializer();
-    const svgStr = serializer.serializeToString(svg);
-    const blob = new Blob([svgStr], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "booking-qr.svg";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="space-y-4">
-      {/* Booking QR Code */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <QrCode className="h-5 w-5" />患者向け予約ページ QRコード
-          </CardTitle>
-          <CardDescription>QRコードをスキャンすると予約ページに直接アクセスできます。印刷して受付や院内に掲示できます。</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="bg-white p-4 rounded-xl border shadow-sm">
-              <QRCodeSVG
-                id="booking-qr-svg"
-                value={bookingUrl}
-                size={160}
-                level="M"
-                includeMargin={false}
-                data-testid="booking-qr-code"
-              />
-            </div>
-            <div className="flex-1 space-y-3">
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">予約ページURL</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={bookingUrl}
-                    readOnly
-                    className="font-mono text-xs"
-                    data-testid="input-booking-url"
-                    onClick={e => (e.target as HTMLInputElement).select()}
-                  />
-                  <Button variant="outline" size="icon" onClick={handleCopyBookingUrl} data-testid="button-copy-booking-url">
-                    {qrCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              <Button variant="outline" onClick={handleDownloadQR} data-testid="button-download-qr">
-                <Download className="h-4 w-4 mr-2" />QRコードをダウンロード
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
       {/* iCal subscription */}
       <Card>
         <CardHeader>
@@ -1818,9 +1898,11 @@ function GeneralTab() {
     requireAppointmentApproval: false, closedOnHolidays: true, primaryColor: "#C4B5A0", enableReferral: true,
   });
   const { data: planInfo } = useQuery<PlanInfo>({ queryKey: ["/api/plan-info"] });
+  const { data: generalClinic } = useQuery<{ slug?: string | null }>({ queryKey: ["/api/clinic"] });
   const [loaded, setLoaded] = useState(false);
 
   if (settings && !loaded) { setForm(settings); setLoaded(true); }
+  const checkinUrl = generalClinic?.slug ? `${window.location.origin}/checkin/${generalClinic.slug}` : "";
 
   const saveMutation = useMutation({
     mutationFn: (data: ClinicSettings) => apiRequest("PUT", "/api/clinic-settings", data),
@@ -1835,7 +1917,7 @@ function GeneralTab() {
       <CardContent>
         {isLoading ? <Skeleton className="h-64" /> : (
           <div className="space-y-5 max-w-lg">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
               <div>
                 <Label className="mb-1.5 block">同時予約受付数</Label>
                 <NumericSelectOrCustom
@@ -1924,6 +2006,32 @@ function GeneralTab() {
       </CardContent>
     </Card>
 
+    {form.enableQrCheckin && checkinUrl && (
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>受付チェックインQR</CardTitle>
+          <CardDescription>このQRを受付に掲示してください。患者さんがスマホで読み取り、電話番号で来院チェックインできます。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row items-center gap-5">
+            <div className="bg-white p-3 rounded-lg border shrink-0">
+              <QRCodeSVG value={checkinUrl} size={160} level="M" />
+            </div>
+            <div className="min-w-0 w-full">
+              <Label className="text-xs text-muted-foreground">チェックインURL</Label>
+              <div className="flex items-center gap-2 mt-1.5">
+                <Input readOnly value={checkinUrl} className="text-sm" />
+                <Button size="icon" variant="outline" onClick={() => { navigator.clipboard.writeText(checkinUrl); toast({ title: "URLをコピーしました" }); }}>
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">「QRチェックインを有効にする」をONにして保存すると利用できます。</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )}
+
     {planInfo && (
       <Card className="mt-4">
         <CardHeader>
@@ -1937,10 +2045,10 @@ function GeneralTab() {
               <span className="font-bold text-base">{planInfo.limits.label}</span>
               <span className="text-sm text-muted-foreground">{planInfo.limits.price}</span>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div className="border rounded-lg p-3">
                 <div className="text-muted-foreground mb-1">スタッフ数</div>
-                <div className="font-semibold">{planInfo.usage.staffCount} / {planInfo.limits.maxStaff === 999 ? "無制限" : `${planInfo.limits.maxStaff}名`}</div>
+                <div className="font-semibold">{planInfo.usage.staffCount} / {planInfo.limits.maxStaff >= 999 ? "無制限" : `${planInfo.limits.maxStaff}名`}</div>
               </div>
               <div className="border rounded-lg p-3">
                 <div className="text-muted-foreground mb-1">今月の予約数</div>
@@ -1951,8 +2059,20 @@ function GeneralTab() {
                 <div className={planInfo.limits.canExport ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canExport ? "利用可能" : "利用不可"}</div>
               </div>
               <div className="border rounded-lg p-3">
-                <div className="text-muted-foreground mb-1">LINE連携</div>
+                <div className="text-muted-foreground mb-1">SMSリマインダー</div>
+                <div className={planInfo.limits.canSms ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canSms ? "利用可能" : "利用不可"}</div>
+              </div>
+              <div className="border rounded-lg p-3">
+                <div className="text-muted-foreground mb-1">LINEリマインダー</div>
                 <div className={planInfo.limits.canLine ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canLine ? "利用可能" : "利用不可"}</div>
+              </div>
+              <div className="border rounded-lg p-3">
+                <div className="text-muted-foreground mb-1">リコール管理</div>
+                <div className={planInfo.limits.canRecall ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canRecall ? "利用可能" : "利用不可"}</div>
+              </div>
+              <div className="border rounded-lg p-3">
+                <div className="text-muted-foreground mb-1">レポート・分析</div>
+                <div className={planInfo.limits.canReport ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{planInfo.limits.canReport ? "利用可能" : "利用不可"}</div>
               </div>
             </div>
             {planInfo.planType === "free" && (
@@ -1981,10 +2101,12 @@ function ReminderTab() {
   const [loaded, setLoaded] = useState(false);
   const [showLineSecret, setShowLineSecret] = useState(false);
   const [showLineToken, setShowLineToken] = useState(false);
+  const [showResendKey, setShowResendKey] = useState(false);
+  const [showTwilioToken, setShowTwilioToken] = useState(false);
 
-  const { canLine } = usePlan();
-  const hasSms = hasAddon("sms_pack");
-  const hasLine = hasAddon("line_reminder") || canLine;
+  const { canLine, canSms } = usePlan();
+  const hasSms = canSms || hasAddon("sms_pack");
+  const hasLine = canLine || hasAddon("line_reminder");
 
   if (settings && !loaded) { setForm({ ...form, ...settings }); setLoaded(true); }
 
@@ -2030,7 +2152,7 @@ function ReminderTab() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-1.5 block">リマインド送信タイミング</Label>
                   <Select value={String(form.reminderHoursBefore)} onValueChange={v => setForm(p => ({ ...p, reminderHoursBefore: parseInt(v) }))}>
@@ -2059,7 +2181,7 @@ function ReminderTab() {
                 <Label className="text-sm font-medium">送信方法</Label>
                 {([
                   { key: "enableEmail", label: "メールリマインダー", note: null, addonKey: null },
-                  { key: "enableSms", label: "SMSリマインダー", note: "SMS送信にはTwilio設定が必要です（TWILIO_ACCOUNT_SID、TWILIO_AUTH_TOKEN、TWILIO_FROM_NUMBER 環境変数）", addonKey: "sms_pack" },
+                  { key: "enableSms", label: "SMSリマインダー", note: null, addonKey: "sms_pack" },
                   { key: "enableLine", label: "LINEリマインダー", note: null, addonKey: "line_reminder" },
                 ] as const).map(item => {
                   const addonEnabled = !item.addonKey || (item.addonKey === "sms_pack" ? hasSms : hasLine);
@@ -2070,7 +2192,7 @@ function ReminderTab() {
                           checked={!!form[item.key as keyof ReminderSettings]}
                           onCheckedChange={v => {
                             if (!addonEnabled) {
-                              toast({ title: "このオプションは未契約です", description: "スーパー管理者に有効化を依頼してください。", variant: "destructive" });
+                              toast({ title: "このオプションは未契約です", description: "運営に有効化を依頼してください。", variant: "destructive" });
                               return;
                             }
                             setForm(p => ({ ...p, [item.key]: v }));
@@ -2106,12 +2228,112 @@ function ReminderTab() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>メール送信設定（Resend）</CardTitle>
+          <CardDescription>メールリマインダーの送信に使用します</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? <Skeleton className="h-32" /> : (
+            <div className="space-y-5 max-w-lg">
+              <div>
+                <Label className="mb-1.5 block">Resend APIキー</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type={showResendKey ? "text" : "password"}
+                    placeholder="re_xxxxxxxx..."
+                    value={form.resendApiKey || ""}
+                    onChange={e => setForm(p => ({ ...p, resendApiKey: e.target.value }))}
+                    data-testid="input-resend-api-key"
+                  />
+                  <Button variant="outline" size="sm" onClick={() => setShowResendKey(p => !p)} type="button">
+                    {showResendKey ? "非表示" : "表示"}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1.5 block">送信元メールアドレス（From）</Label>
+                <Input
+                  type="text"
+                  placeholder="クリニック名 <info@example.com>"
+                  value={form.resendFromEmail || ""}
+                  onChange={e => setForm(p => ({ ...p, resendFromEmail: e.target.value }))}
+                  data-testid="input-resend-from-email"
+                />
+              </div>
+              <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} data-testid="button-save-email-settings">
+                {saveMutation.isPending ? "保存中..." : "メール設定を保存"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="relative">
+        {!hasSms && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px] z-10 rounded-lg flex flex-col items-center justify-center gap-3" data-testid="sms-addon-locked">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center max-w-xs">
+              <p className="font-semibold text-amber-900 mb-1">SMSリマインダーオプション未契約</p>
+              <p className="text-xs text-amber-700">このオプションを使用するには運営に有効化を依頼してください。</p>
+            </div>
+          </div>
+        )}
+        <CardHeader>
+          <CardTitle>SMS送信設定（Twilio）</CardTitle>
+          <CardDescription>SMSリマインダーの送信に使用します</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? <Skeleton className="h-32" /> : (
+            <div className="space-y-5 max-w-lg">
+              <div>
+                <Label className="mb-1.5 block">Account SID</Label>
+                <Input
+                  type="text"
+                  placeholder="ACxxxxxxxx..."
+                  value={form.twilioAccountSid || ""}
+                  onChange={e => setForm(p => ({ ...p, twilioAccountSid: e.target.value }))}
+                  data-testid="input-twilio-account-sid"
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block">Auth Token</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type={showTwilioToken ? "text" : "password"}
+                    placeholder="認証トークンを入力..."
+                    value={form.twilioAuthToken || ""}
+                    onChange={e => setForm(p => ({ ...p, twilioAuthToken: e.target.value }))}
+                    data-testid="input-twilio-auth-token"
+                  />
+                  <Button variant="outline" size="sm" onClick={() => setShowTwilioToken(p => !p)} type="button">
+                    {showTwilioToken ? "非表示" : "表示"}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1.5 block">送信元電話番号（From）</Label>
+                <Input
+                  type="text"
+                  placeholder="+81..."
+                  value={form.twilioFromNumber || ""}
+                  onChange={e => setForm(p => ({ ...p, twilioFromNumber: e.target.value }))}
+                  data-testid="input-twilio-from-number"
+                />
+              </div>
+              <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} data-testid="button-save-sms-settings">
+                {saveMutation.isPending ? "保存中..." : "SMS設定を保存"}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="relative">
         {!hasLine && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px] z-10 rounded-lg flex flex-col items-center justify-center gap-3" data-testid="line-addon-locked">
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center max-w-xs">
               <p className="font-semibold text-amber-900 mb-1">LINEリマインダーオプション未契約</p>
-              <p className="text-xs text-amber-700">このオプションを使用するにはスーパー管理者に有効化を依頼してください。</p>
+              <p className="text-xs text-amber-700">このオプションを使用するには運営に有効化を依頼してください。</p>
             </div>
           </div>
         )}

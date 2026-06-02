@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,19 @@ export function NotificationBell({ collapsed, onViewChange }: { collapsed: boole
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  // ベルの位置からパネル座標を計算し、画面内に収める
+  const updatePos = useCallback(() => {
+    const b = btnRef.current?.getBoundingClientRect();
+    if (!b) return;
+    const PANEL_W = 320;
+    const MARGIN = 8;
+    const left = Math.min(Math.max(MARGIN, b.left), window.innerWidth - PANEL_W - MARGIN);
+    const top = Math.min(b.bottom + 6, window.innerHeight - 120);
+    setPos({ top, left });
+  }, []);
 
   const { data: notifications = [] } = useQuery<AdminNotification[]>({
     queryKey: ["/api/notifications"],
@@ -80,26 +94,40 @@ export function NotificationBell({ collapsed, onViewChange }: { collapsed: boole
     return () => { es?.close(); clearTimeout(retryTimeout); };
   }, [queryClient, toast]);
 
-  // パネル外クリックで閉じる
+  // パネル外クリックで閉じる（ベル本体とパネルの両方を除外）
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    const handler = (e: Event) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
   }, [open]);
 
+  // 開いている間はスクロール/リサイズでパネル位置を追従
+  useEffect(() => {
+    if (!open) return;
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
+  }, [open, updatePos]);
+
   const handleOpen = () => {
+    if (!open) updatePos();
     setOpen(v => !v);
     if (!open && unreadCount > 0) markAllRead();
   };
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative">
       <Button
+        ref={btnRef}
         variant="ghost"
         size="icon"
         className="relative w-8 h-8 text-sidebar-foreground hover:text-foreground"
@@ -115,8 +143,12 @@ export function NotificationBell({ collapsed, onViewChange }: { collapsed: boole
         )}
       </Button>
 
-      {open && (
-        <div className="absolute z-50 left-0 top-9 w-80 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className="fixed z-[100] w-80 bg-popover border border-border rounded-xl shadow-2xl overflow-hidden"
+          style={{ top: pos.top, left: pos.left }}
+        >
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2">
               <Bell className="h-4 w-4 text-muted-foreground" />
@@ -140,15 +172,15 @@ export function NotificationBell({ collapsed, onViewChange }: { collapsed: boole
 
           <div className="max-h-80 overflow-y-auto divide-y divide-border">
             {notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                <Bell className="h-8 w-8 mb-2 opacity-30" />
+              <div className="text-center py-10 text-muted-foreground">
+                <Bell className="h-9 w-9 mx-auto mb-2 opacity-25" />
                 <p className="text-sm">通知はありません</p>
               </div>
             ) : (
               notifications.map(n => (
                 <button
                   key={n.id}
-                  className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-accent transition-colors ${!n.isRead ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}
+                  className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-accent active:bg-accent/50 transition-colors ${!n.isRead ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}
                   onClick={() => {
                     setOpen(false);
                     if (onViewChange && n.type === "new_booking") {
@@ -175,7 +207,8 @@ export function NotificationBell({ collapsed, onViewChange }: { collapsed: boole
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

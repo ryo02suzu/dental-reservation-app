@@ -2,12 +2,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -15,8 +14,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { Redirect, Link, useLocation } from "wouter";
 import {
   Building2, ExternalLink, Copy, Power, PowerOff, Plus, RefreshCw, LogOut,
-  Users, Calendar, KeyRound, Mail, Pencil, Trash2, PackagePlus, CreditCard,
+  Users, Calendar, KeyRound, Mail, Pencil, Trash2, PackagePlus,
   Puzzle, CheckCircle2, XCircle, LayoutDashboard, MoreHorizontal, ChevronRight,
+  Search, Info,
 } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import {
@@ -41,23 +41,12 @@ interface ClinicSummary {
 
 const PLAN_BADGE: Record<string, { label: string; className: string }> = {
   free:       { label: "フリー",         className: "bg-gray-100 text-gray-600" },
-  starter:    { label: "スターター",     className: "bg-blue-100 text-blue-700" },
+  standard:   { label: "スタンダード",   className: "bg-blue-100 text-blue-700" },
+  starter:    { label: "スタンダード",   className: "bg-blue-100 text-blue-700" }, // 旧キー後方互換
   pro:        { label: "プロ",           className: "bg-purple-100 text-purple-700" },
   enterprise: { label: "エンタープライズ", className: "bg-amber-100 text-amber-700" },
   partner:    { label: "パートナー",     className: "bg-green-100 text-green-700" },
 };
-
-interface PlanDefinition {
-  id: string;
-  key: string;
-  name: string;
-  price: number;
-  maxAppointmentsPerMonth: number | null;
-  maxStaff: number | null;
-  features: string[] | null;
-  isActive: boolean | null;
-  sortOrder: number | null;
-}
 
 interface AddonDefinition {
   id: string;
@@ -74,11 +63,6 @@ interface ClinicAddon {
   clinicId: string;
   addonKey: string;
 }
-
-const emptyPlan = (): Partial<PlanDefinition> => ({
-  key: "", name: "", price: 0, maxAppointmentsPerMonth: null, maxStaff: null,
-  features: [], isActive: true, sortOrder: 0,
-});
 
 const emptyAddon = (): Partial<AddonDefinition> => ({
   key: "", name: "", price: 0, description: "", isActive: true, sortOrder: 0,
@@ -105,21 +89,16 @@ export default function SuperAdminPage() {
   const [deleteDialog, setDeleteDialog] = useState<{ clinicId: string; clinicName: string } | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
-  // Dialogs: plan/addon definition
-  const [planDialog, setPlanDialog] = useState<Partial<PlanDefinition> | null>(null);
+  // Dialogs: addon definition
   const [addonDefDialog, setAddonDefDialog] = useState<Partial<AddonDefinition> | null>(null);
-  const [featuresText, setFeaturesText] = useState("");
+
+  // 医院一覧の名前検索
+  const [clinicSearch, setClinicSearch] = useState("");
 
   // ─── Queries ────────────────────────────────────────────────────────────────
   const { data: clinics, isLoading } = useQuery<ClinicSummary[]>({
     queryKey: ["/api/super-admin/clinics"],
     queryFn: async () => (await apiRequest("GET", "/api/super-admin/clinics")).json(),
-    enabled: !!user?.isSuperAdmin,
-  });
-
-  const { data: planDefs = [], isLoading: plansLoading } = useQuery<PlanDefinition[]>({
-    queryKey: ["/api/super-admin/plans"],
-    queryFn: async () => (await apiRequest("GET", "/api/super-admin/plans")).json(),
     enabled: !!user?.isSuperAdmin,
   });
 
@@ -207,37 +186,16 @@ export default function SuperAdminPage() {
     onSettled: () => setPendingAddonKey(null),
   });
 
-  // ─── Plan definition mutations ───────────────────────────────────────────────
-  const savePlanMutation = useMutation({
-    mutationFn: async (data: Partial<PlanDefinition>) => {
-      const features = featuresText.split("\n").map(s => s.trim()).filter(Boolean);
-      const payload = { ...data, features };
-      if (data.id) {
-        return (await apiRequest("PATCH", `/api/super-admin/plans/${data.id}`, payload)).json();
-      }
-      return (await apiRequest("POST", "/api/super-admin/plans", payload)).json();
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/super-admin/plans"] });
-      toast({ title: "プランを保存しました" });
-      setPlanDialog(null);
-    },
-    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
-  });
-
-  const deletePlanMutation = useMutation({
-    mutationFn: async (id: string) => (await apiRequest("DELETE", `/api/super-admin/plans/${id}`)).json(),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/super-admin/plans"] }); toast({ title: "プランを削除しました" }); },
-    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
-  });
-
   // ─── Addon definition mutations ──────────────────────────────────────────────
   const saveAddonDefMutation = useMutation({
     mutationFn: async (data: Partial<AddonDefinition>) => {
-      if (data.id) {
-        return (await apiRequest("PATCH", `/api/super-admin/addons/${data.id}`, data)).json();
+      // keyが空なら名前から自動生成（運営がkeyを意識しなくて済むように）
+      const key = (data.key ?? "").trim() || genAddonKey(data.name);
+      const payload = { ...data, key };
+      if (payload.id) {
+        return (await apiRequest("PATCH", `/api/super-admin/addons/${payload.id}`, payload)).json();
       }
-      return (await apiRequest("POST", "/api/super-admin/addons", data)).json();
+      return (await apiRequest("POST", "/api/super-admin/addons", payload)).json();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/super-admin/addons"] });
@@ -254,6 +212,15 @@ export default function SuperAdminPage() {
   });
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+  // オプションの内部key。名前を英数字に変換し、日本語等で空になる場合は自動採番。
+  const genAddonKey = (name?: string) => {
+    const base = (name ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return base || `opt-${Date.now().toString(36)}`;
+  };
+
   const openEmailDialog = async (clinic: ClinicSummary) => {
     setResendKey(""); setShowResendKey(false);
     setEmailDialog({ clinicId: clinic.id, clinicName: clinic.name });
@@ -263,27 +230,19 @@ export default function SuperAdminPage() {
     } catch (_) {}
   };
 
-  const openPlanDialog = (plan?: PlanDefinition) => {
-    const p = plan ?? emptyPlan();
-    setPlanDialog(p);
-    setFeaturesText((p.features ?? []).join("\n"));
-  };
-
   const copyUrl = (slug: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/book/${slug}`);
     toast({ title: "URLをコピーしました" });
   };
 
-  // ─── Plan options from DB (+ fallback to fixed list) ─────────────────────────
-  const planOptions = planDefs.length > 0
-    ? planDefs.filter(p => p.isActive)
-    : [
-        { key: "free", name: "フリー" },
-        { key: "starter", name: "スターター" },
-        { key: "pro", name: "プロ" },
-        { key: "enterprise", name: "エンタープライズ" },
-        { key: "partner", name: "パートナー（初期）" },
-      ];
+  // ─── Plan options（server/plans.ts で確定している契約コース） ─────────────────
+  const planOptions = [
+    { key: "free", name: "フリー" },
+    { key: "standard", name: "スタンダード" },
+    { key: "pro", name: "プロ" },
+    { key: "enterprise", name: "エンタープライズ" },
+    { key: "partner", name: "パートナー（初期）" },
+  ];
 
   // ─── Auth guards ──────────────────────────────────────────────────────────────
   if (authLoading) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -293,26 +252,37 @@ export default function SuperAdminPage() {
   const activeCount = clinics?.filter(c => c.isActive).length ?? 0;
   const totalAppts = clinics?.reduce((s, c) => s + c.appointmentCount, 0) ?? 0;
 
+  // 医院名・住所・予約URL(slug)で絞り込み
+  const search = clinicSearch.trim().toLowerCase();
+  const filteredClinics = (clinics ?? []).filter((c) => {
+    if (!search) return true;
+    return (
+      c.name.toLowerCase().includes(search) ||
+      (c.address ?? "").toLowerCase().includes(search) ||
+      (c.slug ?? "").toLowerCase().includes(search)
+    );
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 shrink-0 bg-blue-600 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-gray-900">Arche</h1>
-              <p className="text-xs text-gray-500">スーパー管理者ダッシュボード</p>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight truncate">Arche Console</h1>
+              <p className="text-xs text-gray-500 truncate">運営ダッシュボード</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries()} data-testid="button-refresh">
               <RefreshCw className="w-4 h-4" />
             </Button>
             <Button variant="outline" size="sm" asChild data-testid="button-add-clinic">
-              <Link href="/signup"><Plus className="w-4 h-4 mr-1" />新規医院</Link>
+              <Link href="/signup"><Plus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">新規医院</span></Link>
             </Button>
             <Button
               variant="ghost"
@@ -322,46 +292,46 @@ export default function SuperAdminPage() {
               data-testid="button-logout"
             >
               {logoutMutation.isPending
-                ? <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                : <LogOut className="w-4 h-4 mr-1" />}
-              ログアウト
+                ? <Loader2 className="w-4 h-4 sm:mr-1 animate-spin" />
+                : <LogOut className="w-4 h-4 sm:mr-1" />}
+              <span className="hidden sm:inline">ログアウト</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">総医院数</p><p className="text-3xl font-bold" data-testid="stat-total-clinics">{clinics?.length ?? 0}</p></div>
-                <Building2 className="w-8 h-8 text-blue-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">総医院数</p><p className="text-2xl sm:text-3xl font-bold" data-testid="stat-total-clinics">{clinics?.length ?? 0}</p></div>
+                <Building2 className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-blue-400" />
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">稼働中</p><p className="text-3xl font-bold text-green-600" data-testid="stat-active-clinics">{activeCount}</p></div>
-                <Users className="w-8 h-8 text-green-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">稼働中</p><p className="text-2xl sm:text-3xl font-bold text-green-600" data-testid="stat-active-clinics">{activeCount}</p></div>
+                <Users className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-green-400" />
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">プラン数</p><p className="text-3xl font-bold text-purple-600">{planDefs.length}</p></div>
-                <CreditCard className="w-8 h-8 text-purple-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">オプション数</p><p className="text-2xl sm:text-3xl font-bold text-purple-600">{addonDefs.length}</p></div>
+                <Puzzle className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-purple-400" />
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">総予約数</p><p className="text-3xl font-bold" data-testid="stat-total-appointments">{totalAppts}</p></div>
-                <Calendar className="w-8 h-8 text-orange-400" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0"><p className="text-xs sm:text-sm text-gray-500 truncate">総予約数</p><p className="text-2xl sm:text-3xl font-bold" data-testid="stat-total-appointments">{totalAppts}</p></div>
+                <Calendar className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 text-orange-400" />
               </div>
             </CardContent>
           </Card>
@@ -369,28 +339,73 @@ export default function SuperAdminPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="clinics">
-          <TabsList className="mb-4">
-            <TabsTrigger value="clinics" data-testid="tab-clinics"><Building2 className="w-4 h-4 mr-1.5" />医院一覧</TabsTrigger>
-            <TabsTrigger value="plans" data-testid="tab-plans"><CreditCard className="w-4 h-4 mr-1.5" />プラン管理</TabsTrigger>
-            <TabsTrigger value="addons" data-testid="tab-addons"><Puzzle className="w-4 h-4 mr-1.5" />オプション管理</TabsTrigger>
+          <TabsList className="mb-4 grid grid-cols-2 w-full sm:inline-flex sm:w-auto">
+            <TabsTrigger value="clinics" data-testid="tab-clinics"><Building2 className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />医院<span className="hidden sm:inline">一覧</span></TabsTrigger>
+            <TabsTrigger value="addons" data-testid="tab-addons"><Puzzle className="w-4 h-4 mr-1 sm:mr-1.5 shrink-0" />オプション<span className="hidden sm:inline">管理</span></TabsTrigger>
           </TabsList>
 
           {/* ── 医院一覧 ── */}
           <TabsContent value="clinics">
             <Card>
-              <CardHeader><CardTitle>医院一覧</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <CardTitle className="shrink-0">
+                    医院一覧
+                    {!!clinics?.length && (
+                      <span className="ml-2 text-sm font-normal text-gray-400">
+                        {search ? `${filteredClinics.length} / ${clinics.length}件` : `${clinics.length}件`}
+                      </span>
+                    )}
+                  </CardTitle>
+                  {!!clinics?.length && (
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      <Input
+                        placeholder="医院名で検索..."
+                        value={clinicSearch}
+                        onChange={(e) => setClinicSearch(e.target.value)}
+                        className="pl-8 h-9"
+                        data-testid="input-clinic-search"
+                      />
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                        <div className="p-4 pb-3 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-5 w-16 rounded-full" />
+                            <Skeleton className="h-6 w-20 rounded-full" />
+                          </div>
+                          <Skeleton className="h-5 w-40" />
+                          <Skeleton className="h-3 w-32" />
+                          <Skeleton className="h-9 w-full rounded-lg" />
+                        </div>
+                        <div className="border-t bg-gray-50 px-4 py-2.5">
+                          <Skeleton className="h-9 w-full rounded-md" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : !clinics?.length ? (
                   <div className="text-center py-12 text-gray-500">
                     <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p>医院が登録されていません</p>
+                    <p className="text-sm">医院が登録されていません</p>
                     <Button className="mt-4" asChild><Link href="/signup">最初の医院を登録する</Link></Button>
+                  </div>
+                ) : !filteredClinics.length ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <Search className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                    <p className="text-sm">「{clinicSearch}」に一致する医院がありません</p>
+                    <Button variant="outline" className="mt-4" onClick={() => setClinicSearch("")}>検索をクリア</Button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {clinics.map((clinic) => {
+                    {filteredClinics.map((clinic) => {
                       const bookingUrl = clinic.slug ? `${window.location.origin}/book/${clinic.slug}` : null;
                       const currentPlan = clinic.planType ?? "free";
                       const displayPlan = pendingPlans[clinic.id] ?? currentPlan;
@@ -435,16 +450,30 @@ export default function SuperAdminPage() {
                               <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{clinic.appointmentCount}件</span>
                             </div>
 
-                            {/* 予約URL */}
+                            {/* 予約画面URL */}
                             {bookingUrl && (
-                              <div className="flex items-center gap-1.5 mt-2">
-                                <p className="text-xs text-gray-400 font-mono truncate flex-1" data-testid={`text-booking-url-${clinic.id}`}>/book/{clinic.slug}</p>
-                                <button onClick={() => copyUrl(clinic.slug!)} className="text-gray-400 hover:text-gray-600 transition-colors" data-testid={`button-copy-url-${clinic.id}`}>
-                                  <Copy className="w-3.5 h-3.5" />
-                                </button>
-                                <a href={bookingUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 transition-colors" data-testid={`button-open-booking-${clinic.id}`}>
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
+                              <div className="mt-2.5">
+                                <p className="text-[11px] text-gray-400 mb-1 flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />予約画面URL
+                                </p>
+                                <div className="flex items-center gap-1.5 bg-gray-50 border rounded-lg px-2.5 py-1.5">
+                                  <a
+                                    href={bookingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:underline font-mono truncate flex-1"
+                                    data-testid={`text-booking-url-${clinic.id}`}
+                                    title={bookingUrl}
+                                  >
+                                    {bookingUrl}
+                                  </a>
+                                  <button onClick={() => copyUrl(clinic.slug!)} className="text-gray-400 hover:text-gray-700 transition-colors shrink-0" title="URLをコピー" data-testid={`button-copy-url-${clinic.id}`}>
+                                    <Copy className="w-3.5 h-3.5" />
+                                  </button>
+                                  <a href={bookingUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 transition-colors shrink-0" title="予約画面を開く" data-testid={`button-open-booking-${clinic.id}`}>
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                </div>
                               </div>
                             )}
 
@@ -507,11 +536,11 @@ export default function SuperAdminPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="bg-white"
+                                className="bg-white shrink-0"
                                 onClick={() => setAddonDialog({ clinicId: clinic.id, clinicName: clinic.name })}
                                 data-testid={`button-addons-${clinic.id}`}
                               >
-                                <PackagePlus className="w-4 h-4 mr-1" />オプション
+                                <PackagePlus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">オプション</span>
                               </Button>
 
                               <DropdownMenu>
@@ -558,81 +587,31 @@ export default function SuperAdminPage() {
             </Card>
           </TabsContent>
 
-          {/* ── プラン管理 ── */}
-          <TabsContent value="plans">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>プラン定義</CardTitle>
-                <Button size="sm" onClick={() => openPlanDialog()} data-testid="button-add-plan">
-                  <Plus className="w-4 h-4 mr-1" />プランを追加
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {plansLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
-                ) : !planDefs.length ? (
-                  <div className="text-center py-10 text-gray-400">
-                    <CreditCard className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">プランがまだ登録されていません</p>
-                    <Button className="mt-3" size="sm" onClick={() => openPlanDialog()}>最初のプランを追加</Button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-gray-500">
-                          <th className="pb-2 pr-3 font-medium">プラン名</th>
-                          <th className="pb-2 pr-3 font-medium">key</th>
-                          <th className="pb-2 pr-3 font-medium">月額</th>
-                          <th className="pb-2 pr-3 font-medium">予約上限</th>
-                          <th className="pb-2 pr-3 font-medium">スタッフ上限</th>
-                          <th className="pb-2 pr-3 font-medium">順序</th>
-                          <th className="pb-2 pr-3 font-medium">状態</th>
-                          <th className="pb-2 font-medium"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {planDefs.map((plan) => (
-                          <tr key={plan.id} className="border-b last:border-0 hover:bg-gray-50" data-testid={`row-plan-${plan.id}`}>
-                            <td className="py-2.5 pr-3 font-medium">{plan.name}</td>
-                            <td className="py-2.5 pr-3 font-mono text-xs text-gray-500">{plan.key}</td>
-                            <td className="py-2.5 pr-3">¥{plan.price.toLocaleString()}</td>
-                            <td className="py-2.5 pr-3">{plan.maxAppointmentsPerMonth ?? "無制限"}</td>
-                            <td className="py-2.5 pr-3">{plan.maxStaff ?? "無制限"}</td>
-                            <td className="py-2.5 pr-3">{plan.sortOrder ?? 0}</td>
-                            <td className="py-2.5 pr-3">
-                              {plan.isActive
-                                ? <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />有効</span>
-                                : <span className="flex items-center gap-1 text-gray-400"><XCircle className="w-3.5 h-3.5" />無効</span>}
-                            </td>
-                            <td className="py-2.5">
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => openPlanDialog(plan)} data-testid={`button-edit-plan-${plan.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => { if (confirm(`プラン「${plan.name}」を削除しますか？`)) deletePlanMutation.mutate(plan.id); }} data-testid={`button-delete-plan-${plan.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* ── オプション管理 ── */}
           <TabsContent value="addons">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>オプション定義</CardTitle>
-                <Button size="sm" onClick={() => setAddonDefDialog(emptyAddon())} data-testid="button-add-addon">
-                  <Plus className="w-4 h-4 mr-1" />オプションを追加
-                </Button>
+              <CardHeader>
+                <div className="flex flex-row items-center justify-between gap-2">
+                  <CardTitle>オプション一覧</CardTitle>
+                  <Button size="sm" onClick={() => setAddonDefDialog(emptyAddon())} data-testid="button-add-addon">
+                    <Plus className="w-4 h-4 sm:mr-1" /><span className="hidden sm:inline">オプションを追加</span>
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500 mt-1 flex items-start gap-1.5">
+                  <Info className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  ここで作ったオプションを、各医院の「オプション設定」からON/OFFで提供できます。
+                </p>
               </CardHeader>
               <CardContent>
                 {addonsLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="border rounded-xl bg-white p-4 shadow-sm space-y-2">
+                        <Skeleton className="h-5 w-32" />
+                        <Skeleton className="h-3 w-full" />
+                      </div>
+                    ))}
+                  </div>
                 ) : !addonDefs.length ? (
                   <div className="text-center py-10 text-gray-400">
                     <Puzzle className="w-10 h-10 mx-auto mb-2 text-gray-300" />
@@ -640,42 +619,30 @@ export default function SuperAdminPage() {
                     <Button className="mt-3" size="sm" onClick={() => setAddonDefDialog(emptyAddon())}>最初のオプションを追加</Button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-gray-500">
-                          <th className="pb-2 pr-3 font-medium">オプション名</th>
-                          <th className="pb-2 pr-3 font-medium">key</th>
-                          <th className="pb-2 pr-3 font-medium">月額</th>
-                          <th className="pb-2 pr-3 font-medium">説明</th>
-                          <th className="pb-2 pr-3 font-medium">順序</th>
-                          <th className="pb-2 pr-3 font-medium">状態</th>
-                          <th className="pb-2 font-medium"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {addonDefs.map((addon) => (
-                          <tr key={addon.id} className="border-b last:border-0 hover:bg-gray-50" data-testid={`row-addon-${addon.id}`}>
-                            <td className="py-2.5 pr-3 font-medium">{addon.name}</td>
-                            <td className="py-2.5 pr-3 font-mono text-xs text-gray-500">{addon.key}</td>
-                            <td className="py-2.5 pr-3">¥{addon.price.toLocaleString()}</td>
-                            <td className="py-2.5 pr-3 max-w-xs truncate text-gray-500">{addon.description ?? "—"}</td>
-                            <td className="py-2.5 pr-3">{addon.sortOrder ?? 0}</td>
-                            <td className="py-2.5 pr-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {addonDefs.map((addon) => (
+                      <div
+                        key={addon.id}
+                        className="border rounded-xl bg-white p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col"
+                        data-testid={`row-addon-${addon.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-bold text-gray-900 leading-tight">{addon.name}</h3>
                               {addon.isActive
-                                ? <span className="flex items-center gap-1 text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />有効</span>
-                                : <span className="flex items-center gap-1 text-gray-400"><XCircle className="w-3.5 h-3.5" />無効</span>}
-                            </td>
-                            <td className="py-2.5">
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => setAddonDefDialog(addon)} data-testid={`button-edit-addon-${addon.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => { if (confirm(`オプション「${addon.name}」を削除しますか？`)) deleteAddonDefMutation.mutate(addon.id); }} data-testid={`button-delete-addon-${addon.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                ? <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full"><CheckCircle2 className="w-3 h-3" />提供中</span>
+                                : <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full"><XCircle className="w-3 h-3" />停止中</span>}
+                            </div>
+                            <p className="text-sm text-gray-500 mt-1">{addon.description || "説明なし"}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setAddonDefDialog(addon)} data-testid={`button-edit-addon-${addon.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-700" onClick={() => { if (confirm(`オプション「${addon.name}」を削除しますか？`)) deleteAddonDefMutation.mutate(addon.id); }} data-testid={`button-delete-addon-${addon.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -803,7 +770,7 @@ export default function SuperAdminPage() {
                   <div key={addon.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`addon-row-${addon.key}`}>
                     <div>
                       <p className="font-medium text-sm">{addon.name}</p>
-                      <p className="text-xs text-gray-500">¥{addon.price.toLocaleString()}/月 {addon.description ? `・${addon.description}` : ""}</p>
+                      {addon.description && <p className="text-xs text-gray-500">{addon.description}</p>}
                     </div>
                     <Switch
                       checked={isEnabled}
@@ -822,63 +789,6 @@ export default function SuperAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* プラン作成・編集 */}
-      <Dialog open={!!planDialog} onOpenChange={(o) => { if (!o) setPlanDialog(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{planDialog?.id ? "プランを編集" : "プランを追加"}</DialogTitle>
-          </DialogHeader>
-          {planDialog && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">プラン名 <span className="text-red-500">*</span></Label>
-                  <Input value={planDialog.name ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, name: e.target.value }))} placeholder="スタンダード" data-testid="input-plan-name" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">key（英数字・ハイフン） <span className="text-red-500">*</span></Label>
-                  <Input value={planDialog.key ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, key: e.target.value }))} placeholder="standard" data-testid="input-plan-key" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">月額（円）</Label>
-                  <Input type="number" value={planDialog.price ?? 0} onChange={e => setPlanDialog(p => ({ ...p!, price: Number(e.target.value) }))} data-testid="input-plan-price" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">予約上限/月（空=無制限）</Label>
-                  <Input type="number" value={planDialog.maxAppointmentsPerMonth ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, maxAppointmentsPerMonth: e.target.value ? Number(e.target.value) : null }))} placeholder="空=無制限" data-testid="input-plan-max-appointments" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">スタッフ上限（空=無制限）</Label>
-                  <Input type="number" value={planDialog.maxStaff ?? ""} onChange={e => setPlanDialog(p => ({ ...p!, maxStaff: e.target.value ? Number(e.target.value) : null }))} placeholder="空=無制限" data-testid="input-plan-max-staff" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">表示順序</Label>
-                  <Input type="number" value={planDialog.sortOrder ?? 0} onChange={e => setPlanDialog(p => ({ ...p!, sortOrder: Number(e.target.value) }))} data-testid="input-plan-sort-order" />
-                </div>
-                <div className="flex items-center gap-2 mt-5">
-                  <Switch checked={planDialog.isActive ?? true} onCheckedChange={v => setPlanDialog(p => ({ ...p!, isActive: v }))} data-testid="switch-plan-active" />
-                  <Label className="text-xs">有効</Label>
-                </div>
-              </div>
-              <div>
-                <Label className="mb-1 block text-xs">機能一覧（1行1項目）</Label>
-                <Textarea rows={4} value={featuresText} onChange={e => setFeaturesText(e.target.value)} placeholder={"メールリマインダー\nLINE通知\n問診票機能"} data-testid="textarea-plan-features" />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setPlanDialog(null)}>キャンセル</Button>
-                <Button onClick={() => savePlanMutation.mutate(planDialog)} disabled={savePlanMutation.isPending || !planDialog.key || !planDialog.name} data-testid="button-save-plan">
-                  {savePlanMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "保存"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* オプション作成・編集 */}
       <Dialog open={!!addonDefDialog} onOpenChange={(o) => { if (!o) setAddonDefDialog(null); }}>
         <DialogContent className="max-w-md">
@@ -887,25 +797,9 @@ export default function SuperAdminPage() {
           </DialogHeader>
           {addonDefDialog && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">オプション名 <span className="text-red-500">*</span></Label>
-                  <Input value={addonDefDialog.name ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, name: e.target.value }))} placeholder="SMS通知パック" data-testid="input-addon-name" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">key（英数字・ハイフン） <span className="text-red-500">*</span></Label>
-                  <Input value={addonDefDialog.key ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, key: e.target.value }))} placeholder="sms_pack" data-testid="input-addon-key" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1 block text-xs">月額（円）</Label>
-                  <Input type="number" value={addonDefDialog.price ?? 0} onChange={e => setAddonDefDialog(p => ({ ...p!, price: Number(e.target.value) }))} data-testid="input-addon-price" />
-                </div>
-                <div>
-                  <Label className="mb-1 block text-xs">表示順序</Label>
-                  <Input type="number" value={addonDefDialog.sortOrder ?? 0} onChange={e => setAddonDefDialog(p => ({ ...p!, sortOrder: Number(e.target.value) }))} data-testid="input-addon-sort-order" />
-                </div>
+              <div>
+                <Label className="mb-1 block text-xs">オプション名 <span className="text-red-500">*</span></Label>
+                <Input value={addonDefDialog.name ?? ""} onChange={e => setAddonDefDialog(p => ({ ...p!, name: e.target.value }))} placeholder="SMS通知パック" data-testid="input-addon-name" />
               </div>
               <div>
                 <Label className="mb-1 block text-xs">説明</Label>
@@ -917,7 +811,7 @@ export default function SuperAdminPage() {
               </div>
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setAddonDefDialog(null)}>キャンセル</Button>
-                <Button onClick={() => saveAddonDefMutation.mutate(addonDefDialog)} disabled={saveAddonDefMutation.isPending || !addonDefDialog.key || !addonDefDialog.name} data-testid="button-save-addon">
+                <Button onClick={() => saveAddonDefMutation.mutate(addonDefDialog)} disabled={saveAddonDefMutation.isPending || !addonDefDialog.name} data-testid="button-save-addon">
                   {saveAddonDefMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "保存"}
                 </Button>
               </div>

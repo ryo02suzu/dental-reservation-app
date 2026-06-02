@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { createPool } from "./db-config";
 import { eq, and, gte, lte, desc, asc, sql, ilike, or } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type {
@@ -25,7 +25,7 @@ import type {
   Attendance, InsertAttendance,
 } from "@shared/schema";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createPool();
 const db = drizzle(pool, { schema });
 
 export const DEFAULT_CLINIC_ID = "default-clinic-001";
@@ -57,7 +57,7 @@ export interface IStorage {
   deletePatient(id: string): Promise<void>;
   // Shifts
   getShifts(filters: { clinicId: string; staffId?: string; month?: string; startDate?: string; endDate?: string }): Promise<(Shift & { staff?: Staff })[]>;
-  createShift(data: InsertShift): Promise<Shift>;
+  createShift(data: InsertShift & { reviewedAt?: Date; reviewedBy?: string }): Promise<Shift>;
   updateShift(id: string, data: Partial<InsertShift & { reviewedAt?: Date; reviewedBy?: string }>): Promise<Shift | undefined>;
   getShiftById(id: string): Promise<Shift | undefined>;
   deleteShift(id: string): Promise<void>;
@@ -409,7 +409,7 @@ class PgStorage implements IStorage {
     return rows.map(r => ({ ...r.shifts, staff: r.staff ?? undefined }));
   }
 
-  async createShift(data: InsertShift): Promise<Shift> {
+  async createShift(data: InsertShift & { reviewedAt?: Date; reviewedBy?: string }): Promise<Shift> {
     const result = await db.insert(schema.shifts).values(data).returning();
     return result[0];
   }
@@ -1006,6 +1006,159 @@ class PgStorage implements IStorage {
     const staffRows = await db.select().from(schema.staff).where(eq(schema.staff.clinicId, clinicId));
     const staffMap = Object.fromEntries(staffRows.map(s => [s.id, s]));
     return rows.map(r => ({ ...r, staff: staffMap[r.staffId] }));
+  }
+
+  // ─── 機能1: LINEフォローアップ ──────────────────────────────────────────────
+  async getFollowUpTemplates(clinicId: string): Promise<schema.FollowUpTemplate[]> {
+    return db.select().from(schema.followUpTemplates)
+      .where(eq(schema.followUpTemplates.clinicId, clinicId))
+      .orderBy(asc(schema.followUpTemplates.sortOrder), asc(schema.followUpTemplates.createdAt));
+  }
+
+  async getFollowUpTemplateForService(clinicId: string, serviceId: string | null): Promise<schema.FollowUpTemplate | undefined> {
+    const all = await this.getFollowUpTemplates(clinicId);
+    // サービス専用テンプレートを優先、なければ既定（serviceId=null）
+    return all.find(t => t.enabled && t.serviceId === serviceId)
+      ?? all.find(t => t.enabled && !t.serviceId);
+  }
+
+  async createFollowUpTemplate(data: schema.InsertFollowUpTemplate): Promise<schema.FollowUpTemplate> {
+    const [row] = await db.insert(schema.followUpTemplates).values(data).returning();
+    return row;
+  }
+
+  async updateFollowUpTemplate(id: string, data: Partial<schema.InsertFollowUpTemplate>): Promise<schema.FollowUpTemplate | undefined> {
+    const [row] = await db.update(schema.followUpTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.followUpTemplates.id, id)).returning();
+    return row;
+  }
+
+  async deleteFollowUpTemplate(id: string): Promise<void> {
+    await db.delete(schema.followUpTemplates).where(eq(schema.followUpTemplates.id, id));
+  }
+
+  async createScheduledMessage(data: schema.InsertScheduledMessage): Promise<schema.ScheduledMessage> {
+    const [row] = await db.insert(schema.scheduledMessages).values(data).returning();
+    return row;
+  }
+
+  async getScheduledMessages(clinicId: string, status?: string): Promise<schema.ScheduledMessage[]> {
+    const conds = [eq(schema.scheduledMessages.clinicId, clinicId)];
+    if (status) conds.push(eq(schema.scheduledMessages.status, status));
+    return db.select().from(schema.scheduledMessages)
+      .where(and(...conds))
+      .orderBy(desc(schema.scheduledMessages.scheduledFor));
+  }
+
+  // 送信時刻が来た pending メッセージ（全医院分）
+  async getDueScheduledMessages(now: Date): Promise<schema.ScheduledMessage[]> {
+    return db.select().from(schema.scheduledMessages)
+      .where(and(
+        eq(schema.scheduledMessages.status, "pending"),
+        lte(schema.scheduledMessages.scheduledFor, now),
+      ))
+      .orderBy(asc(schema.scheduledMessages.scheduledFor))
+      .limit(100);
+  }
+
+  async updateScheduledMessage(id: string, data: Partial<{ status: string; sentAt: Date | null; error: string | null }>): Promise<void> {
+    await db.update(schema.scheduledMessages).set(data).where(eq(schema.scheduledMessages.id, id));
+  }
+
+  async cancelPendingMessagesForAppointment(appointmentId: string): Promise<void> {
+    await db.update(schema.scheduledMessages)
+      .set({ status: "cancelled" })
+      .where(and(
+        eq(schema.scheduledMessages.appointmentId, appointmentId),
+        eq(schema.scheduledMessages.status, "pending"),
+      ));
+  }
+
+  // ─── 機能2: 口コミ誘導 ──────────────────────────────────────────────────────
+  async getReviewSettings(clinicId: string): Promise<schema.ReviewSettings | undefined> {
+    const [row] = await db.select().from(schema.reviewSettings)
+      .where(eq(schema.reviewSettings.clinicId, clinicId));
+    return row;
+  }
+
+  async upsertReviewSettings(clinicId: string, data: Partial<schema.InsertReviewSettings>): Promise<schema.ReviewSettings> {
+    const existing = await this.getReviewSettings(clinicId);
+    if (existing) {
+      const [row] = await db.update(schema.reviewSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(schema.reviewSettings.clinicId, clinicId)).returning();
+      return row;
+    }
+    const [row] = await db.insert(schema.reviewSettings)
+      .values({ ...data, clinicId }).returning();
+    return row;
+  }
+
+  async createReviewResponse(data: schema.InsertReviewResponse): Promise<schema.ReviewResponse> {
+    const [row] = await db.insert(schema.reviewResponses).values(data).returning();
+    return row;
+  }
+
+  async getReviewResponses(clinicId: string): Promise<schema.ReviewResponse[]> {
+    return db.select().from(schema.reviewResponses)
+      .where(eq(schema.reviewResponses.clinicId, clinicId))
+      .orderBy(desc(schema.reviewResponses.createdAt));
+  }
+
+  async markReviewResponseRead(id: string): Promise<void> {
+    await db.update(schema.reviewResponses).set({ isRead: true }).where(eq(schema.reviewResponses.id, id));
+  }
+
+  // ─── 機能3: 自費カウンセリング＆同意書 ──────────────────────────────────────
+  async getTreatmentPlans(clinicId: string, onlyActive = false): Promise<schema.TreatmentPlan[]> {
+    const conds = [eq(schema.treatmentPlans.clinicId, clinicId)];
+    if (onlyActive) conds.push(eq(schema.treatmentPlans.isActive, true));
+    return db.select().from(schema.treatmentPlans)
+      .where(and(...conds))
+      .orderBy(asc(schema.treatmentPlans.sortOrder), asc(schema.treatmentPlans.createdAt));
+  }
+
+  async createTreatmentPlan(data: schema.InsertTreatmentPlan): Promise<schema.TreatmentPlan> {
+    const [row] = await db.insert(schema.treatmentPlans).values(data).returning();
+    return row;
+  }
+
+  async updateTreatmentPlan(id: string, data: Partial<schema.InsertTreatmentPlan>): Promise<schema.TreatmentPlan | undefined> {
+    const [row] = await db.update(schema.treatmentPlans)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.treatmentPlans.id, id)).returning();
+    return row;
+  }
+
+  async deleteTreatmentPlan(id: string): Promise<void> {
+    await db.delete(schema.treatmentPlans).where(eq(schema.treatmentPlans.id, id));
+  }
+
+  async createConsentForm(data: schema.InsertConsentForm): Promise<schema.ConsentForm> {
+    const [row] = await db.insert(schema.consentForms).values(data).returning();
+    return row;
+  }
+
+  async updateConsentForm(id: string, data: Partial<schema.InsertConsentForm>): Promise<schema.ConsentForm | undefined> {
+    const [row] = await db.update(schema.consentForms)
+      .set(data)
+      .where(eq(schema.consentForms.id, id)).returning();
+    return row;
+  }
+
+  async getConsentForms(clinicId: string, patientId?: string): Promise<schema.ConsentForm[]> {
+    const conds = [eq(schema.consentForms.clinicId, clinicId)];
+    if (patientId) conds.push(eq(schema.consentForms.patientId, patientId));
+    return db.select().from(schema.consentForms)
+      .where(and(...conds))
+      .orderBy(desc(schema.consentForms.createdAt));
+  }
+
+  async getConsentFormById(id: string): Promise<schema.ConsentForm | undefined> {
+    const [row] = await db.select().from(schema.consentForms)
+      .where(eq(schema.consentForms.id, id));
+    return row;
   }
 }
 

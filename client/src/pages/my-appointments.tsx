@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -45,6 +46,7 @@ interface Appointment {
   endTime: string;
   treatmentType: string;
   status: string;
+  confirmationStatus?: string;
   notes?: string;
 }
 
@@ -125,6 +127,7 @@ export default function MyAppointmentsPage() {
   const [authTab, setAuthTab] = useState<AuthTab>("login");
   const [authPhone, setAuthPhone] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [authName, setAuthName] = useState("");
   const [authNameKana, setAuthNameKana] = useState("");
   const kanaReadingRef = useRef<string>("");
@@ -226,7 +229,7 @@ export default function MyAppointmentsPage() {
     mutationFn: async () => {
       const res = await fetch("/api/patient/login", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ phone: authPhone, password: authPassword }),
+        body: JSON.stringify({ phone: authPhone, password: authPassword, rememberMe }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message); }
       return res.json();
@@ -289,6 +292,16 @@ export default function MyAppointmentsPage() {
     onError: (err: Error) => { toast({ title: err.message, variant: "destructive" }); setCancelTarget(null); setCancelReason(""); },
   });
 
+  const confirmMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/patient/confirm/${id}`, { method: "POST", credentials: "include" });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || "確認に失敗しました"); }
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "来院を確認しました" }); refetch(); },
+    onError: (err: Error) => { toast({ title: err.message, variant: "destructive" }); },
+  });
+
   const rescheduleMutation = useMutation({
     mutationFn: async ({ id, date, time }: { id: string; date: string; time: string }) => {
       const res = await fetch(`/api/patient/reschedule/${id}`, {
@@ -348,24 +361,39 @@ export default function MyAppointmentsPage() {
     const status = STATUS_MAP[appt.status] ?? { label: appt.status, color: "bg-gray-100 text-gray-700" };
     const canModify = appt.status !== "cancelled" && appt.status !== "completed";
     return (
-      <div className="border border-gray-200 rounded-xl p-4 bg-white" data-testid={`card-appointment-${appt.id}`}>
-        <div className="flex justify-between items-start mb-3">
-          <span className="font-medium text-sm text-gray-800">{appt.treatmentType}</span>
-          <Badge className={cn("text-xs font-normal", status.color)}>{status.label}</Badge>
+      <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm transition-shadow hover:shadow-md" data-testid={`card-appointment-${appt.id}`}>
+        <div className="flex justify-between items-start gap-3 mb-4">
+          <span className="font-semibold text-base text-gray-800 leading-snug">{appt.treatmentType}</span>
+          <Badge className={cn("text-xs font-medium rounded-full px-2.5 py-0.5 shrink-0", status.color)}>{status.label}</Badge>
         </div>
-        <div className="space-y-1.5 text-sm text-gray-500 mb-3">
-          <div className="flex items-center gap-2"><Calendar className="w-3.5 h-3.5 shrink-0" /><span>{formatDateJP(appt.date)}</span></div>
-          <div className="flex items-center gap-2"><Clock className="w-3.5 h-3.5 shrink-0" /><span>{appt.startTime?.slice(0, 5)} 〜 {appt.endTime?.slice(0, 5)}</span></div>
+        <div className="space-y-2 text-sm text-gray-600 mb-4">
+          <div className="flex items-center gap-2.5"><Calendar className="w-4 h-4 shrink-0 text-gray-400" /><span>{formatDateJP(appt.date)}</span></div>
+          <div className="flex items-center gap-2.5"><Clock className="w-4 h-4 shrink-0 text-gray-400" /><span>{appt.startTime?.slice(0, 5)} 〜 {appt.endTime?.slice(0, 5)}</span></div>
         </div>
-        {appt.notes && <p className="text-xs text-gray-400 mb-3 bg-gray-50 rounded-lg p-2">{appt.notes}</p>}
+        {appt.notes && <p className="text-xs text-gray-500 mb-4 bg-gray-50 rounded-xl p-3 leading-relaxed">{appt.notes}</p>}
+        {canModify && session?.loggedIn && appt.confirmationStatus !== "confirmed" && (
+          <button
+            onClick={() => confirmMutation.mutate(appt.id)}
+            disabled={confirmMutation.isPending}
+            className="w-full mb-2.5 h-11 bg-green-600 hover:bg-green-700 active:bg-green-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
+            data-testid={`button-confirm-${appt.id}`}
+          >
+            <Check className="w-4 h-4" /> {confirmMutation.isPending ? "確認中..." : "来院を確認する"}
+          </button>
+        )}
+        {canModify && session?.loggedIn && appt.confirmationStatus === "confirmed" && (
+          <div className="mb-2.5 flex items-center justify-center gap-1.5 h-9 rounded-xl bg-green-50 text-green-700 text-sm font-medium">
+            <Check className="w-4 h-4" /> 来院確認済み
+          </div>
+        )}
         {canModify && (
           <div className="flex gap-2">
             {session?.loggedIn && (
-              <button onClick={() => openReschedule(appt)} className="flex-1 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors flex items-center justify-center gap-1" data-testid={`button-reschedule-${appt.id}`}>
-                <CalendarClock className="w-3.5 h-3.5" /> 日時を変更
+              <button onClick={() => openReschedule(appt)} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors flex items-center justify-center gap-1.5" data-testid={`button-reschedule-${appt.id}`}>
+                <CalendarClock className="w-4 h-4" /> 日時を変更
               </button>
             )}
-            <button onClick={() => { setCancelTarget(appt.id); setCancelReason(""); }} className="flex-1 py-2 border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50 transition-colors" data-testid={`button-cancel-${appt.id}`}>
+            <button onClick={() => { setCancelTarget(appt.id); setCancelReason(""); }} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors" data-testid={`button-cancel-${appt.id}`}>
               キャンセル
             </button>
           </div>
@@ -436,21 +464,10 @@ export default function MyAppointmentsPage() {
             <p className="text-sm text-gray-500 mt-1.5">予約の確認・変更ができます</p>
           </div>
 
-          <a
-            href="/api/demo/patient"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-medium mb-6 transition-opacity hover:opacity-85 border"
-            style={{ backgroundColor: `${BEIGE}18`, borderColor: `${BEIGE}60`, color: BEIGE }}
-            data-testid="button-demo-patient"
-          >
-            <span className="text-base">🦷</span>
-            デモ患者として体験する
-          </a>
-
           <div className="flex border-b border-gray-200 mb-6">
             {([
               { key: "login",   label: "ログイン",   icon: <LogIn className="w-3.5 h-3.5" /> },
               { key: "register", label: "新規登録",  icon: <UserPlus className="w-3.5 h-3.5" /> },
-              { key: "lookup",  label: "電話で検索", icon: <Search className="w-3.5 h-3.5" /> },
             ] as { key: AuthTab; label: string; icon: JSX.Element }[]).map(tab => (
               <button
                 key={tab.key}
@@ -465,19 +482,6 @@ export default function MyAppointmentsPage() {
           </div>
 
           <AnimatePresence mode="wait">
-            {authTab === "lookup" && (
-              <motion.div key="lookup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                <p className="text-xs text-gray-500">予約時の電話番号で過去の予約を確認できます</p>
-                <div className="space-y-2">
-                  <Label htmlFor="search-phone" className="text-sm text-gray-700 flex items-center gap-2"><Phone className="w-4 h-4" /> 電話番号</Label>
-                  <Input id="search-phone" type="tel" placeholder="090-1234-5678" value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => e.key === "Enter" && setSearchPhone(phone)} className="border-gray-200" data-testid="input-search-phone" />
-                </div>
-                <button onClick={() => setSearchPhone(phone)} disabled={phone.trim().length < 10} className="w-full py-3 rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-40" style={{ backgroundColor: BEIGE }} data-testid="button-search">
-                  予約を検索する
-                </button>
-              </motion.div>
-            )}
-
             {authTab === "login" && !showReset && (
               <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 <div className="space-y-2">
@@ -488,6 +492,10 @@ export default function MyAppointmentsPage() {
                   <Label htmlFor="login-password" className="text-sm text-gray-700">パスワード</Label>
                   <Input id="login-password" type="password" placeholder="パスワードを入力" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && loginMutation.mutate()} className="border-gray-200" data-testid="input-login-password" />
                 </div>
+                <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer select-none">
+                  <Checkbox checked={rememberMe} onCheckedChange={v => setRememberMe(v === true)} data-testid="checkbox-remember-me" />
+                  ログイン状態を保持する
+                </label>
                 <button className="w-full py-3 rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-40" style={{ backgroundColor: BEIGE }} disabled={!authPhone || !authPassword || loginMutation.isPending} onClick={() => loginMutation.mutate()} data-testid="button-login-submit">
                   {loginMutation.isPending ? "ログイン中..." : "ログイン"}
                 </button>

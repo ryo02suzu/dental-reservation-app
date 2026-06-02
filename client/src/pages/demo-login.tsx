@@ -76,10 +76,10 @@ export default function DemoLoginPage() {
             <div className="inline-flex items-center gap-2 bg-[#C4B5A1]/15 text-[#8a7a6a] text-xs font-semibold px-3 py-1.5 rounded-full mb-4 tracking-wide">
               ログイン不要・即体験
             </div>
-            <h1 className="text-2xl font-black text-[#1a1a2e] mb-2 tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-black text-[#1a1a2e] mb-2 tracking-tight">
               どの画面を体験しますか？
             </h1>
-            <p className="text-sm text-[#1a1a2e]/50">
+            <p className="text-sm text-[#1a1a2e]/50 leading-relaxed">
               デモ用クリニック「デモ歯科クリニック」のデータで実際の操作感を体験できます。
             </p>
           </div>

@@ -66,12 +66,12 @@ export function WaitlistView() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-6 py-4 border-b border-border bg-background">
-        <h1 className="text-2xl font-bold tracking-tight">キャンセル待ち</h1>
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-background shrink-0">
+        <h1 className="text-xl font-bold tracking-tight">キャンセル待ち</h1>
         <p className="text-muted-foreground text-sm mt-0.5">予約の空きを待っている患者一覧</p>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -85,17 +85,17 @@ export function WaitlistView() {
                 {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
             ) : waitlist.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Clock className="h-12 w-12 mb-3 opacity-20" />
-                <p>現在、キャンセル待ちの患者様はいません</p>
+              <div className="text-center py-10 text-muted-foreground">
+                <Clock className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                <p className="text-sm">現在、キャンセル待ちの患者様はいません</p>
               </div>
             ) : (
               <Table data-testid="waitlist-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>登録日</TableHead>
+                    <TableHead className="hidden md:table-cell">登録日</TableHead>
                     <TableHead>患者名</TableHead>
-                    <TableHead>連絡先</TableHead>
+                    <TableHead className="hidden sm:table-cell">連絡先</TableHead>
                     <TableHead>希望日</TableHead>
                     <TableHead>ステータス</TableHead>
                     <TableHead className="text-right">操作</TableHead>
@@ -104,11 +104,11 @@ export function WaitlistView() {
                 <TableBody>
                   {waitlist.map((entry) => (
                     <TableRow key={entry.id}>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
                         {format(new Date(entry.createdAt), "yyyy/MM/dd HH:mm")}
                       </TableCell>
                       <TableCell className="font-medium">{entry.patientName}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <div className="text-sm">
                           <div>{entry.patientPhone}</div>
                           {entry.patientEmail && <div className="text-xs text-muted-foreground">{entry.patientEmail}</div>}
@@ -135,11 +135,12 @@ export function WaitlistView() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex justify-end gap-1.5">
                           {entry.status === "waiting" && (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
+                              className="h-9 active:scale-95"
                               onClick={() => updateStatusMutation.mutate({ id: entry.id, status: "notified" })}
                               title="通知済みにする"
                             >
@@ -147,19 +148,20 @@ export function WaitlistView() {
                             </Button>
                           )}
                           {entry.status !== "booked" && (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
+                              className="h-9 active:scale-95"
                               onClick={() => updateStatusMutation.mutate({ id: entry.id, status: "booked" })}
                               title="予約済みにする"
                             >
                               予約
                             </Button>
                           )}
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            className="text-destructive"
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-9 w-9 text-destructive active:scale-95"
                             onClick={() => { if(confirm("削除しますか？")) deleteMutation.mutate(entry.id); }}
                           >
                             <Trash2 className="h-4 w-4" />

@@ -71,7 +71,7 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
     if (item.addonKey && !isPro && !addonsLoading && !hasAddon(item.addonKey) && (!item.planFeature || isPlanLocked(item.planFeature))) {
       toast({
         title: "このオプションは未契約です",
-        description: `「${item.label}」を使用するにはスーパー管理者に有効化を依頼してください。`,
+        description: `「${item.label}」を使用するには運営に有効化を依頼してください。`,
         variant: "destructive",
       });
       return;
@@ -91,32 +91,46 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
       const addonLocked = !!item.addonKey && !isPro && !addonsLoading && !hasAddon(item.addonKey) && (!item.planFeature || planLocked);
       const isLocked = planLocked || addonLocked;
 
-      // グループが切り替わったらラベルを挿入（collapsed時は非表示）
-      if (!collapsed && item.group && item.group !== lastGroup) {
-        elements.push(
-          <div key={`group-${item.group}`} className="text-[10px] text-muted-foreground uppercase tracking-wider px-2 pt-3 pb-1 select-none">
-            {item.group}
-          </div>
-        );
+      // グループが切り替わったらラベルを挿入（collapsed時は区切り線）
+      if (item.group && item.group !== lastGroup) {
+        if (collapsed) {
+          if (lastGroup !== undefined) {
+            elements.push(<div key={`sep-${item.group}`} className="my-2 mx-2 h-px bg-sidebar-border" />);
+          }
+        } else {
+          elements.push(
+            <div key={`group-${item.group}`} className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.14em] px-3 pt-5 pb-2 select-none first:pt-1">
+              {item.group}
+            </div>
+          );
+        }
       }
       lastGroup = item.group;
 
       const btn = (
-        <Button
+        <button
           key={item.id}
-          variant={isActive ? "default" : "ghost"}
-          className={`w-full transition-all duration-200 ${collapsed ? "justify-center px-0" : "justify-start"} ${isLocked ? "opacity-50" : ""}`}
+          className={`group relative w-full h-11 flex items-center rounded-xl transition-all duration-200 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-primary
+            ${collapsed ? "justify-center px-0" : "px-3"}
+            ${isActive
+              ? "bg-primary/10 text-primary font-semibold"
+              : "text-foreground/80 hover:bg-sidebar-accent hover:text-foreground font-medium"}
+            ${isLocked ? "opacity-50" : ""}`}
           onClick={() => handleNavClick(item)}
           data-testid={`nav-${item.id}`}
         >
-          <Icon className={`w-4 h-4 shrink-0 ${collapsed ? "" : "mr-3"}`} />
+          {/* アクティブインジケーター */}
+          {isActive && !collapsed && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-primary" />
+          )}
+          <Icon className={`w-[18px] h-[18px] shrink-0 ${collapsed ? "" : "mr-3"}`} />
           {!collapsed && (
             <>
-              <span className="flex-1 text-left">{item.label}</span>
-              {isLocked && <Lock className="w-3 h-3 ml-auto text-muted-foreground" data-testid={`lock-${item.id}`} />}
+              <span className="flex-1 text-left text-sm">{item.label}</span>
+              {isLocked && <Lock className="w-3.5 h-3.5 ml-auto opacity-70" data-testid={`lock-${item.id}`} />}
             </>
           )}
-        </Button>
+        </button>
       );
 
       if (collapsed) {
@@ -142,19 +156,29 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
           ${collapsed ? "w-16" : "w-64"}`}
         data-testid="sidebar"
       >
-        <div className={`border-b border-sidebar-border flex items-center justify-between shrink-0 h-[65px] ${collapsed ? "px-3" : "px-5"}`}>
-          {!collapsed && (
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold text-primary leading-tight">Arche</h1>
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">{clinic?.name ?? "クリニック"}</p>
+        {/* ─── Brand / context ─────────────────────────── */}
+        <div className={`border-b border-sidebar-border flex items-center justify-between shrink-0 h-[65px] ${collapsed ? "px-2" : "px-4"}`}>
+          {collapsed ? (
+            <div className="mx-auto h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
+              A
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
+                A
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-base font-bold leading-tight tracking-tight">Arche</h1>
+                <p className="text-[11px] text-muted-foreground leading-tight truncate">{clinic?.name ?? "クリニック"}</p>
+              </div>
             </div>
           )}
-          <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-0.5 ml-auto">
             <NotificationBell collapsed={collapsed} onViewChange={handleNotifViewChange} />
             <Button
               variant="ghost"
               size="icon"
-              className="hidden md:flex w-7 h-7 shrink-0 text-muted-foreground hover:text-foreground"
+              className="hidden md:flex w-8 h-8 shrink-0 text-muted-foreground hover:text-foreground rounded-lg"
               onClick={toggleCollapsed}
               data-testid="button-toggle-sidebar"
               title={collapsed ? "サイドバーを展開" : "サイドバーを折りたたむ"}
@@ -162,27 +186,29 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
               {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
             </Button>
             {onClose && (
-              <Button variant="ghost" size="icon" className="md:hidden w-7 h-7" onClick={onClose} data-testid="button-close-sidebar">
+              <Button variant="ghost" size="icon" className="md:hidden w-8 h-8 rounded-lg" onClick={onClose} data-testid="button-close-sidebar">
                 <X className="w-4 h-4" />
               </Button>
             )}
           </div>
         </div>
 
+        {/* ─── Navigation ──────────────────────────────── */}
         <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${collapsed ? "px-2" : "px-3"}`}>
           {renderNavItems()}
         </nav>
 
+        {/* ─── Footer ──────────────────────────────────── */}
         <div className={`border-t border-sidebar-border space-y-1 shrink-0 py-3 ${collapsed ? "px-2" : "px-3"}`}>
           {user && !collapsed && (
-            <div className="flex items-center gap-2.5 px-2 py-1.5 mb-2">
-              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <User className="h-3.5 w-3.5 text-primary" />
+            <div className="flex items-center gap-2.5 px-2.5 py-2 mb-1.5 rounded-xl bg-sidebar-accent/60">
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <User className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{user.username}</p>
+                <p className="text-xs font-semibold truncate">{user.username}</p>
                 <p className="text-[11px] text-muted-foreground truncate">
-                  {(user as any)?.isSuperAdmin ? "スーパー管理者" : "管理者"}
+                  {(user as any)?.isSuperAdmin ? "運営" : "管理者"}
                 </p>
               </div>
             </div>
@@ -192,30 +218,43 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
             collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-center px-0 text-muted-foreground" asChild data-testid="button-super-admin">
-                    <Link href="/super-admin"><Building2 className="w-4 h-4" /></Link>
+                  <Button variant="ghost" className="w-full h-10 justify-center px-0 text-muted-foreground rounded-xl" asChild data-testid="button-super-admin">
+                    <Link href="/super-admin"><Building2 className="w-[18px] h-[18px]" /></Link>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="text-xs">全医院管理</TooltipContent>
               </Tooltip>
             ) : (
-              <Button variant="ghost" className="w-full justify-start text-muted-foreground" asChild data-testid="button-super-admin">
+              <Button variant="ghost" className="w-full h-10 rounded-xl justify-start text-sm font-medium text-muted-foreground hover:text-foreground" asChild data-testid="button-super-admin">
                 <Link href="/super-admin">
-                  <Building2 className="w-4 h-4 mr-3 shrink-0" />
+                  <Building2 className="w-[18px] h-[18px] mr-3 shrink-0" />
                   全医院管理
                 </Link>
               </Button>
             )
           )}
 
-          {/* お問い合わせ（collapsed時は非表示） */}
-          {!collapsed && (
+          {/* お問い合わせ */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="w-full h-10 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors rounded-xl hover:bg-sidebar-accent"
+                  onClick={() => onViewChange("support" as ViewType)}
+                  data-testid="nav-support"
+                >
+                  <HelpCircle className="w-[18px] h-[18px]" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">お問い合わせ</TooltipContent>
+            </Tooltip>
+          ) : (
             <button
-              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              className="w-full h-10 flex items-center gap-3 px-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-xl hover:bg-sidebar-accent"
               onClick={() => onViewChange("support" as ViewType)}
               data-testid="nav-support"
             >
-              <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+              <HelpCircle className="w-[18px] h-[18px] shrink-0" />
               お問い合わせ
             </button>
           )}
@@ -225,12 +264,12 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-center px-0 text-muted-foreground hover:text-destructive"
+                  className="w-full h-10 justify-center px-0 text-muted-foreground hover:text-destructive rounded-xl"
                   onClick={() => logoutMutation.mutate()}
                   disabled={logoutMutation.isPending}
                   data-testid="button-logout"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-[18px] h-[18px]" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right" className="text-xs">ログアウト</TooltipContent>
@@ -238,12 +277,12 @@ export function AppSidebar({ activeView, onViewChange, onClose }: AppSidebarProp
           ) : (
             <Button
               variant="ghost"
-              className="w-full justify-start text-muted-foreground hover:text-destructive"
+              className="w-full h-10 rounded-xl justify-start text-sm font-medium text-muted-foreground hover:text-destructive"
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
               data-testid="button-logout"
             >
-              <LogOut className="w-4 h-4 mr-3 shrink-0" />
+              <LogOut className="w-[18px] h-[18px] mr-3 shrink-0" />
               ログアウト
             </Button>
           )}

@@ -5,7 +5,7 @@ import { storage, DEFAULT_CLINIC_ID } from "./storage";
 import { isJapaneseHoliday, getJapaneseHolidayName } from "./holidays";
 import { resetDemoAppointments } from "./seed";
 import type { Patient } from "@shared/schema";
-import { hashPassword, comparePasswordsExport } from "./auth";
+import { hashPassword, comparePasswordsExport, applyRememberMe } from "./auth";
 import { 
   sendBookingConfirmationEmail, 
   sendCancellationEmail, 
@@ -16,7 +16,10 @@ import {
 } from "./email";
 import { sendLineMessage, buildBookingConfirmationMessage } from "./line";
 import { runDailyReminders } from "./scheduler";
-import { getPlanLimitsFromDB } from "./plans";
+import { scheduleFollowUpsForAppointment } from "./followup";
+import { generateConsentPdf } from "./consent-pdf";
+import { uploadConsentPdf, refreshConsentPdfUrl, isStorageEnabled } from "./storage-bucket";
+import { getPlanLimitsFromDB, type PlanLimits } from "./plans";
 import { validatePassword, sanitizeString, getClientIp, logSecurityEvent, INPUT_LIMITS } from "./security";
 import * as crypto from "crypto";
 
@@ -56,9 +59,7 @@ function validateClockInToken(token: string): string | null {
 
 setInterval(() => {
   const now = Date.now();
-  for (const [k, v] of clockInTokens) {
-    if (now > v.expiresAt) clockInTokens.delete(k);
-  }
+  clockInTokens.forEach((v, k) => { if (now > v.expiresAt) clockInTokens.delete(k); });
 }, 30_000);
 
 function pushAttendanceToClinic(clinicId: string, payload: object) {
@@ -199,7 +200,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Middleware to require super admin
   const requireSuperAdmin = (req: any, res: any, next: any) => {
     if (req.isAuthenticated() && req.user?.isSuperAdmin) return next();
-    res.status(403).json({ message: "スーパー管理者権限が必要です" });
+    res.status(403).json({ message: "運営権限が必要です" });
   };
 
   // Helper: resolve clinicId for the current admin user (supports super-admin impersonation)
@@ -222,7 +223,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return true;
   };
 
+  // 現在の医院の実効プラン上限を取得する。
+  // plan_definitions の数値上書きに加え、購入済みアドオン（recall/report/line_reminder/
+  // sms）による機能フラグの解放を反映する。プラン判定の単一窓口。
+  const getEffectiveLimits = async (clinicId: string): Promise<PlanLimits> => {
+    const clinic = await storage.getClinic(clinicId);
+    const limits = { ...await getPlanLimitsFromDB(storage, clinic?.planType || "free") };
+    try {
+      const addons = await storage.getClinicAddons(clinicId);
+      const keys = new Set(addons.map(a => a.addonKey));
+      if (keys.has("recall")) limits.canRecall = true;
+      if (keys.has("report")) limits.canReport = true;
+      if (keys.has("line_reminder")) limits.canLine = true;
+      if (keys.has("sms")) limits.canSms = true;
+    } catch { /* アドオン取得失敗時はプラン素の値を使う */ }
+    return limits;
+  };
+
+  // 指定機能がプランで使えなければ 403 を返す。使える場合は limits を返す。
+  const requireFeature = async (
+    req: any,
+    res: any,
+    feature: "canExport" | "canEmail" | "canSms" | "canLine" | "canRecall" | "canReport",
+    label: string,
+  ): Promise<PlanLimits | null> => {
+    const limits = await getEffectiveLimits(getAdminClinicId(req));
+    if (!limits[feature]) {
+      res.status(403).json({
+        code: "plan_upgrade_required",
+        feature,
+        message: `「${label}」は現在のプランではご利用いただけません。プランのアップグレードをご検討ください。`,
+      });
+      return null;
+    }
+    return limits;
+  };
+
   // Demo auto-login routes (no auth required)
+  // 本番では無効化（無認証でセッションを発行するため、開発環境専用にする）
+  app.use("/api/demo", (req, res, next) => {
+    if (process.env.NODE_ENV === "production") return res.sendStatus(404);
+    next();
+  });
   const DEMO_PATIENT_ID = "c6dc53f7-a749-415f-8532-7452fbe7f82b";
   app.get("/api/demo/admin", async (req, res) => {
     try {
@@ -486,6 +528,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/clinics/register", async (req, res) => {
     try {
+      // セルフ登録は廃止。医院の追加はスーパー管理者が手動で行う。
+      // フロントを隠すだけでなくAPIも塞ぐ（直接POSTでの登録を防ぐ）。
+      return res.status(403).json({ message: "新規医院の登録は受け付けていません。導入をご希望の場合はお問い合わせください。" });
+
       const { name, slug, phone, address, email, adminUsername, adminPassword, planType, addonKeys } = req.body;
       if (!name || !slug || !adminUsername || !adminPassword) {
         return res.status(400).json({ message: "医院名、スラッグ、管理者ユーザー名、パスワードは必須です" });
@@ -520,8 +566,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // スラッグ存在確認（リアルタイムチェック用）
-  app.get("/api/clinics/check-slug", async (req, res) => {
+  // スラッグ存在確認（リアルタイムチェック用）。医院スラッグの総当たり列挙を防ぐため軽い制限を付与
+  app.get("/api/clinics/check-slug", publicGeneralLimiter, async (req, res) => {
     try {
       const { slug } = req.query as { slug: string };
       if (!slug) return res.status(400).json({ message: "slug required" });
@@ -1152,15 +1198,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/public/my-appointments", async (req, res) => {
     try {
-      const { phone } = req.query as { phone: string };
-      if (!phone) return res.status(400).json({ message: "phone required" });
-
-      const patient = await storage.getPatientByPhone(phone);
+      // A案: 電話番号だけの照会は廃止（他人の予約を電話番号の総当たりで覗ける問題を解消）。
+      // ログイン済み患者のみ、自分の予約を取得できる。
+      const patientId = (req.session as any).patientId;
+      if (!patientId) return res.status(401).json({ message: "ログインしてください" });
+      const patient = await storage.getPatientById(patientId);
       if (!patient) return res.json([]);
-
-      const all = await storage.getAppointments();
-      const mine = all.filter(a => a.patientId === patient.id);
+      const mine = await storage.getAppointments({ clinicId: patient.clinicId, patientId: patient.id });
       res.json(mine);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ─── QRチェックイン（受付） ──────────────────────────────────────────────────
+  // 受付に掲示したQR（/checkin/:slug）を患者がスマホで読み、電話番号で
+  // 本日の予約を照合して「来院済(arrived)」にする。enableQrCheckin が有効な医院のみ。
+  app.get("/api/public/checkin/:slug", publicGeneralLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const settings = await storage.getClinicSettings(clinic.id);
+      if (!settings?.enableQrCheckin) return res.status(404).json({ message: "QRチェックインは利用できません" });
+      res.json({ clinicName: clinic.name });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/public/checkin/:slug", publicLookupLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const settings = await storage.getClinicSettings(clinic.id);
+      if (!settings?.enableQrCheckin) return res.status(404).json({ message: "QRチェックインは利用できません" });
+
+      const phone = sanitizeString(req.body.phone ?? "", INPUT_LIMITS.phone);
+      if (!phone) return res.status(400).json({ message: "電話番号を入力してください" });
+      const patient = await storage.getPatientByPhone(phone, clinic.id);
+      if (!patient) return res.status(404).json({ message: "ご予約が見つかりませんでした。受付スタッフにお声がけください。" });
+
+      const todayJST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const todays = (await storage.getAppointments({ clinicId: clinic.id, date: todayJST }))
+        .filter(a => a.patientId === patient.id && a.status !== "cancelled" && a.status !== "no_show");
+      if (todays.length === 0) {
+        return res.status(404).json({ message: "本日のご予約が見つかりませんでした。受付スタッフにお声がけください。" });
+      }
+
+      // 既にチェックイン済み（arrived/in_progress/completed）ならそのまま成功扱い
+      const target = todays.find(a => a.status === "confirmed" || a.status === "pending") ?? todays[0];
+      const already = ["arrived", "in_progress", "completed"].includes(target.status ?? "");
+      if (!already) {
+        await storage.updateAppointment(target.id, { status: "arrived", confirmationStatus: "confirmed" });
+        try {
+          const notif = await storage.createAdminNotification({
+            clinicId: clinic.id,
+            type: "checkin",
+            title: "患者が来院しました",
+            body: `${patient.name}様（${target.startTime?.slice(0,5)}〜）がチェックインしました。`,
+            appointmentId: target.id,
+          });
+          pushNotificationToClinic(clinic.id, { type: "checkin", notification: notif });
+        } catch { /* 通知失敗は無視 */ }
+      }
+      res.json({
+        success: true,
+        alreadyCheckedIn: already,
+        patientName: patient.name,
+        time: target.startTime?.slice(0, 5) ?? "",
+      });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -1224,6 +1326,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(401).json({ message: "電話番号またはパスワードが正しくありません" });
       }
       (req.session as any).patientId = patient.id;
+      applyRememberMe(req, req.body.rememberMe);
       logSecurityEvent("patient_login", ip, { patientId: patient.id });
       const { password: _pw, ...safe } = patient as any;
       res.json({ loggedIn: true, patient: safe });
@@ -1359,6 +1462,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // 患者による予約確認（来院意思の確認）。enablePatientConfirmation が有効なときに使う。
+  app.post("/api/patient/confirm/:id", async (req, res) => {
+    const patientId = (req.session as any).patientId;
+    if (!patientId) return res.status(401).json({ message: "ログインが必要です" });
+    try {
+      const appointment = await storage.getAppointmentById(req.params.id);
+      if (!appointment) return res.status(404).json({ message: "予約が見つかりません" });
+      if (appointment.patientId !== patientId) return res.status(403).json({ message: "権限がありません" });
+      if (appointment.status === "cancelled") return res.status(400).json({ message: "キャンセル済みの予約です" });
+      const updated = await storage.updateAppointment(req.params.id, { confirmationStatus: "confirmed" });
+      res.json({ success: true, appointment: updated });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   app.put("/api/patient/reschedule/:id", async (req, res) => {
     const patientId = (req.session as any).patientId;
     if (!patientId) return res.status(401).json({ message: "ログインが必要です" });
@@ -1449,18 +1566,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/my-plan", requireAuth, async (req: any, res) => {
     try {
       const clinicId = getAdminClinicId(req);
-      const [clinic, staffList, clinicAddons] = await Promise.all([
+      const now = new Date();
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const [clinic, staffList, monthAppts, limits] = await Promise.all([
         storage.getClinic(clinicId),
         storage.getStaff(clinicId),
-        storage.getClinicAddons(clinicId),
+        storage.getAppointments({ clinicId, startDate: monthStart, endDate: monthEnd }),
+        getEffectiveLimits(clinicId),
       ]);
       const planType = clinic?.planType || "free";
-      const limits = { ...await getPlanLimitsFromDB(storage, planType) };
-      const addonKeys = new Set(clinicAddons.map(a => a.addonKey));
-      if (addonKeys.has("recall")) limits.canRecall = true;
-      if (addonKeys.has("line_reminder")) limits.canLine = true;
-      if (addonKeys.has("report")) limits.canReport = true;
-      res.json({ planType, limits, usage: { staffCount: staffList.length, monthlyAppointments: 0 } });
+      res.json({
+        planType,
+        limits,
+        usage: { staffCount: staffList.length, monthlyAppointments: monthAppts.length },
+      });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
@@ -1563,6 +1684,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const appt = await storage.getAppointmentById(req.params.id);
       if (!appt || appt.clinicId !== clinicId) return res.status(404).json({ message: "予約が見つかりません" });
       const updated = await storage.updateAppointment(req.params.id, { status });
+      // 「会計待ち等 → 完了」への遷移でフォローアップを予約
+      if (status === "completed" && appt.status !== "completed") {
+        await scheduleFollowUpsForAppointment(req.params.id);
+      }
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -1936,17 +2061,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!clinicId) return res.status(400).json({ message: "QRコードが無効または期限切れです。再スキャンしてください" });
       const member = await storage.getStaffById(staffId);
       if (!member || member.clinicId !== clinicId) return res.status(400).json({ message: "スタッフが見つかりません" });
-      if (member.pin) {
-        const rlKey = `${clinicId}:${staffId}`;
-        if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
-        if (!pin) return res.status(400).json({ message: "PINを入力してください" });
-        if (!pinMatches(pin, member.pin)) {
-          recordPinFailure(rlKey);
-          logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
-          return res.status(400).json({ message: "PINが正しくありません" });
-        }
-        clearPinAttempts(rlKey);
+      // PINは全スタッフ必須（未設定なら打刻不可。なりすまし打刻を防止）
+      const rlKey = `${clinicId}:${staffId}`;
+      if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
+      if (!member.pin) return res.status(400).json({ message: "PINが未設定です。管理者にPINの設定を依頼してください" });
+      if (!pin) return res.status(400).json({ message: "PINを入力してください" });
+      if (!pinMatches(pin, member.pin)) {
+        recordPinFailure(rlKey);
+        logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
+        return res.status(400).json({ message: "PINが正しくありません" });
       }
+      clearPinAttempts(rlKey);
       const today = new Date().toISOString().slice(0, 10);
       const existing = await storage.getAttendanceByStaff(staffId, today);
       if (existing) return res.status(400).json({ message: "本日は既に打刻済みです" });
@@ -1964,17 +2089,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!clinicId) return res.status(400).json({ message: "QRコードが無効または期限切れです。再スキャンしてください" });
       const member = await storage.getStaffById(staffId);
       if (!member || member.clinicId !== clinicId) return res.status(400).json({ message: "スタッフが見つかりません" });
-      if (member.pin) {
-        const rlKey = `${clinicId}:${staffId}`;
-        if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
-        if (!pin) return res.status(400).json({ message: "PINを入力してください" });
-        if (!pinMatches(pin, member.pin)) {
-          recordPinFailure(rlKey);
-          logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
-          return res.status(400).json({ message: "PINが正しくありません" });
-        }
-        clearPinAttempts(rlKey);
+      // PINは全スタッフ必須（未設定なら打刻不可。なりすまし打刻を防止）
+      const rlKey = `${clinicId}:${staffId}`;
+      if (!pinRateLimitOk(rlKey)) return res.status(429).json({ message: "PINの試行回数が上限に達しました。しばらく経ってから再度お試しください" });
+      if (!member.pin) return res.status(400).json({ message: "PINが未設定です。管理者にPINの設定を依頼してください" });
+      if (!pin) return res.status(400).json({ message: "PINを入力してください" });
+      if (!pinMatches(pin, member.pin)) {
+        recordPinFailure(rlKey);
+        logSecurityEvent("qr_pin_mismatch", getClientIp(req), { staffId, clinicId });
+        return res.status(400).json({ message: "PINが正しくありません" });
       }
+      clearPinAttempts(rlKey);
       const today = new Date().toISOString().slice(0, 10);
       const existing = await storage.getAttendanceByStaff(staffId, today);
       if (!existing || !existing.clockIn) return res.status(400).json({ message: "出勤打刻がありません" });
@@ -2058,7 +2183,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       if (!existing || (!existing.clockIn && !existing.clockOut)) {
         // 未出勤 → 出勤
-        const record = await storage.createAttendance({
+        const record = await storage.clockIn({
           clinicId: staffClinicId,
           staffId: staffMemberId,
           date: today,
@@ -2294,6 +2419,247 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 機能1: LINE自動フォローアップ＆リコール — テンプレート管理（管理者）
+  // ═══════════════════════════════════════════════════════════════════════════
+  app.get("/api/follow-up-templates", requireAuth, async (req: any, res) => {
+    try {
+      res.json(await storage.getFollowUpTemplates(getAdminClinicId(req)));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/follow-up-templates", requireAuth, async (req: any, res) => {
+    try {
+      const tpl = await storage.createFollowUpTemplate({ ...req.body, clinicId: getAdminClinicId(req) });
+      res.status(201).json(tpl);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/follow-up-templates/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getFollowUpTemplates(getAdminClinicId(req));
+      if (!all.some(t => t.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      const body = { ...req.body }; delete body.id; delete body.clinicId; delete body.createdAt; delete body.updatedAt;
+      res.json(await storage.updateFollowUpTemplate(req.params.id, body));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/follow-up-templates/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getFollowUpTemplates(getAdminClinicId(req));
+      if (!all.some(t => t.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      await storage.deleteFollowUpTemplate(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 送信予約キューの閲覧（管理者がフォローアップ状況を確認）
+  app.get("/api/scheduled-messages", requireAuth, async (req: any, res) => {
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      res.json(await storage.getScheduledMessages(getAdminClinicId(req), status));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 機能2: スマート口コミ誘導＆不満吸収
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 管理: 設定の取得/保存
+  app.get("/api/review-settings", requireAuth, async (req: any, res) => {
+    try {
+      const clinicId = getAdminClinicId(req);
+      const s = await storage.getReviewSettings(clinicId) ?? await storage.upsertReviewSettings(clinicId, {});
+      res.json(s);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/review-settings", requireAuth, async (req: any, res) => {
+    try {
+      const body = { ...req.body }; delete body.id; delete body.clinicId; delete body.createdAt; delete body.updatedAt;
+      if (body.threshold != null) body.threshold = Math.min(5, Math.max(1, Number(body.threshold)));
+      res.json(await storage.upsertReviewSettings(getAdminClinicId(req), body));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 管理: 受信した口コミ/匿名意見の一覧
+  app.get("/api/review-responses", requireAuth, async (req: any, res) => {
+    try {
+      res.json(await storage.getReviewResponses(getAdminClinicId(req)));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/review-responses/:id/read", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getReviewResponses(getAdminClinicId(req));
+      if (!all.some(r => r.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      await storage.markReviewResponseRead(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 公開: 患者向けアンケートページの設定取得（医院slug指定）
+  app.get("/api/public/review/:slug", publicGeneralLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const s = await storage.getReviewSettings(clinic.id);
+      if (!s || !s.enabled) return res.status(404).json({ message: "受付を停止しています" });
+      res.json({
+        clinicName: clinic.name,
+        threshold: s.threshold,
+        googleReviewUrl: s.googleReviewUrl,
+        headline: s.headline,
+        positiveMessage: s.positiveMessage,
+        negativeMessage: s.negativeMessage,
+        thanksMessage: s.thanksMessage,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 公開: 星評価・匿名意見の送信
+  app.post("/api/public/review/:slug", publicGeneralLimiter, async (req: any, res) => {
+    try {
+      const clinic = await storage.getClinicBySlug(req.params.slug);
+      if (!clinic) return res.status(404).json({ message: "医院が見つかりません" });
+      const s = await storage.getReviewSettings(clinic.id);
+      if (!s || !s.enabled) return res.status(404).json({ message: "受付を停止しています" });
+      const rating = Math.min(5, Math.max(1, Number(req.body.rating)));
+      if (!rating) return res.status(400).json({ message: "評価を選択してください" });
+      const threshold = s.threshold ?? 4;
+      const routedToGoogle = rating >= threshold;
+      const feedback = !routedToGoogle && req.body.feedback
+        ? sanitizeString(req.body.feedback, INPUT_LIMITS.longText) : null;
+      await storage.createReviewResponse({
+        clinicId: clinic.id,
+        rating,
+        routedToGoogle,
+        feedback,
+        appointmentId: null,
+        patientId: null,
+      });
+      // 低評価の意見は管理者へ通知（不満の即時吸収）
+      if (!routedToGoogle && feedback) {
+        try {
+          await storage.createAdminNotification({
+            clinicId: clinic.id,
+            type: "review_feedback",
+            title: `★${rating} のご意見が届きました`,
+            body: feedback.slice(0, 200),
+          });
+        } catch { /* 通知失敗は無視 */ }
+      }
+      res.json({
+        routedToGoogle,
+        googleReviewUrl: routedToGoogle ? s.googleReviewUrl : null,
+        message: routedToGoogle ? s.positiveMessage : s.thanksMessage,
+      });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 機能3: 自費診療カウンセリング＆電子同意書
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 治療プラン（比較表カード）の管理
+  app.get("/api/treatment-plans", requireAuth, async (req: any, res) => {
+    try {
+      res.json(await storage.getTreatmentPlans(getAdminClinicId(req)));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.post("/api/treatment-plans", requireAuth, async (req: any, res) => {
+    try {
+      res.status(201).json(await storage.createTreatmentPlan({ ...req.body, clinicId: getAdminClinicId(req) }));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.put("/api/treatment-plans/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getTreatmentPlans(getAdminClinicId(req));
+      if (!all.some(p => p.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      const body = { ...req.body }; delete body.id; delete body.clinicId; delete body.createdAt; delete body.updatedAt;
+      res.json(await storage.updateTreatmentPlan(req.params.id, body));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  app.delete("/api/treatment-plans/:id", requireAuth, async (req: any, res) => {
+    try {
+      const all = await storage.getTreatmentPlans(getAdminClinicId(req));
+      if (!all.some(p => p.id === req.params.id)) return res.status(404).json({ message: "Not found" });
+      await storage.deleteTreatmentPlan(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 同意書の発行（署名データを受け取りPDF生成・保存）
+  app.post("/api/consent-forms", requireAuth, async (req: any, res) => {
+    try {
+      const clinicId = getAdminClinicId(req);
+      const clinic = await storage.getClinic(clinicId);
+      const settings = await storage.getClinicSettings(clinicId);
+      const { patientId, treatmentPlanId, patientName, treatmentName, amount, disclaimerText, signatureData, snapshotDataUrl } = req.body;
+      if (!patientName || !treatmentName) return res.status(400).json({ message: "患者名と治療内容は必須です" });
+
+      const signedDate = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const disclaimer = disclaimerText || settings?.consentDisclaimer || "";
+
+      // まずレコードを作成（PDF保存先のIDを得るため）
+      const form = await storage.createConsentForm({
+        clinicId,
+        patientId: patientId || null,
+        treatmentPlanId: treatmentPlanId || null,
+        patientName: sanitizeString(patientName, 100),
+        treatmentName: sanitizeString(treatmentName, 200),
+        amount: Number(amount) || 0,
+        disclaimerText: disclaimer,
+        signedDate,
+        signatureData: signatureData || null,
+        status: "signed",
+      });
+
+      // PDF生成
+      const pdf = generateConsentPdf({
+        clinicName: clinic?.name || "",
+        patientName, treatmentName,
+        amount: Number(amount) || 0,
+        disclaimerText: disclaimer,
+        signedDate,
+        snapshotDataUrl: snapshotDataUrl || null,
+      });
+
+      // Storageが有効ならアップロード、無ければDBにbase64保持
+      const uploaded = await uploadConsentPdf(clinicId, form.id, pdf);
+      if (uploaded) {
+        await storage.updateConsentForm(form.id, { pdfUrl: uploaded.url, pdfPath: uploaded.path, signatureData: null });
+      } else {
+        await storage.updateConsentForm(form.id, { pdfUrl: `data:application/pdf;base64,${pdf.toString("base64")}` });
+      }
+      const saved = await storage.getConsentFormById(form.id);
+      res.status(201).json(saved);
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 患者の同意書一覧
+  app.get("/api/consent-forms", requireAuth, async (req: any, res) => {
+    try {
+      const patientId = typeof req.query.patientId === "string" ? req.query.patientId : undefined;
+      res.json(await storage.getConsentForms(getAdminClinicId(req), patientId));
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
+  // 同意書PDFのURL取得（Storageの署名URLは期限切れがあるため都度発行）
+  app.get("/api/consent-forms/:id/pdf", requireAuth, async (req: any, res) => {
+    try {
+      const form = await storage.getConsentFormById(req.params.id);
+      if (!assertClinicOwnership(req, res, form)) return;
+      if (form.pdfPath && isStorageEnabled()) {
+        const url = await refreshConsentPdfUrl(form.pdfPath);
+        if (url) return res.json({ url });
+      }
+      if (form.pdfUrl) return res.json({ url: form.pdfUrl });
+      res.status(404).json({ message: "PDFが見つかりません" });
+    } catch (e: any) { res.status(500).json({ message: e.message }); }
+  });
+
   // Appointments
   // 終了時刻を過ぎた confirmed 予約を自動で completed に変更
   async function autoCompleteAppointments(clinicId: string) {
@@ -2309,6 +2675,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return false;
       });
       await Promise.all(toComplete.map(a => storage.updateAppointment(a.id, { status: "completed" })));
+      // 完了になった予約に対しフォローアップ/リコールを予約（トリガー）
+      await Promise.all(toComplete.map(a => scheduleFollowUpsForAppointment(a.id)));
     } catch (e) { console.error("autoCompleteAppointments error:", e); }
   }
 
@@ -2389,7 +2757,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/appointments", async (req: any, res) => {
     try {
-      const body = { ...req.body, clinicId: getAdminClinicId(req) };
+      const clinicId = getAdminClinicId(req);
+      const body = { ...req.body, clinicId };
+      // プラン上限: 今月の予約総数（医院側の手動登録もカウント対象）
+      const limits = await getEffectiveLimits(clinicId);
+      const now = new Date();
+      const mStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const mLastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const mEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(mLastDay).padStart(2, "0")}`;
+      const monthAppts = await storage.getAppointments({ clinicId, startDate: mStart, endDate: mEnd });
+      if (monthAppts.length >= limits.maxMonthlyAppointments) {
+        return res.status(403).json({
+          code: "plan_upgrade_required",
+          message: `今月の予約登録が上限（${limits.maxMonthlyAppointments}件）に達しました。プランをアップグレードすると無制限になります。`,
+        });
+      }
       if (!body.staffId) body.staffId = null;
       if (!body.serviceId) body.serviceId = null;
       if (body.staffId && body.date && body.startTime && body.endTime) {
@@ -2427,6 +2809,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       const appt = await storage.updateAppointment(req.params.id, body);
       if (!appt) return res.status(404).json({ message: "Not found" });
+      // 「完了」への遷移でフォローアップ/リコールを予約（重複作成は内部でガード）
+      if (body.status === "completed" && prevAppt.status !== "completed") {
+        await scheduleFollowUpsForAppointment(req.params.id);
+      }
       res.json(appt);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2616,13 +3002,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const { chairsCount, bookingAdvanceDays, bookingBufferMinutes, slotIntervalMinutes,
               maxConcurrentAppointments, allowDoubleBooking, enablePatientConfirmation,
               confirmationDeadlineHours, enableQrCheckin, primaryColor,
-              requireAppointmentApproval, closedOnHolidays, resendApiKey, enableReferral } = req.body;
+              requireAppointmentApproval, closedOnHolidays, resendApiKey, enableReferral,
+              consentDisclaimer } = req.body;
       const settings = await storage.upsertClinicSettings(
         { chairsCount, bookingAdvanceDays, bookingBufferMinutes, slotIntervalMinutes,
           maxConcurrentAppointments, allowDoubleBooking, enablePatientConfirmation,
           confirmationDeadlineHours, enableQrCheckin, primaryColor,
           requireAppointmentApproval, closedOnHolidays, resendApiKey,
-          enableReferral: enableReferral ?? true },
+          enableReferral: enableReferral ?? true, consentDisclaimer },
         getAdminClinicId(req)
       );
       res.json(settings);
@@ -2634,23 +3021,34 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const settings = await storage.getReminderSettings(getAdminClinicId(req));
       if (!settings) return res.json(null);
-      // シークレットは実値を返さずマスクする
+      // シークレットは実値を返さずマスクする（識別子のSID/番号/送信元は表示）
       res.json({
         ...settings,
         lineChannelAccessToken: maskSecret(settings.lineChannelAccessToken),
         lineChannelSecret: maskSecret(settings.lineChannelSecret),
         resendApiKey: maskSecret(settings.resendApiKey),
+        twilioAuthToken: maskSecret(settings.twilioAuthToken),
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
   app.put("/api/reminder-settings", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
       const clinicId = getAdminClinicId(req);
       const {
         enableEmail, enableSms, enableLine, reminderHoursBefore,
         lineChannelAccessToken, lineChannelSecret, resendApiKey, autoReminderEnabled, reminderSendTime,
+        resendFromEmail, twilioAccountSid, twilioAuthToken, twilioFromNumber,
       } = req.body;
+      // プラン制限: 使えない通知チャネルはONにできない
+      const limits = await getEffectiveLimits(clinicId);
+      if (enableSms && !limits.canSms) {
+        return res.status(403).json({ code: "plan_upgrade_required", message: "SMSリマインダーはスタンダード以上のプランでご利用いただけます。" });
+      }
+      if (enableLine && !limits.canLine) {
+        return res.status(403).json({ code: "plan_upgrade_required", message: "LINEリマインダーはプロ以上のプランでご利用いただけます。" });
+      }
       // マスク値/未送信のシークレットは既存値を保持する
       const prev = await storage.getReminderSettings(clinicId);
       const settings = await storage.upsertReminderSettings({
@@ -2658,6 +3056,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         lineChannelAccessToken: resolveSecret(lineChannelAccessToken, prev?.lineChannelAccessToken),
         lineChannelSecret: resolveSecret(lineChannelSecret, prev?.lineChannelSecret),
         resendApiKey: resolveSecret(resendApiKey, prev?.resendApiKey),
+        twilioAuthToken: resolveSecret(twilioAuthToken, prev?.twilioAuthToken),
+        resendFromEmail: resendFromEmail ?? prev?.resendFromEmail ?? null,
+        twilioAccountSid: twilioAccountSid ?? prev?.twilioAccountSid ?? null,
+        twilioFromNumber: twilioFromNumber ?? prev?.twilioFromNumber ?? null,
         autoReminderEnabled, reminderSendTime,
       }, clinicId);
       // 応答でも実値を返さない
@@ -2666,6 +3068,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         lineChannelAccessToken: maskSecret(settings.lineChannelAccessToken),
         lineChannelSecret: maskSecret(settings.lineChannelSecret),
         resendApiKey: maskSecret(settings.resendApiKey),
+        twilioAuthToken: maskSecret(settings.twilioAuthToken),
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -2678,7 +3081,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "クリニックのメールアドレスが設定されていません" });
       }
       const testSettings = await storage.getReminderSettings(clinicId);
-      await sendTestEmail(clinic.email, clinic.name, testSettings?.resendApiKey);
+      await sendTestEmail(clinic.email, clinic.name, testSettings?.resendApiKey, testSettings?.resendFromEmail);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ message: e.message });
@@ -2705,15 +3108,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const settings = await storage.getReminderSettings(clinic.id);
       if (!settings?.lineChannelSecret) return res.status(400).json({ message: "LINE設定がありません" });
 
-      // Verify signature
+      // Verify signature（署名が無い／一致しない要求は拒否。正規のLINEは必ず署名を送る）
       const signature = req.headers["x-line-signature"] as string;
-      if (signature) {
-        const hmac = crypto.createHmac("sha256", settings.lineChannelSecret);
-        hmac.update(JSON.stringify(req.body));
-        const digest = hmac.digest("base64");
-        if (digest !== signature) {
-          return res.status(401).json({ message: "Invalid signature" });
-        }
+      if (!signature) {
+        return res.status(401).json({ message: "Missing signature" });
+      }
+      const hmac = crypto.createHmac("sha256", settings.lineChannelSecret);
+      hmac.update(JSON.stringify(req.body));
+      const digest = hmac.digest("base64");
+      if (digest !== signature) {
+        return res.status(401).json({ message: "Invalid signature" });
       }
 
       const events = req.body.events || [];
@@ -2777,6 +3181,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Reports
   app.get("/api/reports", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canReport", "レポート・分析"))) return;
       const clinicId = getAdminClinicId(req);
       const appointments = await storage.getAppointments({ clinicId });
       const patients = await storage.getPatients(clinicId);
@@ -2887,14 +3293,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const clinicId = getAdminClinicId(req);
       const clinic = await storage.getClinic(clinicId);
-      const planLimits = await getPlanLimitsFromDB(storage, clinic?.planType || "free");
       const now = new Date();
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-      const [staff, monthAppts] = await Promise.all([
+      const [staff, monthAppts, planLimits] = await Promise.all([
         storage.getStaff(clinicId),
         storage.getAppointments({ clinicId, startDate: monthStart, endDate: monthEnd }),
+        getEffectiveLimits(clinicId),
       ]);
       res.json({
         planType: clinic?.planType || "free",
@@ -2910,12 +3316,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Export Data
   app.get("/api/export/patients.csv", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canExport", "データエクスポート"))) return;
       const clinicId = getAdminClinicId(req);
-      const clinic = await storage.getClinic(clinicId);
-      const planLimits = await getPlanLimitsFromDB(storage, clinic?.planType || "free");
-      if (!planLimits.canExport) {
-        return res.status(403).json({ message: "データエクスポートはスターター以上のプランで利用できます。" });
-      }
       const patients = await storage.getPatients(clinicId);
       const BOM = "\uFEFF";
       const header = ["患者番号", "氏名", "ふりがな", "生年月日", "性別", "電話", "メール", "住所", "アレルギー", "備考", "キャンセル数", "無断キャンセル数", "最終来院日", "登録日"].join(",");
@@ -2945,12 +3348,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/export/appointments.csv", async (req: any, res) => {
     try {
+      if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canExport", "データエクスポート"))) return;
       const clinicId = getAdminClinicId(req);
-      const clinic = await storage.getClinic(clinicId);
-      const planLimitsExport = await getPlanLimitsFromDB(storage, clinic?.planType || "free");
-      if (!planLimitsExport.canExport) {
-        return res.status(403).json({ message: "データエクスポートはスターター以上のプランで利用できます。" });
-      }
       const appointments = await storage.getAppointments({ clinicId });
       const BOM = "\uFEFF";
       const header = ["日付", "開始時間", "終了時間", "患者名", "担当スタッフ", "診療メニュー", "治療種別", "ステータス", "確認状況", "チェア番号", "メモ", "作成日"].join(",");
@@ -3027,6 +3427,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/recall", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const patients = await storage.getRecallPatients(getAdminClinicId(req));
       res.json(patients);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
@@ -3035,6 +3436,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/patients/:id/recall", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const { nextRecallDate, recallIntervalMonths } = req.body;
       const patient = await storage.updatePatientRecall(req.params.id, { nextRecallDate, recallIntervalMonths }, getAdminClinicId(req));
       if (!patient) return res.status(404).json({ message: "患者が見つかりません" });
@@ -3045,6 +3447,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/recall/:id/send", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const patient = await storage.markRecallSent(req.params.id, getAdminClinicId(req));
       if (!patient) return res.status(404).json({ message: "患者が見つかりません" });
       try {
@@ -3063,6 +3466,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/recall/send-bulk", async (req: any, res) => {
     try {
       if (!req.user) return res.status(401).json({ message: "認証が必要です" });
+      if (!(await requireFeature(req, res, "canRecall", "リコール管理"))) return;
       const clinicId = getAdminClinicId(req);
       const patients = await storage.getRecallPatients(clinicId);
       const unsent = patients.filter(p => !p.lastRecallSentAt);

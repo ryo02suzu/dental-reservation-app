@@ -183,6 +183,7 @@ export const clinicSettings = pgTable("clinic_settings", {
   enableReferral: boolean("enable_referral").default(true),
   resendApiKey: text("resend_api_key"),
   primaryColor: text("primary_color").default("#C4B5A0"),
+  consentDisclaimer: text("consent_disclaimer"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -233,6 +234,10 @@ export const reminderSettings = pgTable("reminder_settings", {
   lineChannelAccessToken: text("line_channel_access_token"),
   lineChannelSecret: text("line_channel_secret"),
   resendApiKey: text("resend_api_key"),
+  resendFromEmail: text("resend_from_email"),
+  twilioAccountSid: text("twilio_account_sid"),
+  twilioAuthToken: text("twilio_auth_token"),
+  twilioFromNumber: text("twilio_from_number"),
   autoReminderEnabled: boolean("auto_reminder_enabled").default(false),
   reminderSendTime: text("reminder_send_time").default("09:00"),
   lastReminderRunDate: text("last_reminder_run_date"),
@@ -393,3 +398,142 @@ export type InsertAddonDefinition = z.infer<typeof insertAddonDefinitionSchema>;
 export type Shift = typeof shifts.$inferSelect;
 export type InsertShift = z.infer<typeof insertShiftSchema>;
 export type InsertShiftPattern = z.infer<typeof insertShiftPatternSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 機能1: 治療内容連動型 LINE自動フォローアップ＆リコール
+// ─────────────────────────────────────────────────────────────────────────────
+
+// メニュー（または既定カテゴリ）ごとの自動フォローアップ設定。
+// serviceId が null のものは「医院の既定テンプレート」として扱う。
+export const followUpTemplates = pgTable("follow_up_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  clinicId: varchar("clinic_id").notNull().references(() => clinics.id, { onDelete: "cascade" }),
+  serviceId: varchar("service_id").references(() => services.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // surgical（外科・抜歯系: 翌日アフターフォロー）/ checkup（定期検診系: サンクス＋リコール）
+  kind: text("kind").notNull().default("checkup"),
+  enabled: boolean("enabled").default(true),
+  // フォローアップ（翌日等）
+  followUpEnabled: boolean("follow_up_enabled").default(true),
+  followUpDelayHours: integer("follow_up_delay_hours").default(24), // 完了から何時間後
+  followUpSendAtTime: text("follow_up_send_at_time").default("18:00"), // その日の何時に送るか
+  followUpMessage: text("follow_up_message"),
+  // リコール（数ヶ月後）
+  recallEnabled: boolean("recall_enabled").default(false),
+  recallDelayMonths: integer("recall_delay_months").default(6),
+  recallSendAtTime: text("recall_send_at_time").default("10:00"),
+  recallMessage: text("recall_message"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// 送信予約キュー。スケジューラが時刻になったら送信する。
+export const scheduledMessages = pgTable("scheduled_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  clinicId: varchar("clinic_id").notNull().references(() => clinics.id, { onDelete: "cascade" }),
+  patientId: varchar("patient_id").references(() => patients.id, { onDelete: "cascade" }),
+  appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
+  templateId: varchar("template_id").references(() => followUpTemplates.id, { onDelete: "set null" }),
+  // followup / recall
+  purpose: text("purpose").notNull().default("followup"),
+  channel: text("channel").notNull().default("line"), // line / email
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("pending"), // pending / sent / failed / cancelled
+  sentAt: timestamp("sent_at"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 機能2: スマート口コミ誘導＆不満吸収
+// ─────────────────────────────────────────────────────────────────────────────
+export const reviewSettings = pgTable("review_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  clinicId: varchar("clinic_id").notNull().references(() => clinics.id, { onDelete: "cascade" }).unique(),
+  enabled: boolean("enabled").default(true),
+  // この星数「以上」でGoogleへ誘導、未満で匿名フォーム
+  threshold: integer("threshold").default(4),
+  googleReviewUrl: text("google_review_url"),
+  headline: text("headline").default("本日はご来院ありがとうございました"),
+  positiveMessage: text("positive_message").default("高評価ありがとうございます！ぜひGoogleの口コミでも応援をお願いします。"),
+  negativeMessage: text("negative_message").default("ご不便をおかけし申し訳ございません。今後の改善のため、具体的な内容を院長宛に匿名でお送りいただけます。"),
+  thanksMessage: text("thanks_message").default("貴重なご意見をありがとうございました。"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const reviewResponses = pgTable("review_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  clinicId: varchar("clinic_id").notNull().references(() => clinics.id, { onDelete: "cascade" }),
+  appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
+  patientId: varchar("patient_id").references(() => patients.id, { onDelete: "set null" }),
+  rating: integer("rating").notNull(),
+  routedToGoogle: boolean("routed_to_google").default(false),
+  feedback: text("feedback"), // 匿名意見（閾値未満のとき）
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 機能3: 自費診療デジタルカウンセリング＆電子同意書
+// ─────────────────────────────────────────────────────────────────────────────
+// 医院が提示する自費治療プラン（比較表の各カード）
+export const treatmentPlans = pgTable("treatment_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  clinicId: varchar("clinic_id").notNull().references(() => clinics.id, { onDelete: "cascade" }),
+  category: text("category").notNull().default("general"), // 悩みカテゴリ（色/歯並び等）でWEB問診と連動
+  name: text("name").notNull(),
+  material: text("material"), // 材質（セラミック等）
+  price: integer("price").default(0),
+  durationLabel: text("duration_label"), // 治療期間の目安
+  merits: text("merits").array(),
+  demerits: text("demerits").array(),
+  description: text("description"),
+  isInsurance: boolean("is_insurance").default(false),
+  isRecommended: boolean("is_recommended").default(false),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// 署名済み電子同意書
+export const consentForms = pgTable("consent_forms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  clinicId: varchar("clinic_id").notNull().references(() => clinics.id, { onDelete: "cascade" }),
+  patientId: varchar("patient_id").references(() => patients.id, { onDelete: "set null" }),
+  treatmentPlanId: varchar("treatment_plan_id").references(() => treatmentPlans.id, { onDelete: "set null" }),
+  patientName: text("patient_name").notNull(),
+  treatmentName: text("treatment_name").notNull(),
+  amount: integer("amount").default(0),
+  disclaimerText: text("disclaimer_text"),
+  signedDate: date("signed_date").notNull(),
+  signatureData: text("signature_data"), // 署名画像（dataURL、PDF生成用の一時保持）
+  pdfUrl: text("pdf_url"), // Supabase Storage 上のPDF
+  pdfPath: text("pdf_path"),
+  status: text("status").notNull().default("signed"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// 医院ごとの自費カウンセリング既定免責事項
+export const insertFollowUpTemplateSchema = createInsertSchema(followUpTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertScheduledMessageSchema = createInsertSchema(scheduledMessages).omit({ id: true, createdAt: true });
+export const insertReviewSettingsSchema = createInsertSchema(reviewSettings).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertReviewResponseSchema = createInsertSchema(reviewResponses).omit({ id: true, createdAt: true });
+export const insertTreatmentPlanSchema = createInsertSchema(treatmentPlans).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertConsentFormSchema = createInsertSchema(consentForms).omit({ id: true, createdAt: true });
+
+export type FollowUpTemplate = typeof followUpTemplates.$inferSelect;
+export type InsertFollowUpTemplate = z.infer<typeof insertFollowUpTemplateSchema>;
+export type ScheduledMessage = typeof scheduledMessages.$inferSelect;
+export type InsertScheduledMessage = z.infer<typeof insertScheduledMessageSchema>;
+export type ReviewSettings = typeof reviewSettings.$inferSelect;
+export type InsertReviewSettings = z.infer<typeof insertReviewSettingsSchema>;
+export type ReviewResponse = typeof reviewResponses.$inferSelect;
+export type InsertReviewResponse = z.infer<typeof insertReviewResponseSchema>;
+export type TreatmentPlan = typeof treatmentPlans.$inferSelect;
+export type InsertTreatmentPlan = z.infer<typeof insertTreatmentPlanSchema>;
+export type ConsentForm = typeof consentForms.$inferSelect;
+export type InsertConsentForm = z.infer<typeof insertConsentFormSchema>;

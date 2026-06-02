@@ -122,7 +122,10 @@ export default function QrClockInPage() {
       setErrorMsg("");
       setStep("enter-pin");
     } else {
-      doClock(s.id, "", act);
+      // PINが未設定のスタッフは打刻できない。管理者にPIN登録を促す（無限ループ防止）。
+      setErrorMsg("PINが未設定です。管理者に「設定 → スタッフ」からPINの登録を依頼してください。");
+      setErrorSource("clock");
+      setStep("error");
     }
   }
 
@@ -142,6 +145,13 @@ export default function QrClockInPage() {
       });
       const data = await r.json();
       if (!r.ok) {
+        // PIN未設定はループさせず案内表示。PIN入力が必要なケースのみ再入力へ。
+        if (data.message?.includes("未設定")) {
+          setErrorMsg(data.message);
+          setErrorSource("clock");
+          setStep("error");
+          return;
+        }
         if (data.message?.includes("PIN")) {
           setErrorMsg(data.message);
           setStep("enter-pin");
@@ -223,7 +233,7 @@ export default function QrClockInPage() {
             <a
               href="/my-schedule"
               data-testid="btn-go-to-mypage"
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-primary text-white font-bold text-sm mb-3 active:bg-primary/90 transition-colors">
+              className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-primary text-white font-bold text-sm mb-3 active:bg-primary/90 active:scale-95 transition-all">
               <LogIn className="w-4 h-4" />
               マイページへログイン
             </a>
@@ -240,7 +250,7 @@ export default function QrClockInPage() {
             <button
               onClick={() => setStep("select-staff")}
               data-testid="btn-use-list"
-              className="w-full py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium active:bg-gray-50 transition-colors">
+              className="w-full h-12 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium active:bg-gray-50 active:scale-95 transition-all">
               スタッフ一覧から選んで打刻
             </button>
           </>
@@ -279,14 +289,14 @@ export default function QrClockInPage() {
                         {canClockIn && (
                           <button onClick={() => handleSelectStaff(s, "clock-in")}
                             data-testid={`btn-clock-in-${s.id}`}
-                            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-emerald-500 text-white text-xs font-bold active:bg-emerald-600 transition-colors">
+                            className="flex items-center gap-1 px-3.5 h-10 rounded-lg bg-emerald-500 text-white text-xs font-bold active:bg-emerald-600 active:scale-95 transition-all">
                             <LogIn className="w-3.5 h-3.5" />出勤
                           </button>
                         )}
                         {canClockOut && (
                           <button onClick={() => handleSelectStaff(s, "clock-out")}
                             data-testid={`btn-clock-out-${s.id}`}
-                            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-red-500 text-white text-xs font-bold active:bg-red-600 transition-colors">
+                            className="flex items-center gap-1 px-3.5 h-10 rounded-lg bg-red-500 text-white text-xs font-bold active:bg-red-600 active:scale-95 transition-all">
                             <LogOut className="w-3.5 h-3.5" />退勤
                           </button>
                         )}
@@ -339,14 +349,14 @@ export default function QrClockInPage() {
                 if (n === "del") return (
                   <button key="del" onClick={() => setPin(p => p.slice(0, -1))}
                     data-testid="btn-pin-delete"
-                    className="py-3 rounded-xl bg-gray-100 text-gray-600 font-bold active:bg-gray-200 transition-colors">
+                    className="h-14 rounded-xl bg-gray-100 text-gray-600 text-lg font-bold active:bg-gray-200 active:scale-95 transition-all">
                     ←
                   </button>
                 );
                 return (
                   <button key={n} onClick={() => { const np = pin.length < 4 ? pin + n : pin; setPin(np); if (np.length === 4 && selectedStaff) { setTimeout(() => { doClock(selectedStaff.id, np, action); }, 150); } }}
                     data-testid={`btn-pin-${n}`}
-                    className="py-3 rounded-xl bg-gray-50 border text-lg font-bold text-gray-800 active:bg-primary/10 transition-colors">
+                    className="h-14 rounded-xl bg-gray-50 border text-xl font-bold text-gray-800 active:bg-primary/10 active:scale-95 transition-all">
                     {n}
                   </button>
                 );
@@ -377,7 +387,7 @@ export default function QrClockInPage() {
             <p className="text-xs text-gray-400 mb-6">{format(new Date(), "yyyy年M月d日(E)", { locale: ja })}</p>
             <button onClick={() => resetToList()}
               data-testid="btn-another-staff"
-              className="w-full py-3 rounded-xl bg-gray-100 text-gray-700 font-bold active:bg-gray-200 transition-colors">
+              className="w-full h-12 rounded-xl bg-gray-100 text-gray-700 font-bold active:bg-gray-200 active:scale-95 transition-all">
               別のスタッフの打刻
             </button>
           </div>
@@ -401,7 +411,7 @@ export default function QrClockInPage() {
                 <button
                   onClick={() => window.history.back()}
                   data-testid="btn-go-back"
-                  className="w-full py-3 rounded-xl bg-gray-100 text-gray-700 font-bold active:bg-gray-200 mb-2">
+                  className="w-full h-12 rounded-xl bg-gray-100 text-gray-700 font-bold active:bg-gray-200 active:scale-95 transition-all mb-2">
                   ← 前の画面に戻る
                 </button>
               </>
@@ -414,7 +424,7 @@ export default function QrClockInPage() {
                 <p className="text-sm text-red-500 mb-6">{errorMsg}</p>
                 <button onClick={() => resetToList()}
                   data-testid="btn-retry"
-                  className="w-full py-3 rounded-xl bg-primary text-white font-bold active:bg-primary/90">
+                  className="w-full h-12 rounded-xl bg-primary text-white font-bold active:bg-primary/90 active:scale-95 transition-all">
                   やり直す
                 </button>
               </>

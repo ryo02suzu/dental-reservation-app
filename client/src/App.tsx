@@ -11,17 +11,18 @@ import LoginPage from "@/pages/login";
 import SetupPage from "@/pages/setup";
 import BookingPage from "@/pages/booking";
 import MyAppointmentsPage from "@/pages/my-appointments";
-import ClinicSignupPage from "@/pages/clinic-signup";
 import SuperAdminPage from "@/pages/super-admin";
 import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
-import DemoLoginPage from "@/pages/demo-login";
 import StaffLoginPage from "@/pages/staff-login";
 import MySchedulePage from "@/pages/my-schedule";
 import QrClockInPage from "@/pages/qr-clock-in";
+import ReviewPage from "@/pages/review";
+import CheckinPage from "@/pages/checkin";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "./lib/queryClient";
 import { Redirect } from "wouter";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -70,10 +71,12 @@ function Router() {
     <>
       <ScrollToTop />
       <Switch>
-        <Route path="/">{() => <Redirect to="/signup" />}</Route>
+        <Route path="/">{() => <Redirect to="/login" />}</Route>
         <Route path="/login" component={LoginPage} />
         <Route path="/setup" component={SetupPage} />
-        <Route path="/signup" component={ClinicSignupPage} />
+        {/* セルフ登録は廃止。医院の追加はスーパー管理者が手動で行う。
+            既存リンク/ブックマーク対策として /signup はログインへ誘導する。 */}
+        <Route path="/signup">{() => <Redirect to="/login" />}</Route>
         <Route path="/super-admin" component={SuperAdminPage} />
         <Route path="/booking">{() => <BookingPage />}</Route>
         <Route path="/book/:slug">{() => <BookingPageWithSlug />}</Route>
@@ -81,10 +84,11 @@ function Router() {
         <Route path="/admin">
           {() => <ProtectedRoute component={Home} />}
         </Route>
-        <Route path="/demo-login" component={DemoLoginPage} />
         <Route path="/staff-login/:token" component={StaffLoginPage} />
         <Route path="/my-schedule" component={MySchedulePage} />
         <Route path="/qr-clock-in/:token" component={QrClockInPage} />
+        <Route path="/review/:slug" component={ReviewPage} />
+        <Route path="/checkin/:slug" component={CheckinPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route component={NotFound} />
@@ -95,14 +99,16 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

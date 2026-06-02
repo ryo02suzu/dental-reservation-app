@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Phone, Mail, Trash2, Edit2, AlertTriangle, CalendarCheck, ArrowUpDown } from "lucide-react";
+import { Search, Plus, Phone, Mail, Trash2, Edit2, AlertTriangle, CalendarCheck, ArrowUpDown, ChevronLeft, ChevronRight, Presentation } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
+import { CounselingMode } from "@/components/counseling-mode";
 
 interface Patient {
   id: string;
@@ -49,15 +50,19 @@ const defaultForm = {
 
 type SortType = "number" | "kana" | "created";
 
+const PAGE_SIZE = 50;
+
 export function PatientList() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortType>("number");
+  const [page, setPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [selectedRecallPatient, setSelectedRecallPatient] = useState<Patient | null>(null);
+  const [counselingPatient, setCounselingPatient] = useState<Patient | null>(null);
   const [nextRecallDate, setNextRecallDate] = useState("");
   const [recallInterval, setRecallInterval] = useState(6);
   const [form, setForm] = useState(defaultForm);
@@ -92,6 +97,18 @@ export function PatientList() {
       return (a.createdAt || "").localeCompare(b.createdAt || "");
     });
   }, [patients, sortBy]);
+
+  // 検索・並び替えが変わったら1ページ目に戻す
+  useEffect(() => { setPage(1); }, [debouncedSearch, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  );
+  const rangeStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, filtered.length);
 
   const saveMutation = useMutation({
     mutationFn: (data: typeof form) => {
@@ -157,23 +174,25 @@ export function PatientList() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">患者一覧</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{patients.length}名登録済み</p>
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-background flex items-center justify-between gap-3 shrink-0">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight truncate">患者一覧</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{patients.length}名登録済み</p>
         </div>
-        <Button onClick={openCreate} data-testid="button-add-patient">
+        <Button onClick={openCreate} className="shrink-0 h-10" data-testid="button-add-patient">
           <Plus className="h-4 w-4 mr-1" />
-          新規患者登録
+          <span className="hidden sm:inline">新規患者登録</span>
+          <span className="sm:hidden">新規</span>
         </Button>
       </div>
 
-      <div className="px-4 md:px-6 py-3 border-b border-border flex items-center gap-3">
+      <div className="px-4 md:px-6 py-3 border-b border-border flex items-center gap-3 shrink-0">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            className="pl-9"
+            className="pl-9 h-10"
             placeholder="患者名・カナ・番号・電話番号で検索"
+            aria-label="患者を検索"
             value={search}
             onChange={e => setSearch(e.target.value)}
             data-testid="input-patient-search"
@@ -182,7 +201,7 @@ export function PatientList() {
         <div className="flex items-center gap-1.5 shrink-0">
           <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
           <Select value={sortBy} onValueChange={v => setSortBy(v as SortType)}>
-            <SelectTrigger className="h-9 w-36 text-sm" data-testid="select-sort-patients">
+            <SelectTrigger className="h-10 w-36 text-sm" aria-label="並び替え" data-testid="select-sort-patients">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -197,12 +216,19 @@ export function PatientList() {
       <div className="flex-1 overflow-auto">
         {isLoading ? (
           <div className="p-4 md:p-6 space-y-3">
-            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12" />)}
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 flex-1 max-w-[180px]" />
+                <Skeleton className="h-4 w-24 hidden sm:block" />
+                <Skeleton className="h-8 w-8 ml-auto rounded-lg" />
+              </div>
+            ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <Users className="h-12 w-12 mb-3 opacity-30" />
-            <p>{search ? "検索結果が見つかりません" : "患者が登録されていません"}</p>
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+            <Users className="h-9 w-9 mb-3 opacity-25" />
+            <p className="text-sm">{search ? "検索結果が見つかりません" : "患者が登録されていません"}</p>
           </div>
         ) : (
           <Table>
@@ -213,11 +239,11 @@ export function PatientList() {
                 <TableHead className="hidden md:table-cell">生年月日 / 年齢</TableHead>
                 <TableHead className="hidden sm:table-cell">連絡先</TableHead>
                 <TableHead className="hidden lg:table-cell">キャンセル履歴</TableHead>
-                <TableHead className="w-20">操作</TableHead>
+                <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(p => {
+              {paged.map(p => {
                 const age = calcAge(p.dateOfBirth);
                 const risk = isHighRisk(p);
                 return (
@@ -238,9 +264,9 @@ export function PatientList() {
                       {p.dateOfBirth ? `${p.dateOfBirth}（${age}歳）` : "—"}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <div className="space-y-0.5">
-                        {p.phone && <div className="text-sm flex items-center gap-1"><Phone className="h-3 w-3" />{p.phone}</div>}
-                        {p.email && <div className="text-xs text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{p.email}</div>}
+                      <div className="space-y-0.5 min-w-0">
+                        {p.phone && <div className="text-sm flex items-center gap-1 min-w-0"><Phone className="h-3 w-3 shrink-0" /><span className="truncate">{p.phone}</span></div>}
+                        {p.email && <div className="text-xs text-muted-foreground flex items-center gap-1 min-w-0"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{p.email}</span></div>}
                       </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm">
@@ -253,27 +279,46 @@ export function PatientList() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center justify-end gap-0.5">
                         <Button
                           size="icon"
                           variant="ghost"
+                          className="h-10 w-10 sm:h-9 sm:w-9"
                           onClick={() => openRecallSettings(p)}
                           title="リコール設定"
                           data-testid={`button-recall-settings-${p.id}`}
                         >
-                          <CalendarCheck className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(p)} data-testid={`edit-patient-${p.id}`}>
-                          <Edit2 className="h-3.5 w-3.5" />
+                          <CalendarCheck className="h-4 w-4" />
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="text-destructive"
+                          className="h-10 w-10 sm:h-9 sm:w-9"
+                          onClick={() => setCounselingPatient(p)}
+                          title="カウンセリング開始"
+                          data-testid={`button-counseling-${p.id}`}
+                        >
+                          <Presentation className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-10 w-10 sm:h-9 sm:w-9"
+                          onClick={() => openEdit(p)}
+                          title="編集"
+                          data-testid={`edit-patient-${p.id}`}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-10 w-10 sm:h-9 sm:w-9 text-destructive"
                           onClick={() => { if (confirm("削除しますか？")) deleteMutation.mutate(p.id); }}
+                          title="削除"
                           data-testid={`delete-patient-${p.id}`}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -284,6 +329,44 @@ export function PatientList() {
           </Table>
         )}
       </div>
+
+      {/* ページネーション */}
+      {!isLoading && filtered.length > 0 && (
+        <div className="px-4 md:px-6 py-3 border-t border-border flex items-center justify-between gap-3 bg-background shrink-0">
+          <p className="text-sm text-muted-foreground">
+            {rangeStart}–{rangeEnd}件 / 全{filtered.length}件
+          </p>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-9"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                data-testid="button-prev-page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline ml-1">前へ</span>
+              </Button>
+              <span className="text-sm tabular-nums" data-testid="text-page-indicator">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-9"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                data-testid="button-next-page"
+              >
+                <span className="hidden sm:inline mr-1">次へ</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={v => !v && setIsDialogOpen(false)}>
@@ -415,6 +498,13 @@ export function PatientList() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {counselingPatient && (
+        <CounselingMode
+          patient={{ id: counselingPatient.id, name: counselingPatient.name }}
+          onClose={() => setCounselingPatient(null)}
+        />
+      )}
     </div>
   );
 }

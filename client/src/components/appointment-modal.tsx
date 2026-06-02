@@ -332,33 +332,33 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
   return (
     <>
     <Dialog open={isOpen} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="w-[calc(100%-32px)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{appointment?.id ? "予約の編集" : "新規予約"}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Patient */}
           <div>
-            <Label className="mb-2 block">患者 <span className="text-red-500">*</span></Label>
+            <Label className="mb-1.5 block text-sm">患者 <span className="text-red-500">*</span></Label>
             {!isNewPatient ? (
               <div className="space-y-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    className="pl-9"
-                    placeholder="患者名・カナ・患者番号・電話番号で検索"
+                    className="pl-9 h-10"
+                    placeholder="名前・カナ・番号・電話で検索"
                     value={searchValue}
                     onChange={e => setSearchValue(e.target.value)}
                     data-testid="input-patient-search"
                   />
                 </div>
                 {searchValue && filteredPatients.length > 0 && !form.patientId && (
-                  <div className="border border-border rounded-md divide-y max-h-40 overflow-y-auto bg-popover">
+                  <div className="border border-border rounded-lg divide-y max-h-44 overflow-y-auto bg-popover">
                     {filteredPatients.map(p => (
                       <button
                         key={p.id}
-                        className="w-full text-left px-3 py-2 hover:bg-accent transition-colors text-sm"
+                        className="w-full text-left px-3 py-2.5 hover:bg-accent active:bg-accent/50 transition-colors text-sm"
                         onClick={() => {
                           setForm(prev => ({ ...prev, patientId: p.id }));
                           setSearchValue(p.name);
@@ -373,36 +373,37 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
                   </div>
                 )}
                 {form.patientId && (
-                  <div className="flex items-center justify-between p-2 bg-accent rounded-md">
-                    <div className="text-sm">
+                  <div className="flex items-center justify-between gap-2 p-2.5 bg-accent rounded-lg">
+                    <div className="text-sm min-w-0">
                       <span className="font-medium">{selectedPatient?.name}</span>
                       <span className="text-muted-foreground ml-2 text-xs">{selectedPatient?.patientNumber}</span>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => { setForm(prev => ({ ...prev, patientId: "" })); setSearchValue(""); }}>
+                    <Button variant="ghost" size="sm" className="shrink-0" onClick={() => { setForm(prev => ({ ...prev, patientId: "" })); setSearchValue(""); }}>
                       変更
                     </Button>
                   </div>
                 )}
                 {isHighRisk && (
-                  <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-md text-sm text-red-700 dark:text-red-400">
+                  <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-700 dark:text-red-400">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     <span>キャンセル{selectedPatient?.cancellationCount}回・無断{selectedPatient?.noShowCount}回の履歴があります</span>
                   </div>
                 )}
                 <button
-                  className="text-xs text-primary hover:underline"
+                  className="text-xs text-primary hover:underline active:opacity-70"
                   onClick={() => setIsNewPatient(true)}
                 >
                   新規患者として登録する
                 </button>
               </div>
             ) : (
-              <div className="space-y-3 p-3 border border-border rounded-md bg-muted/30">
-                <p className="text-sm font-medium">新規患者情報</p>
+              <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/30">
+                <p className="text-sm font-semibold">新規患者情報</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs mb-1 block">氏名 *</Label>
+                    <Label className="text-sm mb-1.5 block">氏名 *</Label>
                     <Input
+                      className="h-10"
                       value={newPatient.name}
                       onChange={e => setNewPatient(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="山田 太郎"
@@ -410,31 +411,34 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
                     />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1 block">カナ</Label>
+                    <Label className="text-sm mb-1.5 block">カナ</Label>
                     <Input
+                      className="h-10"
                       value={newPatient.nameKana}
                       onChange={e => setNewPatient(prev => ({ ...prev, nameKana: e.target.value }))}
                       placeholder="ヤマダ タロウ"
                     />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1 block">電話番号</Label>
+                    <Label className="text-sm mb-1.5 block">電話番号</Label>
                     <Input
+                      className="h-10"
                       value={newPatient.phone}
                       onChange={e => setNewPatient(prev => ({ ...prev, phone: e.target.value }))}
                       placeholder="090-0000-0000"
                     />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1 block">メール</Label>
+                    <Label className="text-sm mb-1.5 block">メール</Label>
                     <Input
+                      className="h-10"
                       value={newPatient.email}
                       onChange={e => setNewPatient(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="email@example.com"
                     />
                   </div>
                 </div>
-                <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setIsNewPatient(false)}>
+                <button className="text-xs text-muted-foreground hover:text-foreground active:opacity-70" onClick={() => setIsNewPatient(false)}>
                   既存患者から選択する
                 </button>
               </div>
@@ -445,30 +449,33 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
 
           {/* Date / Time */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
+            <div className="min-w-0">
               <Label className="mb-1.5 block text-sm">日付</Label>
               <Input
                 type="date"
                 value={form.date}
                 onChange={e => setForm(prev => ({ ...prev, date: e.target.value }))}
+                className="appearance-none block h-10"
                 data-testid="input-date"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label className="mb-1.5 block text-sm">開始時間</Label>
               <Input
                 type="time"
                 value={form.startTime}
                 onChange={e => setForm(prev => ({ ...prev, startTime: e.target.value }))}
+                className="appearance-none block h-10"
                 data-testid="input-start-time"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label className="mb-1.5 block text-sm">終了時間</Label>
               <Input
                 type="time"
                 value={form.endTime}
                 onChange={e => setForm(prev => ({ ...prev, endTime: e.target.value }))}
+                className="appearance-none block h-10"
                 data-testid="input-end-time"
               />
             </div>
@@ -485,7 +492,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
                 )}
               </Label>
               <Select value={form.staffId} onValueChange={v => setForm(prev => ({ ...prev, staffId: v }))}>
-                <SelectTrigger data-testid="select-staff">
+                <SelectTrigger className="h-10" data-testid="select-staff">
                   <SelectValue placeholder="担当者を選択" />
                 </SelectTrigger>
                 <SelectContent>
@@ -500,7 +507,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
             <div>
               <Label className="mb-1.5 block text-sm">診療メニュー</Label>
               <Select value={form.serviceId} onValueChange={handleServiceChange}>
-                <SelectTrigger data-testid="select-service">
+                <SelectTrigger className="h-10" data-testid="select-service">
                   <SelectValue placeholder="メニューを選択" />
                 </SelectTrigger>
                 <SelectContent>
@@ -520,6 +527,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
               <div>
                 <Label className="mb-1.5 block text-sm">治療内容（メモ）</Label>
                 <Input
+                  className="h-10"
                   value={form.treatmentType}
                   onChange={e => setForm(prev => ({ ...prev, treatmentType: e.target.value }))}
                   placeholder="診療メニューを選択するか入力"
@@ -530,7 +538,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
             <div className={form.serviceId ? "col-span-2" : ""}>
               <Label className="mb-1.5 block text-sm">ステータス</Label>
               <Select value={form.status} onValueChange={v => setForm(prev => ({ ...prev, status: v }))}>
-                <SelectTrigger data-testid="select-status">
+                <SelectTrigger className="h-10" data-testid="select-status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -557,7 +565,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
           {questionnaire && (
             <div className="border rounded-lg overflow-hidden">
               <button
-                className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted text-sm font-medium"
+                className="w-full flex items-center justify-between p-3 bg-muted/50 hover:bg-muted active:bg-muted/70 transition-colors text-sm font-medium"
                 onClick={() => setShowQuestionnaire(v => !v)}
                 data-testid="button-toggle-questionnaire"
               >
@@ -565,7 +573,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
                 {showQuestionnaire ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               {showQuestionnaire && (
-                <div className="p-3 space-y-2 text-sm" data-testid="questionnaire-detail">
+                <div className="p-3 space-y-2 text-sm leading-relaxed" data-testid="questionnaire-detail">
                   {questionnaire.chiefComplaint && <div><span className="text-muted-foreground">主訴：</span>{questionnaire.chiefComplaint}</div>}
                   {(questionnaire.painLevel !== null && questionnaire.painLevel !== undefined) && <div><span className="text-muted-foreground">痛みの強さ：</span>{questionnaire.painLevel}/10{questionnaire.painLocation && ` （${questionnaire.painLocation}）`}</div>}
                   {questionnaire.medicalHistory && <div><span className="text-muted-foreground">既往歴：</span>{questionnaire.medicalHistory}</div>}
@@ -581,12 +589,13 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
           )}
 
           {/* Actions */}
-          <div className="flex items-center justify-between pt-2">
-            <div className="flex gap-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-border mt-1">
+            <div className="flex gap-2 flex-wrap">
               {appointment?.id && (
                 <Button
                   variant="destructive"
                   size="sm"
+                  className="active:scale-95"
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
                   data-testid="button-delete"
@@ -599,6 +608,7 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
                 <Button
                   variant="outline"
                   size="sm"
+                  className="active:scale-95"
                   onClick={handleNextAppointment}
                   data-testid="button-next-appointment"
                 >
@@ -607,9 +617,10 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
                 </Button>
               )}
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" onClick={onClose}>閉じる</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" className="h-10 flex-1 sm:flex-none active:scale-95" onClick={onClose}>閉じる</Button>
               <Button
+                className="h-10 flex-1 sm:flex-none active:scale-95"
                 onClick={() => saveMutation.mutate({ ...form, newPatient: isNewPatient ? newPatient : undefined })}
                 disabled={saveMutation.isPending || (!form.patientId && !isNewPatient)}
                 data-testid="button-save"
@@ -629,37 +640,40 @@ export function AppointmentModal({ isOpen, onClose, appointment, initialSlotData
           <DialogTitle>リコール設定: {recallPatientInfo?.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          <p className="text-sm text-muted-foreground">診療が完了しました。次回の定期検診予定日を設定してください。</p>
-          <div className="space-y-2">
-            <Label htmlFor="prompt-recall-date">次回リコール予定日</Label>
-            <Input 
+          <p className="text-sm text-muted-foreground leading-relaxed">診療が完了しました。次回の定期検診予定日を設定してください。</p>
+          <div>
+            <Label htmlFor="prompt-recall-date" className="mb-1.5 block text-sm">次回リコール予定日</Label>
+            <Input
               id="prompt-recall-date"
-              type="date" 
-              value={nextRecallDate} 
-              onChange={(e) => setNextRecallDate(e.target.value)} 
+              type="date"
+              className="h-10"
+              value={nextRecallDate}
+              onChange={(e) => setNextRecallDate(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="prompt-recall-interval">リコール間隔（ヶ月）</Label>
-            <Input 
+          <div>
+            <Label htmlFor="prompt-recall-interval" className="mb-1.5 block text-sm">リコール間隔（ヶ月）</Label>
+            <Input
               id="prompt-recall-interval"
-              type="number" 
+              type="number"
               min="1"
               max="24"
-              value={recallInterval} 
-              onChange={(e) => setRecallInterval(parseInt(e.target.value) || 6)} 
+              className="h-10"
+              value={recallInterval}
+              onChange={(e) => setRecallInterval(parseInt(e.target.value) || 6)}
             />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setShowRecallPrompt(false)}>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="h-10 active:scale-95" onClick={() => setShowRecallPrompt(false)}>
             スキップ
           </Button>
-          <Button 
-            onClick={() => updateRecallMutation.mutate({ 
-              id: recallPatientInfo?.id || "", 
-              nextRecallDate, 
-              recallIntervalMonths: recallInterval 
+          <Button
+            className="h-10 active:scale-95"
+            onClick={() => updateRecallMutation.mutate({
+              id: recallPatientInfo?.id || "",
+              nextRecallDate,
+              recallIntervalMonths: recallInterval
             })}
             disabled={updateRecallMutation.isPending}
             data-testid="button-save-recall-prompt"

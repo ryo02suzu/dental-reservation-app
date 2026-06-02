@@ -1,9 +1,32 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 import { sql } from "drizzle-orm";
+import { scrypt, randomBytes } from "crypto";
+import { promisify } from "util";
+import { createPool } from "./db-config";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = createPool();
 const db = drizzle(pool);
+
+const scryptAsync = promisify(scrypt);
+
+// auth.ts と同じ形式（scrypt 64byte + ランダムsalt）でパスワードをハッシュ化する。
+// シードはソースにハッシュをハードコードせず、環境変数（無ければ起動時生成）から作成する。
+async function seedHash(plain: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(plain, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
+
+// 環境変数からシード用パスワードを取得。未設定なら一時パスワードを生成しログに一度だけ表示する。
+// （本番DBは初回起動済みのためseed自体が走らず、この経路は新規デプロイ時のみ通る）
+async function seedPassword(envKey: string, label: string): Promise<string> {
+  const provided = process.env[envKey];
+  const plain = provided || randomBytes(12).toString("base64url");
+  if (!provided) {
+    console.warn(`[Seed] ${envKey} 未設定。${label} の一時パスワードを生成しました（必ず変更してください）: ${plain}`);
+  }
+  return seedHash(plain);
+}
 
 const DEMO_CLINIC_ID = "default-clinic-001";
 
@@ -159,7 +182,7 @@ export async function applyMigrations() {
       UPDATE clinics
       SET plan_type = 'partner'
       WHERE id = 'a5225a6e-9fdc-4cf5-bf9e-f43db810c3c1'
-        AND plan_type IN ('free', 'starter', 'pro')
+        AND plan_type IN ('free', 'starter', 'standard', 'pro')
     `);
   } catch (err) {
     console.error("[Migration] 今泉歯科 partner プランエラー:", err);
@@ -229,80 +252,19 @@ export async function seedDatabase() {
 
     console.log("[Seed] 初期データを作成中...");
 
+    // 管理者パスワードは環境変数から（ソースにハッシュをハードコードしない）
+    const superAdminPw = await seedPassword("SUPER_ADMIN_PASSWORD", "Sourirette（スーパー管理者）");
+    const imaizumiAdminPw = await seedPassword("IMAIZUMI_ADMIN_PASSWORD", "imaizumi 管理者");
+
     // Sourirette スーパー管理者
     await db.execute(sql`
       INSERT INTO users (id, username, password, clinic_id, is_super_admin)
       VALUES (
         '1927a6b4-9cd3-45f8-8490-b2f2d98832ab',
         'Sourirette',
-        '8c7a6c58d1d226ea84f2df9daa737439f3ac4b807548993b7159da7e788a4b48a73096868e2b034990a0db7d5d8382be40c4cb6a9318a30fcb8bcb0752aa0d15.275b581f722d2551c0e503d073a10701',
+        ${superAdminPw},
         NULL,
         true
-      )
-      ON CONFLICT (id) DO NOTHING
-    `);
-
-    // sakura-demo クリニック
-    await db.execute(sql`
-      INSERT INTO clinics (id, name, slug, phone, email, address, plan_type, is_active)
-      VALUES (
-        'f9853962-5b78-4671-a421-7e5328827c72',
-        'Souriretteデンタルクリニック',
-        'sakura-demo',
-        '03-1234-5678',
-        'info@sakura-dental.jp',
-        '東京都渋谷区桜丘町1-2-3',
-        'professional',
-        true
-      )
-      ON CONFLICT (id) DO NOTHING
-    `);
-
-    await db.execute(sql`
-      INSERT INTO business_hours (id, clinic_id, day_of_week, open_time, close_time, is_closed)
-      VALUES
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 0, '09:00', '13:00', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 1, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 2, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 3, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 4, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 5, '09:00', '18:30', false),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 6, '09:00', '13:00', false)
-    `);
-
-    await db.execute(sql`
-      INSERT INTO clinic_settings (id, clinic_id, clinic_name, chairs_count, booking_advance_days, booking_buffer_minutes, allow_double_booking, max_concurrent_appointments, enable_patient_confirmation, confirmation_deadline_hours, enable_qr_checkin, require_appointment_approval, slot_interval_minutes)
-      VALUES (
-        'b4392bc3-16dd-4b1b-a229-96fe3efea814',
-        'f9853962-5b78-4671-a421-7e5328827c72',
-        'さくら歯科クリニック', 6, 60, 15, false, 2, true, 24, false, false, 30
-      )
-      ON CONFLICT (id) DO NOTHING
-    `);
-
-    await db.execute(sql`
-      INSERT INTO reminder_settings (id, clinic_id, enable_email, enable_sms, enable_line, reminder_hours_before)
-      VALUES (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', true, false, false, 24)
-    `);
-
-    await db.execute(sql`
-      INSERT INTO services (id, clinic_id, name, description, duration, price, category, is_active)
-      VALUES
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '定期検診・クリーニング', '歯石除去・歯面清掃・フッ素塗布', 30, 3300, '予防', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '虫歯治療', '視診・X線検査・レジン充填', 45, 5500, '治療', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', 'ホワイトニング（オフィス）', '院内照射型ホワイトニング', 90, 33000, '審美', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '歯周病治療', 'スケーリング・ルートプレーニング', 60, 4400, '治療', true),
-        (gen_random_uuid(), 'f9853962-5b78-4671-a421-7e5328827c72', '矯正相談', '歯並び・矯正方法のカウンセリング', 30, 0, '相談', true)
-    `);
-
-    await db.execute(sql`
-      INSERT INTO users (id, username, password, clinic_id, is_super_admin)
-      VALUES (
-        '2e5d32b7-7846-4db3-ad90-dd5c6730172c',
-        'sakura-demo',
-        '2c4a6382eb304478d12b8542d2e354803f3daac2ea5994642561efcd7d65a497b6c521147094669ae305781051a4a82df2ad4e52aa3673b907cf09937e0a6800.e47f0ab3e34dba258c31562e0e70cf4c',
-        'f9853962-5b78-4671-a421-7e5328827c72',
-        false
       )
       ON CONFLICT (id) DO NOTHING
     `);
@@ -317,7 +279,7 @@ export async function seedDatabase() {
         '',
         '',
         '群馬県桐生市',
-        'starter',
+        'partner',
         true
       )
       ON CONFLICT (id) DO NOTHING
@@ -364,7 +326,7 @@ export async function seedDatabase() {
       VALUES (
         '07bb6c3c-5f17-4656-a92d-4985ad9b8754',
         'imaizumi-admin',
-        '393f6bf16af5b14336dddb46e318d732c6bbf7d83ac730b7c04c04672446ef46e20b824806207cfb2fe51c45bd9ac775bd6c277174dbf458572b9844f9fee9d2.582873da497b98e259689a39b1a7f8c3',
+        ${imaizumiAdminPw},
         'a5225a6e-9fdc-4cf5-bf9e-f43db810c3c1',
         false
       )

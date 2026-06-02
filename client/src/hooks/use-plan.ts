@@ -5,6 +5,8 @@ interface PlanLimits {
   maxStaff: number;
   maxMonthlyAppointments: number;
   canExport: boolean;
+  canEmail: boolean;
+  canSms: boolean;
   canLine: boolean;
   canRecall: boolean;
   canReport: boolean;
@@ -36,9 +38,12 @@ export function usePlan() {
     canRecall: limits?.canRecall ?? false,
     canReport: limits?.canReport ?? false,
     canLine: limits?.canLine ?? false,
+    canSms: limits?.canSms ?? false,
+    canEmail: limits?.canEmail ?? true,
     canExport: limits?.canExport ?? false,
     isPro: ["pro", "enterprise", "partner"].includes(planType),
-    isStarter: ["starter", "pro", "enterprise", "partner"].includes(planType),
+    // スタンダード相当以上（CSV出力・SMSが使える層）。旧"starter"も後方互換で含める。
+    isStandard: ["standard", "starter", "pro", "enterprise", "partner"].includes(planType),
     isFree: planType === "free",
     planLabel: limits?.label ?? "フリー",
   };
