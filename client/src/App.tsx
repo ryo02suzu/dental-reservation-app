@@ -14,7 +14,6 @@ import MyAppointmentsPage from "@/pages/my-appointments";
 import SuperAdminPage from "@/pages/super-admin";
 import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
-import DemoLoginPage from "@/pages/demo-login";
 import StaffLoginPage from "@/pages/staff-login";
 import MySchedulePage from "@/pages/my-schedule";
 import QrClockInPage from "@/pages/qr-clock-in";
@@ -85,7 +84,6 @@ function Router() {
         <Route path="/admin">
           {() => <ProtectedRoute component={Home} />}
         </Route>
-        <Route path="/demo-login" component={DemoLoginPage} />
         <Route path="/staff-login/:token" component={StaffLoginPage} />
         <Route path="/my-schedule" component={MySchedulePage} />
         <Route path="/qr-clock-in/:token" component={QrClockInPage} />
