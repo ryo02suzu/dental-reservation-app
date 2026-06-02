@@ -122,7 +122,10 @@ export default function QrClockInPage() {
       setErrorMsg("");
       setStep("enter-pin");
     } else {
-      doClock(s.id, "", act);
+      // PINが未設定のスタッフは打刻できない。管理者にPIN登録を促す（無限ループ防止）。
+      setErrorMsg("PINが未設定です。管理者に「設定 → スタッフ」からPINの登録を依頼してください。");
+      setErrorSource("clock");
+      setStep("error");
     }
   }
 
@@ -142,6 +145,13 @@ export default function QrClockInPage() {
       });
       const data = await r.json();
       if (!r.ok) {
+        // PIN未設定はループさせず案内表示。PIN入力が必要なケースのみ再入力へ。
+        if (data.message?.includes("未設定")) {
+          setErrorMsg(data.message);
+          setErrorSource("clock");
+          setStep("error");
+          return;
+        }
         if (data.message?.includes("PIN")) {
           setErrorMsg(data.message);
           setStep("enter-pin");
