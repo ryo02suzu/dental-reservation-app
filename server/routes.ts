@@ -561,8 +561,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
-  // スラッグ存在確認（リアルタイムチェック用）
-  app.get("/api/clinics/check-slug", async (req, res) => {
+  // スラッグ存在確認（リアルタイムチェック用）。医院スラッグの総当たり列挙を防ぐため軽い制限を付与
+  app.get("/api/clinics/check-slug", publicGeneralLimiter, async (req, res) => {
     try {
       const { slug } = req.query as { slug: string };
       if (!slug) return res.status(400).json({ message: "slug required" });
@@ -3104,15 +3104,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const settings = await storage.getReminderSettings(clinic.id);
       if (!settings?.lineChannelSecret) return res.status(400).json({ message: "LINE設定がありません" });
 
-      // Verify signature
+      // Verify signature（署名が無い／一致しない要求は拒否。正規のLINEは必ず署名を送る）
       const signature = req.headers["x-line-signature"] as string;
-      if (signature) {
-        const hmac = crypto.createHmac("sha256", settings.lineChannelSecret);
-        hmac.update(JSON.stringify(req.body));
-        const digest = hmac.digest("base64");
-        if (digest !== signature) {
-          return res.status(401).json({ message: "Invalid signature" });
-        }
+      if (!signature) {
+        return res.status(401).json({ message: "Missing signature" });
+      }
+      const hmac = crypto.createHmac("sha256", settings.lineChannelSecret);
+      hmac.update(JSON.stringify(req.body));
+      const digest = hmac.digest("base64");
+      if (digest !== signature) {
+        return res.status(401).json({ message: "Invalid signature" });
       }
 
       const events = req.body.events || [];

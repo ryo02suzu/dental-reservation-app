@@ -2,6 +2,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { type Express } from "express";
 import session from "express-session";
+import rateLimit from "express-rate-limit";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
@@ -111,7 +112,16 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
+  // 管理者ログインの総当たり対策（正規利用は数回／攻撃のみ遮断）
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { message: "ログイン試行が多すぎます。15分後に再度お試しください。" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.post("/api/login", loginLimiter, passport.authenticate("local"), (req, res) => {
     applyRememberMe(req, (req.body as any)?.rememberMe);
     res.status(200).json(req.user);
   });
