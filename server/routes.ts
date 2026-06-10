@@ -781,6 +781,73 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
+  // ─── 予約書き込み直前の空き再チェック（二重予約防止）────────────────────────
+  // /slots と同じ判定（休診・診療時間・カットオフ・重複/同時上限）を「単一の希望枠」に対して行う。
+  // 読み取り→書き込みが非アトミックな点は残るが、ページ表示〜送信の間に枠が埋まるケースを塞ぐ。
+  async function checkSlotStillAvailable(
+    clinicId: string,
+    date: string,
+    startTime: string,
+    duration: number,
+    opts?: { excludeAppointmentId?: string; staffId?: string | null }
+  ): Promise<{ ok: boolean; reason?: string }> {
+    const start5 = startTime.slice(0, 5);
+    const [hours, holidays, appointments, settings] = await Promise.all([
+      storage.getBusinessHours(clinicId),
+      storage.getHolidays(clinicId),
+      storage.getAppointments({ clinicId, date }),
+      storage.getClinicSettings(clinicId),
+    ]);
+    const tm = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+
+    const fullDayHoliday = holidays.find(h => h.date === date && !h.startTime);
+    const partialHolidays = holidays.filter(h => h.date === date && h.startTime && h.endTime);
+    const closedOnHolidays = settings?.closedOnHolidays !== false;
+    const isHoliday = !!fullDayHoliday || (isJapaneseHoliday(date) && closedOnHolidays);
+    const dayHours = hours.find(h => h.dayOfWeek === new Date(date + "T00:00:00").getDay());
+    if (isHoliday || !dayHours || dayHours.isClosed) return { ok: false, reason: "休診日です" };
+
+    const slotStart = tm(start5);
+    const slotEnd = slotStart + duration;
+    const inWindow = (open?: string | null, close?: string | null) =>
+      !!open && !!close && slotStart >= tm(open.slice(0, 5)) && slotEnd <= tm(close.slice(0, 5));
+    if (!inWindow(dayHours.openTime, dayHours.closeTime) && !inWindow(dayHours.afternoonOpenTime, dayHours.afternoonCloseTime)) {
+      return { ok: false, reason: "診療時間外です" };
+    }
+    if (partialHolidays.some(ph => slotStart < tm(ph.endTime!.slice(0, 5)) && slotEnd > tm(ph.startTime!.slice(0, 5)))) {
+      return { ok: false, reason: "休診時間帯です" };
+    }
+
+    const nowJST = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayJST = nowJST.toISOString().slice(0, 10);
+    if (date < todayJST) return { ok: false, reason: "過去の日付です" };
+    if (date === todayJST) {
+      const bufferMins = settings?.bookingBufferMinutes ?? 15;
+      if (slotStart < nowJST.getUTCHours() * 60 + nowJST.getUTCMinutes() + bufferMins) {
+        return { ok: false, reason: "受付時間を過ぎています" };
+      }
+    }
+
+    const maxConcurrent = settings?.allowDoubleBooking ? 9999 : (settings?.chairsCount ?? settings?.maxConcurrentAppointments ?? 1);
+    const activeAppts = appointments.filter(a => {
+      if (a.status === "cancelled") return false;
+      if (opts?.excludeAppointmentId && a.id === opts.excludeAppointmentId) return false;
+      return true;
+    });
+    const overlaps = (a: any) => {
+      const aStart = tm(a.startTime.slice(0, 5));
+      const aEnd = a.endTime ? tm(a.endTime.slice(0, 5)) : aStart + 30;
+      return aStart < slotEnd && aEnd > slotStart;
+    };
+    if (opts?.staffId) {
+      const staffAppts = activeAppts.filter(a => !a.staffId || a.staffId === opts.staffId);
+      if (staffAppts.some(overlaps)) return { ok: false, reason: "選択した時間は既に予約で埋まっています" };
+    } else if (activeAppts.filter(overlaps).length >= maxConcurrent) {
+      return { ok: false, reason: "選択した時間は既に予約で埋まっています" };
+    }
+    return { ok: true };
+  }
+
   // ─── Auto-assign staff & chair helper ─────────────────────────────────────
   async function autoAssignStaffAndChair(
     clinicId: string,
@@ -923,6 +990,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const [h, m] = startTime.split(":").map(Number);
       const endTotal = h * 60 + m + duration;
       const endTime = `${Math.floor(endTotal / 60).toString().padStart(2, "0")}:${(endTotal % 60).toString().padStart(2, "0")}`;
+
+      // 二重予約防止：書き込み直前に空きを再チェック
+      const avail = await checkSlotStillAvailable(clinic.id, date, startTime, duration, { staffId });
+      if (!avail.ok) return res.status(409).json({ message: `${avail.reason ?? "選択した時間は予約できません"}。別の時間をお選びください。` });
 
       // 自動割り当て（スタッフ＋ユニット）
       const { staffId: autoStaffId, chairNumber: autoChairNumber } =
@@ -1141,6 +1212,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const [h, m] = startTime.split(":").map(Number);
       const endTotal = h * 60 + m + duration;
       const endTime = `${Math.floor(endTotal / 60).toString().padStart(2, "0")}:${(endTotal % 60).toString().padStart(2, "0")}`;
+
+      // 二重予約防止：書き込み直前に空きを再チェック
+      const avail2 = await checkSlotStillAvailable(DEFAULT_CLINIC_ID, date, startTime, duration, { staffId });
+      if (!avail2.ok) return res.status(409).json({ message: `${avail2.reason ?? "選択した時間は予約できません"}。別の時間をお選びください。` });
 
       // 自動割り当て（スタッフ＋ユニット）
       const { staffId: autoStaffId2, chairNumber: autoChairNumber2 } =
@@ -1495,6 +1570,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const [h, m] = startTime.split(":").map(Number);
       const endTotal = h * 60 + m + duration;
       const endTime = `${Math.floor(endTotal / 60).toString().padStart(2, "0")}:${(endTotal % 60).toString().padStart(2, "0")}`;
+      // 二重予約防止：変更先の空きを再チェック（自分自身は除外）
+      const avail3 = await checkSlotStillAvailable(appointment.clinicId, date, startTime, duration, { excludeAppointmentId: req.params.id, staffId: appointment.staffId });
+      if (!avail3.ok) return res.status(409).json({ message: `${avail3.reason ?? "選択した時間は予約できません"}。別の時間をお選びください。` });
       const updated = await storage.updateAppointment(req.params.id, { date, startTime, endTime, confirmationStatus: "pending" });
       res.json({ success: true, appointment: updated });
     } catch (e: any) { res.status(500).json({ message: e.message }); }

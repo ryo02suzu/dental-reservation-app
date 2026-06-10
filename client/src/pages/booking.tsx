@@ -867,7 +867,9 @@ function DateTimeGridStep({
       queryFn: async (): Promise<SlotInfo> => {
         if (isClosed) return { available: false, slots: [] };
         const res = await fetch(`${apiBase}/slots?date=${toYMD(date)}`);
-        return res.json();
+        if (!res.ok) return { available: false, slots: [] };
+        const data = await res.json();
+        return { ...data, slots: Array.isArray(data?.slots) ? data.slots : [] };
       },
       staleTime: 60 * 1000,
       enabled: !isClosed,
@@ -965,7 +967,7 @@ function DateTimeGridStep({
                     const q = slotQueries[di];
                     const isLoading = q.isLoading && !isClosed;
                     const slotData = q.data;
-                    const isAvail = !isClosed && slotData && slotData.slots.some(s => s.slice(0, 5) === time);
+                    const isAvail = !isClosed && Array.isArray(slotData?.slots) && slotData.slots.some(s => s.slice(0, 5) === time);
                     const cellKey = `${toYMD(date)}-${time}`;
                     return (
                       <td key={toYMD(date)} className="border-r border-gray-200 py-1 px-1 text-center last:border-r-0"
@@ -1291,13 +1293,15 @@ export default function BookingPage({ slug }: { slug?: string }) {
     }
   }, [session]);
 
-  const { data: info, isLoading: infoLoading } = useQuery<ClinicInfo>({
+  const { data: info, isLoading: infoLoading, isError: infoError } = useQuery<ClinicInfo>({
     queryKey: [apiBase + "/info"],
     queryFn: async () => {
       const res = await fetch(apiBase + "/info");
+      if (!res.ok) throw new Error("クリニック情報を取得できませんでした");
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
   const clinicName = info?.clinic?.name || "歯科クリニック";
@@ -1378,6 +1382,21 @@ export default function BookingPage({ slug }: { slug?: string }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin border-gray-300" />
+      </div>
+    );
+  }
+
+  if (infoError || !info) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6 text-center gap-4">
+        <p className="text-base font-semibold text-gray-800">クリニック情報を読み込めませんでした</p>
+        <p className="text-sm text-gray-500">通信状況をご確認のうえ、再度お試しください。</p>
+        <button
+          onClick={() => qc.invalidateQueries({ queryKey: [apiBase + "/info"] })}
+          className="px-5 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-medium"
+        >
+          再読み込み
+        </button>
       </div>
     );
   }
