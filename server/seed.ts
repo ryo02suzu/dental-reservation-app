@@ -153,6 +153,24 @@ export async function resetDemoAppointments(): Promise<void> {
 
 export async function applyMigrations() {
   try {
+    // セッション保存テーブル（connect-pg-simple用）を確実に作成する。
+    // バンドル後は connect-pg-simple の createTableIfMissing がtable.sqlを読めず
+    // 失敗するため（ENOENT）、ここで明示的に作成しておく。新規DBでも自動で用意される。
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL,
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")`);
+    await db.execute(sql`ALTER TABLE "session" ENABLE ROW LEVEL SECURITY`);
+  } catch (err) {
+    console.error("[Migration] session テーブル作成エラー:", err);
+  }
+
+  try {
     // 今泉歯科医院のprimaryColorを常に正しい値に保つ
     await db.execute(sql`
       UPDATE clinic_settings
