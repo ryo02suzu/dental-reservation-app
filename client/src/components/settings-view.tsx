@@ -1919,6 +1919,18 @@ function GeneralTab() {
           <div className="space-y-5 max-w-lg">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
               <div>
+                <Label className="mb-1.5 block">ユニット数（診療台）</Label>
+                <NumericSelectOrCustom
+                  value={form.chairsCount}
+                  onChange={v => setForm(p => ({ ...p, chairsCount: v }))}
+                  options={[1, 2, 3, 4, 5, 6, 8, 10]}
+                  unit="台"
+                  min={1}
+                  testId="select-chairs-count"
+                />
+                <p className="text-xs text-muted-foreground mt-1">診療チェアの数。カレンダー「ユニット別」表示の列数と、同じ時間に受けられる予約数の基準になります。</p>
+              </div>
+              <div>
                 <Label className="mb-1.5 block">同時予約受付数</Label>
                 <NumericSelectOrCustom
                   value={form.maxConcurrentAppointments}
