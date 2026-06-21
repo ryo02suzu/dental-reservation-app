@@ -33,6 +33,7 @@ interface Appointment {
   status: string;
   confirmationStatus: string;
   treatmentType: string;
+  visitType?: string | null;
   chairNumber?: number;
   notes?: string;
   staffId?: string;
@@ -641,7 +642,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
 // ─── Appointment Card ─────────────────────────────────────────────────────────
 function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number; onClick: () => void }) {
   const c = getTreatmentColor(appt.treatmentType || "");
-  const isNewPatient = (appt.treatmentType || "").includes("初診");
+  const isNewPatient = appt.visitType === "first" || (appt.treatmentType || "").includes("初診");
   return (
     <button
       className={`w-full text-left rounded overflow-hidden border border-border/60 shadow-sm flex ${c.bg} hover:brightness-95 transition-all`}
@@ -655,7 +656,7 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
           <>
             <div className="flex items-center gap-1">
               <span className="text-xs font-semibold truncate">{appt.patient?.name || "患者不明"}</span>
-              {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">新患</span>}
+              {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">初診</span>}
             </div>
             <div className="text-[10px] opacity-70 truncate mt-0.5">
               {appt.startTime.slice(0, 5)}〜{appt.endTime?.slice(0, 5)} {appt.treatmentType}
@@ -664,13 +665,13 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
         ) : height >= 36 ? (
           <div className="flex items-center gap-1 h-full">
             <span className="text-xs font-semibold truncate leading-tight">{appt.patient?.name || "患者不明"}</span>
-            {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">新患</span>}
+            {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">初診</span>}
             {appt.treatmentType && <span className="text-[10px] opacity-60 truncate shrink-0 hidden sm:block">{appt.treatmentType}</span>}
           </div>
         ) : (
           <div className="flex items-center gap-1 h-full">
             <span className="text-[10px] font-semibold truncate leading-none">{appt.patient?.name || "患者不明"}</span>
-            {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">新患</span>}
+            {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">初診</span>}
           </div>
         )}
       </div>
@@ -771,8 +772,8 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   const afternoonAppts = activeAppts.filter(a => parseInt(a.startTime) >= 13);
   const morningCount = morningAppts.length;
   const afternoonCount = afternoonAppts.length;
-  const morningNew = morningAppts.filter(a => (a.treatmentType || "").includes("初診")).length;
-  const afternoonNew = afternoonAppts.filter(a => (a.treatmentType || "").includes("初診")).length;
+  const morningNew = morningAppts.filter(a => (a.visitType === "first" || (a.treatmentType || "").includes("初診"))).length;
+  const afternoonNew = afternoonAppts.filter(a => (a.visitType === "first" || (a.treatmentType || "").includes("初診"))).length;
 
   // ── 台帳の列を軸（スタッフ別／ユニット別）から構築 ──────────────────────────
   type Col = { key: string; label: string; sub: string; kind: "staff" | "chair" | "unassigned"; accent?: boolean };
@@ -936,11 +937,11 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     <div className="flex items-center gap-4 px-4 md:px-6 py-2 bg-muted/30 border-b border-border text-sm shrink-0 overflow-x-auto">
       <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
         <Sun className="h-3.5 w-3.5" />午前 <strong className="text-foreground">{morningCount}</strong>件
-        {morningNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(新患{morningNew}名)</span>}
+        {morningNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(初診{morningNew}名)</span>}
       </div>
       <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
         <Sunset className="h-3.5 w-3.5" />午後 <strong className="text-foreground">{afternoonCount}</strong>件
-        {afternoonNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(新患{afternoonNew}名)</span>}
+        {afternoonNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(初診{afternoonNew}名)</span>}
       </div>
       <div className="text-muted-foreground shrink-0">計 <strong className="text-foreground">{activeAppts.length}</strong>件</div>
       {!isDayOff && <div className="text-emerald-600 dark:text-emerald-400 shrink-0">空き <strong>{freeCount}</strong>枠</div>}
@@ -988,7 +989,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
               </div>
             ) : sorted.map(appt => {
               const c = getTreatmentColor(appt.treatmentType || "");
-              const isNewPatient = (appt.treatmentType || "").includes("初診");
+              const isNewPatient = appt.visitType === "first" || (appt.treatmentType || "").includes("初診");
               const start = appt.startTime.slice(0, 5);
               const showDivider = isToday && !dividerShown && timeToMins(start) >= nowMins;
               if (showDivider) dividerShown = true;
@@ -1016,7 +1017,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                       </div>
                       <div className="font-semibold mt-1 flex items-center gap-1.5 truncate">
                         <span className="truncate">{appt.patient?.name || "患者不明"}</span>
-                        {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-1 shrink-0">新患</span>}
+                        {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-1 shrink-0">初診</span>}
                       </div>
                       <div className="text-xs text-muted-foreground truncate mt-0.5">
                         {appt.treatmentType}{appt.staff && appt.chairNumber ? ` ・ ${appt.staff.name}` : ""}

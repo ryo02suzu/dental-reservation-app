@@ -171,6 +171,13 @@ export async function applyMigrations() {
   }
 
   try {
+    // 予約の初診/再診区分カラム（新規DB・既存DB両方で確実に用意）
+    await db.execute(sql`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS visit_type text`);
+  } catch (err) {
+    console.error("[Migration] visit_type カラム追加エラー:", err);
+  }
+
+  try {
     // 今泉歯科医院のprimaryColorを常に正しい値に保つ
     await db.execute(sql`
       UPDATE clinic_settings

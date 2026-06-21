@@ -115,6 +115,7 @@ export const appointments = pgTable("appointments", {
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
   treatmentType: text("treatment_type"),
+  visitType: text("visit_type"), // "first"(初診) | "return"(再診) | null
   status: text("status").default("confirmed"),
   confirmationStatus: text("confirmation_status").default("pending"),
   chairNumber: integer("chair_number"),

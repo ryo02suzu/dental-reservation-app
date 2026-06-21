@@ -20,6 +20,7 @@ interface Appointment {
   status: string;
   confirmationStatus: string;
   treatmentType: string;
+  visitType?: string | null;
   chairNumber?: number;
   notes?: string;
   cancellationReason?: string;
@@ -436,7 +437,10 @@ export function Dashboard() {
                           </div>
                           {/* 患者・治療 */}
                           <div className="flex-1 min-w-0 flex flex-col justify-center">
-                            <div className="font-semibold truncate text-sm">{apt.patient?.name || "不明"}</div>
+                            <div className="font-semibold truncate text-sm flex items-center gap-1.5">
+                              {apt.visitType === "first" && <span className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">初診</span>}
+                              <span className="truncate">{apt.patient?.name || "不明"}</span>
+                            </div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap mt-0.5">
                               <span className={`px-1.5 py-0.5 rounded-md border text-[11px] ${treatmentColors[apt.treatmentType] || "bg-card border-border"}`}>{apt.treatmentType}</span>
                               {apt.staff && <span className="truncate">{apt.staff.name}</span>}

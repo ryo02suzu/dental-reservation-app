@@ -959,7 +959,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(429).json({ message: "今月の予約受付上限に達しました。医院にお電話でご連絡ください。" });
       }
 
-      const { patientName, patientPhone, date, startTime, treatmentType, notes, durationMinutes, serviceId, staffId } = req.body;
+      const { patientName, patientPhone, date, startTime, treatmentType, visitType, notes, durationMinutes, serviceId, staffId } = req.body;
       if (!patientName || !patientPhone || !date || !startTime || !treatmentType) {
         return res.status(400).json({ message: "必須項目が不足しています" });
       }
@@ -1014,6 +1014,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         startTime,
         endTime,
         treatmentType,
+        visitType: visitType || null,
         notes: notes || null,
         status: apptStatus,
         confirmationStatus: apptStatus === "confirmed" ? "confirmed" : "pending",
@@ -1175,7 +1176,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/public/book", async (req, res) => {
     try {
-      const { patientName, patientPhone, date, startTime, treatmentType, notes, durationMinutes, serviceId, staffId } = req.body;
+      const { patientName, patientPhone, date, startTime, treatmentType, visitType, notes, durationMinutes, serviceId, staffId } = req.body;
       if (!patientName || !patientPhone || !date || !startTime || !treatmentType) {
         return res.status(400).json({ message: "必須項目が不足しています" });
       }
@@ -1235,6 +1236,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         startTime,
         endTime,
         treatmentType,
+        visitType: visitType || null,
         notes: notes || null,
         status: apptStatus,
         confirmationStatus: apptStatus === "confirmed" ? "confirmed" : "pending",

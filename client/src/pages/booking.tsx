@@ -93,7 +93,8 @@ interface SlotInfo { available: boolean; slots: string[]; bookedSlots?: string[]
 interface PatientSession { loggedIn: boolean; patient?: { id: string; name: string; phone: string } }
 interface SelectedService { id: string | null; name: string; duration: number; price?: number; description?: string }
 
-type View = "top" | "auth" | "register" | "reset-password" | "service" | "datetime" | "confirm" | "success";
+type View = "top" | "auth" | "register" | "reset-password" | "visit-type" | "service" | "datetime" | "confirm" | "success";
+type VisitType = "first" | "return";
 
 // ── Shared Layout Shell ───────────────────────────────────────────────────────
 
@@ -726,14 +727,52 @@ function ResetPasswordPage({
   );
 }
 
+// ── Step: 初診 / 再診 選択 ─────────────────────────────────────────────────────
+
+function VisitTypeStep({ onSelect }: { onSelect: (t: VisitType) => void }) {
+  const { primary, light, border } = useClinicColors();
+  return (
+    <div className="px-4 md:px-8 py-6 max-w-2xl">
+      <h2 className="text-sm font-semibold text-gray-700 mb-1.5">ご来院について</h2>
+      <div className="w-10 h-0.5 mb-4" style={{ backgroundColor: primary }} />
+      <p className="text-sm text-gray-600 mb-1.5 leading-relaxed">当院のご利用は初めてですか？</p>
+      <p className="text-xs text-gray-400 mb-5 leading-relaxed">※以前から通院されている方も、オンライン予約が初めての場合は「再診」をお選びください。</p>
+      <div className="space-y-3">
+        <button onClick={() => onSelect("first")} className="w-full text-left rounded-2xl border p-5 bg-white hover:shadow-md transition-all active:scale-[0.99] flex items-center gap-4" style={{ borderColor: border }} data-testid="button-visit-first">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: light }}>
+            <span className="text-lg font-bold" style={{ color: primary }}>初</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold text-gray-800">初めて受診します（初診）</p>
+            <p className="text-xs text-gray-500 mt-0.5">問診票のご記入や検査のため、少しお時間をいただきます。</p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+        </button>
+        <button onClick={() => onSelect("return")} className="w-full text-left rounded-2xl border p-5 bg-white hover:shadow-md transition-all active:scale-[0.99] flex items-center gap-4" style={{ borderColor: border }} data-testid="button-visit-return">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-gray-100">
+            <span className="text-lg font-bold text-gray-500">再</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold text-gray-800">受診したことがあります（再診）</p>
+            <p className="text-xs text-gray-500 mt-0.5">通院中・以前に来院された方はこちら。</p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Step: Service Selection ───────────────────────────────────────────────────
 
 function ServiceSelectStep({
   services,
   onSelect,
+  visitType,
 }: {
   services: ClinicInfo["services"];
   onSelect: (s: SelectedService) => void;
+  visitType: VisitType | null;
 }) {
   const { primary, border } = useClinicColors();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -747,9 +786,13 @@ function ServiceSelectStep({
     { id: null, name: "その他", duration: 30, description: "上記以外の治療・相談" },
   ];
 
-  const displayServices: SelectedService[] = services && services.length > 0
+  const activeServices: SelectedService[] = services && services.length > 0
     ? services.filter(s => s.isActive).map(s => ({ id: s.id, name: s.name, duration: s.duration, price: s.price, description: s.description }))
     : fallbackServices;
+  // 再診のときは「初診」を含むメニュー（初診・健診・相談 等）を表示しない
+  const displayServices: SelectedService[] = visitType === "return"
+    ? activeServices.filter(s => !s.name.includes("初診"))
+    : activeServices;
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-2xl">
@@ -1011,12 +1054,12 @@ function DateTimeGridStep({
 
 function ConfirmStep({
   clinicName, patientName, selectedService, selectedDate, selectedTime,
-  notes, onNotesChange, onBack, onSubmit, isPending,
+  notes, onNotesChange, onBack, onSubmit, isPending, visitType,
 }: {
   clinicName: string; patientName: string; selectedService: SelectedService;
   selectedDate: Date; selectedTime: string; notes: string;
   onNotesChange: (v: string) => void; onBack: () => void;
-  onSubmit: () => void; isPending: boolean;
+  onSubmit: () => void; isPending: boolean; visitType: VisitType | null;
 }) {
   const { primary, border } = useClinicColors();
   const [termsAgreed, setTermsAgreed] = useState(false);
@@ -1035,6 +1078,14 @@ function ConfirmStep({
         </div>
         <div className="border rounded-xl p-4 bg-white space-y-3" style={{ borderColor: border }}>
           <p className="text-xs text-gray-400">{clinicName}</p>
+          {visitType && (
+            <div>
+              <p className="text-xs text-gray-400 mb-1">受診区分</p>
+              <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full" style={{ backgroundColor: visitType === "first" ? `${primary}22` : "#F3F4F6", color: visitType === "first" ? primary : "#6B7280" }}>
+                {visitType === "first" ? "初診" : "再診"}
+              </span>
+            </div>
+          )}
           <div>
             <p className="text-xs text-gray-400 mb-1">予約メニュー</p>
             <div className="border rounded-lg p-3" style={{ borderColor: border, backgroundColor: "#FAFAF9" }}>
@@ -1241,6 +1292,7 @@ export default function BookingPage({ slug }: { slug?: string }) {
   const [view, setView] = useState<View>("top");
   const [patientName, setPatientName] = useState("");
   const [patientPhone, setPatientPhone] = useState("");
+  const [visitType, setVisitType] = useState<VisitType | null>(null);
   const [selectedService, setSelectedService] = useState<SelectedService | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState("");
@@ -1336,6 +1388,7 @@ export default function BookingPage({ slug }: { slug?: string }) {
           date: toYMD(selectedDate!), startTime: selectedTime,
           treatmentType: svc.name, notes: notes || null,
           durationMinutes: svc.duration, serviceId: svc.id || null,
+          visitType,
         }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || "予約に失敗しました"); }
@@ -1352,17 +1405,18 @@ export default function BookingPage({ slug }: { slug?: string }) {
   const loggedIn = !!session?.loggedIn;
 
   const handleBookClick = () => {
-    if (loggedIn) setView("service");
+    if (loggedIn) setView("visit-type");
     else setView("auth");
   };
 
   const handleAuthSuccess = (name: string, phone: string) => {
     setPatientName(name);
     setPatientPhone(phone);
-    setView("service");
+    setView("visit-type");
   };
 
   const resetBooking = () => {
+    setVisitType(null);
     setSelectedService(null);
     setSelectedDate(null);
     setSelectedTime("");
@@ -1372,7 +1426,8 @@ export default function BookingPage({ slug }: { slug?: string }) {
   };
 
   const handleNavClick = (v: View) => {
-    if (v === "service" && !loggedIn) setView("auth");
+    // 「新規予約」は初診/再診の選択から開始
+    if (v === "service") setView(loggedIn ? "visit-type" : "auth");
     else setView(v);
   };
 
@@ -1413,13 +1468,13 @@ export default function BookingPage({ slug }: { slug?: string }) {
       onNavClick={handleNavClick}
     >
       {/* Step progress bar (for booking steps) */}
-      {["service", "datetime", "confirm"].includes(view) && (
+      {["visit-type", "service", "datetime", "confirm"].includes(view) && (
         <div
           className="flex items-center gap-0 px-4 md:px-8 py-3 border-b text-xs overflow-x-auto"
           style={{ borderColor: colors.border, backgroundColor: "white" }}
         >
-          {[["service", "メニュー選択"], ["datetime", "日時選択"], ["confirm", "予約確定"]].map(([v, label], i) => {
-            const views: View[] = ["service", "datetime", "confirm"];
+          {[["visit-type", "初診/再診"], ["service", "メニュー選択"], ["datetime", "日時選択"], ["confirm", "予約確定"]].map(([v, label], i) => {
+            const views: View[] = ["visit-type", "service", "datetime", "confirm"];
             const idx = views.indexOf(view);
             const isActive = view === v;
             const isDone = idx > i;
@@ -1437,7 +1492,7 @@ export default function BookingPage({ slug }: { slug?: string }) {
                   </div>
                   <span className="whitespace-nowrap" style={{ color: isActive ? "#2D2D2D" : "#AAA", fontWeight: isActive ? 600 : 400 }}>{label}</span>
                 </div>
-                {i < 2 && <ChevronRight className="w-3 h-3 text-gray-200 mx-2 shrink-0" />}
+                {i < 3 && <ChevronRight className="w-3 h-3 text-gray-200 mx-2 shrink-0" />}
               </div>
             );
           })}
@@ -1445,12 +1500,13 @@ export default function BookingPage({ slug }: { slug?: string }) {
       )}
 
       {/* Back button for booking steps */}
-      {["datetime", "confirm"].includes(view) && (
+      {["service", "datetime", "confirm"].includes(view) && (
         <div className="px-4 md:px-8 pt-4">
           <button
             onClick={() => {
               if (view === "confirm") setView("datetime");
               else if (view === "datetime") setView("service");
+              else if (view === "service") setView("visit-type");
             }}
             className="flex items-center gap-1 h-10 -ml-1 pl-1 pr-2 rounded-lg text-sm hover:opacity-70 active:opacity-70 transition-opacity"
             style={{ color: colors.primary }}
@@ -1491,9 +1547,14 @@ export default function BookingPage({ slug }: { slug?: string }) {
         />
       )}
 
+      {view === "visit-type" && (
+        <VisitTypeStep onSelect={(t) => { setVisitType(t); setView("service"); }} />
+      )}
+
       {view === "service" && info && (
         <ServiceSelectStep
           services={info.services}
+          visitType={visitType}
           onSelect={(svc) => { setSelectedService(svc); setView("datetime"); }}
         />
       )}
@@ -1526,6 +1587,7 @@ export default function BookingPage({ slug }: { slug?: string }) {
           onBack={() => setView("datetime")}
           onSubmit={() => bookMutation.mutate()}
           isPending={bookMutation.isPending}
+          visitType={visitType}
         />
       )}
 
