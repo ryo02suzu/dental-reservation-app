@@ -360,6 +360,11 @@ export default function MyAppointmentsPage() {
   function AppointmentCard({ appt }: { appt: Appointment }) {
     const status = STATUS_MAP[appt.status] ?? { label: appt.status, color: "bg-gray-100 text-gray-700" };
     const canModify = appt.status !== "cancelled" && appt.status !== "completed";
+    // 予約変更は24時間前まで・キャンセルは48時間前まで（JST）
+    const apptMs = Date.parse(`${appt.date}T${appt.startTime || "00:00:00"}+09:00`);
+    const hoursUntil = Number.isNaN(apptMs) ? Infinity : (apptMs - Date.now()) / 3600000;
+    const canReschedule = hoursUntil >= 24;
+    const canCancel = hoursUntil >= 48;
     return (
       <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm transition-shadow hover:shadow-md" data-testid={`card-appointment-${appt.id}`}>
         <div className="flex justify-between items-start gap-3 mb-4">
@@ -387,16 +392,25 @@ export default function MyAppointmentsPage() {
           </div>
         )}
         {canModify && (
-          <div className="flex gap-2">
-            {session?.loggedIn && (
-              <button onClick={() => openReschedule(appt)} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors flex items-center justify-center gap-1.5" data-testid={`button-reschedule-${appt.id}`}>
-                <CalendarClock className="w-4 h-4" /> 日時を変更
+          <>
+            <div className="flex gap-2">
+              {session?.loggedIn && (
+                <button onClick={() => openReschedule(appt)} disabled={!canReschedule} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" data-testid={`button-reschedule-${appt.id}`}>
+                  <CalendarClock className="w-4 h-4" /> 日時を変更
+                </button>
+              )}
+              <button onClick={() => { setCancelTarget(appt.id); setCancelReason(""); }} disabled={!canCancel} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent" data-testid={`button-cancel-${appt.id}`}>
+                キャンセル
               </button>
+            </div>
+            {(!canReschedule || !canCancel) && (
+              <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                {!canReschedule
+                  ? "変更・キャンセルの期限を過ぎています（変更は24時間前・キャンセルは48時間前まで）。お手数ですが医院へお電話ください。"
+                  : "キャンセルは予約日時の48時間前まで。期限を過ぎたキャンセルは医院へお電話ください。"}
+              </p>
             )}
-            <button onClick={() => { setCancelTarget(appt.id); setCancelReason(""); }} className="flex-1 h-11 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-50 transition-colors" data-testid={`button-cancel-${appt.id}`}>
-              キャンセル
-            </button>
-          </div>
+          </>
         )}
       </div>
     );

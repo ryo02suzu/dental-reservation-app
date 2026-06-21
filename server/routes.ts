@@ -1524,6 +1524,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const appointment = await storage.getAppointmentById(req.params.id);
       if (!appointment) return res.status(404).json({ message: "予約が見つかりません" });
       if (appointment.patientId !== patientId) return res.status(403).json({ message: "権限がありません" });
+      // キャンセルは予約日時の48時間前まで（過ぎたらお電話案内）
+      const cancelApptMs = Date.parse(`${appointment.date}T${appointment.startTime}+09:00`);
+      if (!Number.isNaN(cancelApptMs) && cancelApptMs - Date.now() < 48 * 60 * 60 * 1000) {
+        return res.status(403).json({ message: "予約日時の48時間前を過ぎているため、マイページからはキャンセルできません。恐れ入りますが医院へお電話ください。" });
+      }
       await storage.updateAppointment(req.params.id, { status: "cancelled", cancellationReason: cancellationReason || null });
       res.json({ success: true });
 
@@ -1566,6 +1571,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!appointment) return res.status(404).json({ message: "予約が見つかりません" });
       if (appointment.patientId !== patientId) return res.status(403).json({ message: "権限がありません" });
       if (appointment.status === "cancelled") return res.status(400).json({ message: "キャンセル済みの予約は変更できません" });
+      // 予約変更は予約日時の24時間前まで（過ぎたらお電話案内）
+      const apptStartMs = Date.parse(`${appointment.date}T${appointment.startTime}+09:00`);
+      if (!Number.isNaN(apptStartMs) && apptStartMs - Date.now() < 24 * 60 * 60 * 1000) {
+        return res.status(403).json({ message: "予約日時の24時間前を過ぎているため、マイページからは変更できません。恐れ入りますが医院へお電話ください。" });
+      }
       const duration = durationMinutes || 30;
       const [h, m] = startTime.split(":").map(Number);
       const endTotal = h * 60 + m + duration;
