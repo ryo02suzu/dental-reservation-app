@@ -730,33 +730,55 @@ function ResetPasswordPage({
 // ── Step: 初診 / 再診 選択 ─────────────────────────────────────────────────────
 
 function VisitTypeStep({ onSelect }: { onSelect: (t: VisitType) => void }) {
-  const { primary, light, border } = useClinicColors();
+  const { primary, light } = useClinicColors();
   return (
-    <div className="px-4 md:px-8 py-6 max-w-2xl">
-      <h2 className="text-sm font-semibold text-gray-700 mb-1.5">ご来院について</h2>
-      <div className="w-10 h-0.5 mb-4" style={{ backgroundColor: primary }} />
-      <p className="text-sm text-gray-600 mb-1.5 leading-relaxed">当院のご利用は初めてですか？</p>
-      <p className="text-xs text-gray-400 mb-5 leading-relaxed">※以前から通院されている方も、オンライン予約が初めての場合は「再診」をお選びください。</p>
-      <div className="space-y-3">
-        <button onClick={() => onSelect("first")} className="w-full text-left rounded-2xl border p-5 bg-white hover:shadow-md transition-all active:scale-[0.99] flex items-center gap-4" style={{ borderColor: border }} data-testid="button-visit-first">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: light }}>
-            <span className="text-lg font-bold" style={{ color: primary }}>初</span>
+    <div className="px-4 md:px-8 py-10 max-w-md mx-auto flex flex-col justify-center min-h-[56vh]">
+      <div className="text-center mb-8">
+        <h2 className="text-lg font-bold text-gray-800">ご来院について</h2>
+        <p className="text-sm text-gray-600 mt-2.5">当院のご利用は初めてですか？</p>
+        <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+          以前から通院されている方も、オンライン予約が<br className="hidden sm:block" />初めての場合は「再診」をお選びください。
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {/* 初診 */}
+        <button
+          onClick={() => onSelect("first")}
+          className="group w-full text-left rounded-2xl border-2 p-5 bg-white transition-all hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] flex items-center gap-4"
+          style={{ borderColor: `${primary}66` }}
+          data-testid="button-visit-first"
+        >
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: light }}>
+            <span className="text-2xl font-bold" style={{ color: primary }}>初</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-gray-800">初めて受診します（初診）</p>
-            <p className="text-xs text-gray-500 mt-0.5">問診票のご記入や検査のため、少しお時間をいただきます。</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-bold text-gray-800 leading-tight">初めて受診します</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: `${primary}22`, color: primary }}>初診</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">問診票のご記入や検査のため、少しお時間をいただきます。</p>
           </div>
-          <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+          <ChevronRight className="w-5 h-5 shrink-0 transition-transform group-hover:translate-x-0.5" style={{ color: primary }} />
         </button>
-        <button onClick={() => onSelect("return")} className="w-full text-left rounded-2xl border p-5 bg-white hover:shadow-md transition-all active:scale-[0.99] flex items-center gap-4" style={{ borderColor: border }} data-testid="button-visit-return">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 bg-gray-100">
-            <span className="text-lg font-bold text-gray-500">再</span>
+
+        {/* 再診 */}
+        <button
+          onClick={() => onSelect("return")}
+          className="group w-full text-left rounded-2xl border-2 border-gray-200 p-5 bg-white transition-all hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] flex items-center gap-4"
+          data-testid="button-visit-return"
+        >
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-gray-100">
+            <span className="text-2xl font-bold text-gray-500">再</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold text-gray-800">受診したことがあります（再診）</p>
-            <p className="text-xs text-gray-500 mt-0.5">通院中・以前に来院された方はこちら。</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-bold text-gray-800 leading-tight">受診したことがあります</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 bg-gray-100 text-gray-500">再診</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">通院中・以前に来院された方はこちら。</p>
           </div>
-          <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+          <ChevronRight className="w-5 h-5 text-gray-300 shrink-0 transition-transform group-hover:translate-x-0.5" />
         </button>
       </div>
     </div>
