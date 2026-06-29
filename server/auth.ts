@@ -92,7 +92,9 @@ export function setupAuth(app: Express) {
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
         }
-        return done(null, user);
+        // パスワードハッシュはセッション/レスポンスに載せない
+        const { password: _pw, ...safeUser } = user as any;
+        return done(null, safeUser);
       } catch (err) {
         return done(err);
       }
@@ -106,6 +108,8 @@ export function setupAuth(app: Express) {
   passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
+      // req.user にパスワードハッシュを含めない（クライアントへの漏洩防止）
+      if (user) delete (user as any).password;
       done(null, user);
     } catch (err) {
       done(err);

@@ -329,6 +329,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (clinicName) {
         await storage.upsertClinic({ name: clinicName, phone: clinicPhone || "", address: clinicAddress || "" });
       }
+      if (user) delete (user as any).password;
       res.status(201).json(user);
     } catch (e: any) {
       res.status(500).json({ message: e.message });
@@ -667,7 +668,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({
         clinic, hours, holidays,
         services: services.filter(s => s.isActive),
-        staff: staffList,
+        // 公開エンドポイントではスタッフの機密情報(loginToken/pin/時給/連絡先)を返さない
+        staff: staffList.map(s => ({ id: s.id, name: s.name, role: s.role })),
         primaryColor: settings?.primaryColor || "#C4B5A0",
         slotIntervalMinutes: settings?.slotIntervalMinutes ?? 30,
         bookingAdvanceDays: settings?.bookingAdvanceDays ?? 60,
@@ -974,12 +976,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       let patient = sessionPatientId
         ? await storage.getPatientById(sessionPatientId)
         : undefined;
+      // 別医院の患者は使わない（越境予約の防止）
+      if (patient && patient.clinicId !== clinic.id) patient = undefined;
 
       if (!patient) {
         patient = await storage.getPatientByPhone(patientPhone, clinic.id);
       }
       if (!patient) {
         patient = await storage.createPatient({ clinicId: clinic.id, name: patientName, phone: patientPhone });
+      }
+
+      // 指定された担当スタッフが当院のものか検証（他院スタッフIDの混入防止）
+      let safeStaffId: string | null = null;
+      if (staffId) {
+        const clinicStaff = await storage.getStaff(clinic.id);
+        if (clinicStaff.some(s => s.id === staffId)) safeStaffId = staffId;
       }
 
       // Security: check if patient is allowed to book
@@ -992,12 +1003,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const endTime = `${Math.floor(endTotal / 60).toString().padStart(2, "0")}:${(endTotal % 60).toString().padStart(2, "0")}`;
 
       // 二重予約防止：書き込み直前に空きを再チェック
-      const avail = await checkSlotStillAvailable(clinic.id, date, startTime, duration, { staffId });
+      const avail = await checkSlotStillAvailable(clinic.id, date, startTime, duration, { staffId: safeStaffId });
       if (!avail.ok) return res.status(409).json({ message: `${avail.reason ?? "選択した時間は予約できません"}。別の時間をお選びください。` });
 
       // 自動割り当て（スタッフ＋ユニット）
       const { staffId: autoStaffId, chairNumber: autoChairNumber } =
-        await autoAssignStaffAndChair(clinic.id, patient.id, date, startTime, endTime, staffId);
+        await autoAssignStaffAndChair(clinic.id, patient.id, date, startTime, endTime, safeStaffId);
 
       // Check requireAppointmentApproval setting
       const [clinicSettings, emailSettings] = await Promise.all([
@@ -1071,7 +1082,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         storage.getStaff(clinicId),
         storage.getClinicSettings(clinicId),
       ]);
-      res.json({ clinic, hours, holidays, services: services.filter(s => s.isActive), staff: staffList, enableReferral: settings?.enableReferral ?? true });
+      res.json({ clinic, hours, holidays, services: services.filter(s => s.isActive), staff: staffList.map(s => ({ id: s.id, name: s.name, role: s.role })), enableReferral: settings?.enableReferral ?? true });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -1354,6 +1365,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const patient = await storage.getPatientByPhone(phone);
       if (!patient || appointment.patientId !== patient.id) {
         return res.status(403).json({ message: "この予約をキャンセルする権限がありません" });
+      }
+      if (appointment.status === "cancelled") return res.status(400).json({ message: "既にキャンセル済みです" });
+      // キャンセルは予約日時の48時間前まで（ログイン版と同じ制限を裏口にも適用）
+      const pubCancelMs = Date.parse(`${appointment.date}T${appointment.startTime}+09:00`);
+      if (!Number.isNaN(pubCancelMs) && pubCancelMs - Date.now() < 48 * 60 * 60 * 1000) {
+        return res.status(403).json({ message: "予約日時の48時間前を過ぎているため、キャンセルできません。恐れ入りますが医院へお電話ください。" });
       }
 
       await storage.updateAppointment(req.params.id, { status: "cancelled", cancellationReason: cancellationReason || null });
@@ -3509,6 +3526,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "そのユーザー名はすでに使用されています" });
       }
       const updated = await storage.updateUser(req.user.id, { username: newUsername.trim() });
+      if (updated) delete (updated as any).password;
       res.json(updated);
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });

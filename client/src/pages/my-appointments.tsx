@@ -31,6 +31,14 @@ function toYMD(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// 予約の所要時間(分)を start/end から算出（変更時に元の長さを保つため）
+function apptDurationMins(a?: { startTime?: string; endTime?: string } | null): number {
+  if (!a?.startTime || !a?.endTime) return 30;
+  const t = (x: string) => { const [h, m] = x.split(":").map(Number); return h * 60 + m; };
+  const d = t(a.endTime) - t(a.startTime);
+  return d > 0 ? d : 30;
+}
+
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   confirmed:   { label: "確定",       color: "bg-green-100 text-green-800" },
   pending:     { label: "確認中",     color: "bg-amber-100 text-amber-800" },
@@ -186,7 +194,9 @@ export default function MyAppointmentsPage() {
     queryFn: async () => {
       if (!searchPhone) return [];
       const res = await fetch(`/api/public/my-appointments?phone=${encodeURIComponent(searchPhone)}`);
-      return res.json();
+      if (!res.ok) return [];
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
     },
     enabled: !!searchPhone && !session?.loggedIn,
   });
@@ -195,6 +205,7 @@ export default function MyAppointmentsPage() {
     queryKey: ["/api/public/info"],
     queryFn: async () => {
       const res = await fetch("/api/public/info");
+      if (!res.ok) throw new Error("クリニック情報を取得できませんでした");
       return res.json();
     },
     staleTime: 10 * 60 * 1000,
@@ -205,8 +216,11 @@ export default function MyAppointmentsPage() {
     queryFn: async () => {
       const params = new URLSearchParams({ date: rescheduleDate });
       if (rescheduleTarget?.id) params.set("excludeAppointmentId", rescheduleTarget.id);
+      params.set("durationMinutes", String(apptDurationMins(rescheduleTarget)));
       const res = await fetch(`/api/public/slots?${params}`);
-      return res.json();
+      if (!res.ok) return { available: false, slots: [] };
+      const data = await res.json();
+      return { ...data, slots: Array.isArray(data?.slots) ? data.slots : [] };
     },
     enabled: !!rescheduleDate && !!rescheduleTarget,
     staleTime: 30 * 1000,
@@ -306,7 +320,7 @@ export default function MyAppointmentsPage() {
     mutationFn: async ({ id, date, time }: { id: string; date: string; time: string }) => {
       const res = await fetch(`/api/patient/reschedule/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ date, startTime: time }),
+        body: JSON.stringify({ date, startTime: time, durationMinutes: apptDurationMins(rescheduleTarget) }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || "変更に失敗しました"); }
       return res.json();

@@ -147,7 +147,8 @@ export function Dashboard() {
     queryKey: ["/api/appointments", dateStr],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/appointments?date=${dateStr}`);
-      return res.json();
+      const d = await res.json();
+      return Array.isArray(d) ? d : [];
     },
   });
 
@@ -172,7 +173,7 @@ export function Dashboard() {
       const durationMins = differenceInMinutes(origEnd, orig);
       const newEnd = format(addMinutes(now, durationMins), "HH:mm:ss");
       return (await apiRequest("PUT", `/api/appointments/${appt.id}`, {
-        ...appt, status: "confirmed", startTime: newStart, endTime: newEnd,
+        ...appt, status: "confirmed", date: format(now, "yyyy-MM-dd"), startTime: newStart, endTime: newEnd,
       })).json();
     },
     onSuccess: () => {
@@ -438,7 +439,7 @@ export function Dashboard() {
                           {/* 患者・治療 */}
                           <div className="flex-1 min-w-0 flex flex-col justify-center">
                             <div className="font-semibold truncate text-sm flex items-center gap-1.5">
-                              {apt.visitType === "first" && <span className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">初診</span>}
+                              {(apt.visitType === "first" || (apt.treatmentType || "").includes("初診")) && <span className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">初診</span>}
                               <span className="truncate">{apt.patient?.name || "不明"}</span>
                             </div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap mt-0.5">
