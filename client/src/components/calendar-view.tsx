@@ -320,11 +320,11 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Toolbar */}
       <div className="flex flex-col px-3 md:px-6 py-2 border-b border-border bg-background shrink-0 gap-2">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {calendarMode === "holiday" ? (
             <h2 className="text-base md:text-lg font-bold tracking-tight min-w-0 flex-1 truncate leading-tight" data-testid="calendar-title">休診設定</h2>
           ) : (
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 min-w-0 w-full sm:w-auto sm:flex-1">
             <Button size="icon" variant="outline" className="h-10 w-10 sm:h-9 sm:w-9 shrink-0 active:scale-95" onClick={() => navigate(-1)} data-testid="button-prev">
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -336,7 +336,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
           </div>
           )}
           {/* カレンダーモード切替（閲覧＝見るだけ / 予約＝空き枠タップで作成 / 休診＝まとめて編集） */}
-          <div className="flex border border-border rounded-lg overflow-hidden shrink-0 shadow-sm">
+          <div className="flex w-full sm:w-auto sm:shrink-0 border border-border rounded-lg overflow-hidden shadow-sm">
             {([
               { mode: "view" as CalendarMode, icon: Eye, label: "閲覧", activeCls: "bg-foreground text-background" },
               { mode: "book" as CalendarMode, icon: Plus, label: "予約", activeCls: "bg-primary text-primary-foreground" },
@@ -344,7 +344,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             ] as const).map(({ mode, icon: Icon, label, activeCls }, idx) => (
               <button
                 key={mode}
-                className={`flex items-center gap-1.5 h-10 sm:h-9 px-3 sm:px-3.5 text-xs font-semibold transition-all duration-200 active:scale-95 ${idx > 0 ? "border-l border-border" : ""} ${calendarMode === mode ? `${activeCls} shadow-inner` : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                className={`flex flex-1 sm:flex-none items-center justify-center gap-1.5 h-10 sm:h-9 px-3 sm:px-3.5 text-xs font-semibold transition-all duration-200 active:scale-95 ${idx > 0 ? "border-l border-border" : ""} ${calendarMode === mode ? `${activeCls} shadow-inner` : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground"}`}
                 onClick={() => switchCalendarMode(mode)}
                 data-testid={`calendar-mode-${mode}`}
               >
@@ -820,26 +820,35 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
                     >
                       {fullyOff ? "終日休診（タップで解除）" : "終日休診にする"}
                     </button>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {day.slots.map(s => s.status === "lunch" ? (
-                        <div key={s.start} className="rounded-xl border border-dashed border-border/60 py-2 text-center text-muted-foreground/60 bg-muted/20 select-none">
-                          <span className="block text-xs tabular-nums">{s.start}</span>
-                          <span className="block text-[10px] mt-1.5">昼休み</span>
-                        </div>
-                      ) : (
-                        <button
-                          key={s.start}
-                          onClick={() => toggleSlot(day, s.start)}
-                          disabled={saving}
-                          className={`rounded-xl border py-2 text-center transition-all duration-150 active:scale-95 disabled:opacity-50 ${st.closed.has(s.start) ? "bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800" : "bg-card border-border hover:border-emerald-400"}`}
-                          data-testid={`holiday-slot-${day.dateStr}-${s.start}`}
-                        >
-                          <span className="block text-xs font-semibold tabular-nums">{s.start}</span>
-                          {st.closed.has(s.start)
-                            ? <Minus className="h-5 w-5 mx-auto mt-1 text-red-500" strokeWidth={3} />
-                            : <Circle className="h-5 w-5 mx-auto mt-1 text-emerald-500 dark:text-emerald-400" strokeWidth={2.5} />}
-                        </button>
-                      ))}
+                    {/* 時刻の行（左＝時間、右＝〇診療可能／−休診）。行タップで切り替え */}
+                    <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
+                      {day.slots.map(s => {
+                        if (s.status === "lunch") return (
+                          <div key={s.start} className="flex items-center bg-muted/30 select-none">
+                            <span className="w-16 shrink-0 py-2.5 px-3 text-sm font-semibold tabular-nums text-muted-foreground/70 border-r border-border">{s.start}</span>
+                            <span className="flex-1 py-2.5 px-3 text-xs text-muted-foreground/60">昼休み</span>
+                          </div>
+                        );
+                        const closed = st.closed.has(s.start);
+                        return (
+                          <button
+                            key={s.start}
+                            onClick={() => toggleSlot(day, s.start)}
+                            disabled={saving}
+                            className={`w-full flex items-center text-left transition-colors active:bg-accent/60 disabled:opacity-50 ${closed ? "bg-red-50 dark:bg-red-950/30" : "bg-card hover:bg-accent/30"}`}
+                            data-testid={`holiday-slot-${day.dateStr}-${s.start}`}
+                          >
+                            <span className={`w-16 shrink-0 py-3 px-3 text-sm font-semibold tabular-nums border-r ${closed ? "border-red-200 dark:border-red-900 text-red-500" : "border-border text-foreground"}`}>{s.start}</span>
+                            <span className="flex-1 flex items-center gap-2 py-3 px-3">
+                              {closed ? (
+                                <><Minus className="h-5 w-5 text-red-500" strokeWidth={3} /><span className="text-sm font-medium text-red-500">休診</span></>
+                              ) : (
+                                <><Circle className="h-5 w-5 text-emerald-500 dark:text-emerald-400" strokeWidth={2.5} /><span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">診療可能</span></>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </>
                 )}
