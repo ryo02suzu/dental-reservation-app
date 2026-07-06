@@ -1931,18 +1931,6 @@ function GeneralTab() {
                 <p className="text-xs text-muted-foreground mt-1">診療チェアの数。カレンダー「ユニット別」表示の列数と、同じ時間に受けられる予約数の基準になります。</p>
               </div>
               <div>
-                <Label className="mb-1.5 block">同時予約受付数</Label>
-                <NumericSelectOrCustom
-                  value={form.maxConcurrentAppointments}
-                  onChange={v => setForm(p => ({ ...p, maxConcurrentAppointments: v }))}
-                  options={[1, 2, 3, 4, 5, 6, 8, 10]}
-                  unit="件"
-                  min={1}
-                  testId="select-max-concurrent-appointments"
-                />
-                <p className="text-xs text-muted-foreground mt-1">同じ時間帯に同時受付できる予約の上限数。</p>
-              </div>
-              <div>
                 <Label className="mb-1.5 block">予約スロット間隔</Label>
                 <NumericSelectOrCustom
                   value={form.slotIntervalMinutes}

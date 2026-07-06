@@ -68,6 +68,7 @@ interface SlotInfo { available: boolean; slots: string[] }
 interface ClinicInfo {
   clinic: { id: string; name: string; slug?: string; phone?: string; address?: string; email?: string };
   enableReferral?: boolean;
+  enablePatientConfirmation?: boolean;
 }
 
 type AuthTab = "lookup" | "login" | "register";
@@ -390,7 +391,7 @@ export default function MyAppointmentsPage() {
           <div className="flex items-center gap-2.5"><Clock className="w-4 h-4 shrink-0 text-gray-400" /><span>{appt.startTime?.slice(0, 5)} 〜 {appt.endTime?.slice(0, 5)}</span></div>
         </div>
         {appt.notes && <p className="text-xs text-gray-500 mb-4 bg-gray-50 rounded-xl p-3 leading-relaxed">{appt.notes}</p>}
-        {canModify && session?.loggedIn && appt.confirmationStatus !== "confirmed" && (
+        {canModify && session?.loggedIn && clinicInfo?.enablePatientConfirmation && appt.confirmationStatus !== "confirmed" && (
           <button
             onClick={() => confirmMutation.mutate(appt.id)}
             disabled={confirmMutation.isPending}
@@ -400,7 +401,7 @@ export default function MyAppointmentsPage() {
             <Check className="w-4 h-4" /> {confirmMutation.isPending ? "確認中..." : "来院を確認する"}
           </button>
         )}
-        {canModify && session?.loggedIn && appt.confirmationStatus === "confirmed" && (
+        {canModify && session?.loggedIn && clinicInfo?.enablePatientConfirmation && appt.confirmationStatus === "confirmed" && (
           <div className="mb-2.5 flex items-center justify-center gap-1.5 h-9 rounded-xl bg-green-50 text-green-700 text-sm font-medium">
             <Check className="w-4 h-4" /> 来院確認済み
           </div>

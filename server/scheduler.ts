@@ -30,6 +30,12 @@ function getTodayDateStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function getDateStrDaysAhead(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function formatDateJP(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   const days = ["日", "月", "火", "水", "木", "金", "土"];
@@ -38,7 +44,10 @@ function formatDateJP(dateStr: string): string {
 
 async function runRemindersForClinic(clinic: { id: string; name: string }, reminderCfg: any): Promise<void> {
   const today = getTodayDateStr();
-  const tomorrowDate = getTomorrowDateStr();
+  // 設定「◯時間前」を日数に換算して対象日を決定（24h→翌日, 48h→2日後, ...）
+  const hoursBefore = Number(reminderCfg.reminderHoursBefore) || 24;
+  const daysAhead = Math.max(1, Math.round(hoursBefore / 24));
+  const targetDate = getDateStrDaysAhead(daysAhead);
 
   // プラン制限: 使えない通知チャネルはスケジューラからも送らない（多層防御）
   const limits = await getClinicLimits(clinic.id);
@@ -48,8 +57,8 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
 
   const appointments = await storage.getAppointments({
     clinicId: clinic.id,
-    startDate: tomorrowDate,
-    endDate: tomorrowDate,
+    startDate: targetDate,
+    endDate: targetDate,
   });
 
   let sent = 0;
@@ -99,7 +108,7 @@ async function runRemindersForClinic(clinic: { id: string; name: string }, remin
   await storage.upsertReminderSettings({ lastReminderRunDate: today }, clinic.id);
 
   if (sent > 0 || appointments.length > 0) {
-    console.log(`[Scheduler] Sent ${sent} reminders for clinic "${clinic.name}" (tomorrow: ${tomorrowDate})`);
+    console.log(`[Scheduler] Sent ${sent} reminders for clinic "${clinic.name}" (target: ${targetDate}, ${hoursBefore}h前設定)`);
   }
 }
 

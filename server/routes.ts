@@ -675,6 +675,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         bookingAdvanceDays: settings?.bookingAdvanceDays ?? 60,
         bookingBufferMinutes: settings?.bookingBufferMinutes ?? 15,
         enableReferral: settings?.enableReferral ?? true,
+        enablePatientConfirmation: settings?.enablePatientConfirmation ?? false,
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -1082,7 +1083,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         storage.getStaff(clinicId),
         storage.getClinicSettings(clinicId),
       ]);
-      res.json({ clinic, hours, holidays, services: services.filter(s => s.isActive), staff: staffList.map(s => ({ id: s.id, name: s.name, role: s.role })), enableReferral: settings?.enableReferral ?? true });
+      res.json({ clinic, hours, holidays, services: services.filter(s => s.isActive), staff: staffList.map(s => ({ id: s.id, name: s.name, role: s.role })), enableReferral: settings?.enableReferral ?? true, enablePatientConfirmation: settings?.enablePatientConfirmation ?? false });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 

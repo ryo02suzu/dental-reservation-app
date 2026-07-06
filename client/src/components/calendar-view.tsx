@@ -1085,7 +1085,6 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   if (isMobile) {
     const sorted = [...activeAppts].sort((a, b) => a.startTime.localeCompare(b.startTime));
     const nowMinsRaw = new Date().getHours() * 60 + new Date().getMinutes();
-    const nowHour = Math.floor(nowMinsRaw / 60);
     const suggestTime = () => {
       const open = dayHours?.openTime ? timeToMins(dayHours.openTime.slice(0, 5)) : startHour * 60;
       const close = dayHours?.closeTime ? timeToMins(dayHours.closeTime.slice(0, 5)) : endHour * 60;
@@ -1095,8 +1094,9 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
       if (m < open || m > close - SLOT_MINUTES) m = open;
       return minsToTime(m);
     };
-    const hoursList: number[] = [];
-    for (let h = startHour; h < endHour; h++) hoursList.push(h);
+    // 設定の「スロット間隔」に追従して時刻の目盛りを刻む（例: 30分なら 9:00, 9:30, …）
+    const slotList: number[] = [];
+    for (let t = startHour * 60; t + SLOT_MINUTES <= endHour * 60; t += SLOT_MINUTES) slotList.push(t);
     return (
       <div className="h-full flex flex-col bg-background relative">
         {summaryBar}
@@ -1109,21 +1109,22 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
           </div>
         ) : (
           <div className="flex-1 overflow-auto pb-24" ref={scrollRef}>
-            {hoursList.map(h => {
-              const label = `${String(h).padStart(2, "0")}:00`;
+            {slotList.map(t => {
+              const label = minsToTime(t);
+              const isHourRow = t % 60 === 0;
               const st = getSlotStatus(label, dayHours);
               const isLunch = st === "lunch";
-              const list = sorted.filter(a => Math.floor(timeToMins(a.startTime.slice(0, 5)) / 60) === h);
-              const isNowHour = isToday && nowHour === h;
+              const list = sorted.filter(a => { const m = timeToMins(a.startTime.slice(0, 5)); return m >= t && m < t + SLOT_MINUTES; });
+              const isNowRow = isToday && nowMinsRaw >= t && nowMinsRaw < t + SLOT_MINUTES;
               return (
-                <div key={h} className="flex items-stretch border-b border-border/40 min-h-[52px]">
-                  {/* 時刻ラベル（左） */}
-                  <div className="w-14 shrink-0 pt-1.5 pr-2 text-right text-xs font-semibold text-muted-foreground tabular-nums border-r border-border/40">
+                <div key={t} className="flex items-stretch border-b border-border/30 min-h-[44px]">
+                  {/* 時刻ラベル（左・刻み単位。正時は濃く） */}
+                  <div className={`w-14 shrink-0 pt-1.5 pr-2 text-right tabular-nums border-r border-border/40 ${isHourRow ? "text-xs font-semibold text-muted-foreground" : "text-[10px] text-muted-foreground/50"}`}>
                     {label}
                   </div>
-                  {/* その時間の予約 */}
+                  {/* この枠の予約 */}
                   <div className="flex-1 min-w-0 p-1.5 space-y-1.5">
-                    {isNowHour && (
+                    {isNowRow && (
                       <div className="flex items-center gap-1.5">
                         <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
                         <span className="text-[10px] font-medium text-red-500">現在 {minsToTime(nowMinsRaw)}</span>
