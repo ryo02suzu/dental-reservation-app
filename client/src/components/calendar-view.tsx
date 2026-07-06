@@ -602,8 +602,8 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
+      {/* Content（モバイルは横方向の移動を完全に無効化＝縦スクロールのみ） */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-auto">
         {isLoading ? (
           <div className="p-4 md:p-6 space-y-3">
             <Skeleton className="h-10 w-full rounded-lg" />
@@ -1233,8 +1233,8 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
   const [popoverDate, setPopoverDate] = useState<string | null>(null);
 
   return (
-    <div className="p-2 md:p-4 overflow-x-auto">
-      <div className="grid grid-cols-7 gap-1.5 md:gap-2 min-w-[760px]">
+    <div className="p-2 md:p-4 overflow-x-hidden md:overflow-x-auto">
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-2 md:min-w-[760px]">
         {days.map((day, i) => {
           const dow = day.getDay();
           const dateStr = format(day, "yyyy-MM-dd");
@@ -1257,7 +1257,7 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
 
           const cellContent = (
             <div
-              className={`rounded-lg border cursor-pointer hover:shadow-md transition-all min-h-[180px] flex flex-col
+              className={`rounded-lg border cursor-pointer hover:shadow-md transition-all min-h-[104px] md:min-h-[180px] flex flex-col
                 ${isDayOff ? "bg-muted/30 border-border/40 opacity-70" : calendarMode === "holiday" ? (isPopOpen ? "ring-2 ring-destructive/60 border-destructive/40" : "hover:ring-2 hover:ring-destructive/40") : isToday ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-card hover:bg-accent/30"}`}
               onClick={() => calendarMode === "holiday" ? setPopoverDate(isPopOpen ? null : dateStr) : onDayClick(day)}
               data-testid={`week-day-${dateStr}`}
@@ -1374,8 +1374,8 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
   const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
 
   return (
-    <div className="p-2 md:p-4 overflow-x-auto">
-      <div className="border border-border rounded-lg overflow-hidden min-w-[680px]">
+    <div className="p-2 md:p-4 overflow-x-hidden md:overflow-x-auto">
+      <div className="border border-border rounded-lg overflow-hidden md:min-w-[680px]">
         {/* Header row */}
         <div className="grid grid-cols-7 border-b border-border">
           {dayNames.map((d, i) => (
@@ -1387,7 +1387,7 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
           {Array.from({ length: cells }, (_, idx) => {
             const dayNum = idx - startPad + 1;
             if (dayNum < 1 || dayNum > lastDay.getDate()) {
-              return <div key={idx} className={`min-h-[90px] bg-muted/20 ${idx % 7 < 6 ? "border-r border-border/30" : ""} border-b border-border/30`} />;
+              return <div key={idx} className={`min-h-[58px] md:min-h-[90px] bg-muted/20 ${idx % 7 < 6 ? "border-r border-border/30" : ""} border-b border-border/30`} />;
             }
             const date = new Date(year, month, dayNum);
             const dateStr = format(date, "yyyy-MM-dd");
@@ -1409,7 +1409,7 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
 
             const cellContent = (
               <div
-                className={`min-h-[90px] p-1.5 cursor-pointer transition-colors
+                className={`min-h-[58px] md:min-h-[90px] p-1 md:p-1.5 cursor-pointer transition-colors
                   ${calendarMode === "holiday" ? (isPopOpen ? "bg-destructive/5 ring-1 ring-inset ring-destructive/40" : "hover:bg-destructive/5") : "hover:bg-accent/40"}
                   ${idx % 7 < 6 ? "border-r border-border/30" : ""} border-b border-border/30 ${isDayOff ? "bg-muted/30" : isToday ? "bg-primary/5" : ""}`}
                 onClick={() => calendarMode === "holiday" ? setPopoverDate(isPopOpen ? null : dateStr) : onDayClick(date)}
@@ -1441,28 +1441,41 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
                     })}
                   </div>
                 ) : (
-                  <div className="space-y-0.5">
-                    {dayAppts.slice(0, 3).map(a => {
-                      const c = getTreatmentColor(a.treatmentType || "");
-                      return (
-                        <div
-                          key={a.id}
-                          className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] overflow-hidden ${c.bg} ${c.text}`}
-                          onClick={e => {
-                            if (calendarMode === "holiday") { e.stopPropagation(); setPopoverDate(isPopOpen ? null : dateStr); return; }
-                            e.stopPropagation(); onAppointmentClick(a);
-                          }}
-                        >
-                          <div className={`w-0.5 h-3 rounded-full shrink-0 ${c.bar}`} />
-                          <span className="font-mono shrink-0 opacity-70">{a.startTime.slice(0, 5)}</span>
-                          <span className="truncate">{a.patient?.name || a.treatmentType || "—"}</span>
-                        </div>
-                      );
-                    })}
-                    {dayAppts.length > 3 && (
-                      <div className="text-[10px] text-muted-foreground px-1">+{dayAppts.length - 3}件</div>
+                  <>
+                    {/* モバイル: 予約をドットで表示（画面幅にフィット・横スクロールなし） */}
+                    {dayAppts.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-0.5 mt-0.5 md:hidden">
+                        {dayAppts.slice(0, 5).map(a => {
+                          const c = getTreatmentColor(a.treatmentType || "");
+                          return <span key={a.id} className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.bar}`} />;
+                        })}
+                        {dayAppts.length > 5 && <span className="text-[8px] leading-none text-muted-foreground">+{dayAppts.length - 5}</span>}
+                      </div>
                     )}
-                  </div>
+                    {/* デスクトップ: 時刻＋氏名のテキストチップ */}
+                    <div className="hidden md:block space-y-0.5">
+                      {dayAppts.slice(0, 3).map(a => {
+                        const c = getTreatmentColor(a.treatmentType || "");
+                        return (
+                          <div
+                            key={a.id}
+                            className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] overflow-hidden ${c.bg} ${c.text}`}
+                            onClick={e => {
+                              if (calendarMode === "holiday") { e.stopPropagation(); setPopoverDate(isPopOpen ? null : dateStr); return; }
+                              e.stopPropagation(); onAppointmentClick(a);
+                            }}
+                          >
+                            <div className={`w-0.5 h-3 rounded-full shrink-0 ${c.bar}`} />
+                            <span className="font-mono shrink-0 opacity-70">{a.startTime.slice(0, 5)}</span>
+                            <span className="truncate">{a.patient?.name || a.treatmentType || "—"}</span>
+                          </div>
+                        );
+                      })}
+                      {dayAppts.length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1">+{dayAppts.length - 3}件</div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             );
