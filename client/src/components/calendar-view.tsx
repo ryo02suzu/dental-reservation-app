@@ -1081,10 +1081,11 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     </div>
   );
 
-  // ── モバイル：縦アジェンダ（時系列リスト）───────────────────────────────────
+  // ── モバイル：時刻目盛り付き縦タイムライン（各時間の左に時刻＋その時間の予約）──
   if (isMobile) {
     const sorted = [...activeAppts].sort((a, b) => a.startTime.localeCompare(b.startTime));
-    const nowMins = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : -1;
+    const nowMinsRaw = new Date().getHours() * 60 + new Date().getMinutes();
+    const nowHour = Math.floor(nowMinsRaw / 60);
     const suggestTime = () => {
       const open = dayHours?.openTime ? timeToMins(dayHours.openTime.slice(0, 5)) : startHour * 60;
       const close = dayHours?.closeTime ? timeToMins(dayHours.closeTime.slice(0, 5)) : endHour * 60;
@@ -1094,7 +1095,8 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
       if (m < open || m > close - SLOT_MINUTES) m = open;
       return minsToTime(m);
     };
-    let dividerShown = false;
+    const hoursList: number[] = [];
+    for (let h = startHour; h < endHour; h++) hoursList.push(h);
     return (
       <div className="h-full flex flex-col bg-background relative">
         {summaryBar}
@@ -1106,50 +1108,66 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-auto p-3 space-y-2 pb-24" ref={scrollRef}>
-            {sorted.length === 0 ? (
-              <div className="text-center text-muted-foreground py-16">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
-                <p className="text-sm">予約はありません</p>
-                <p className="text-xs mt-1 opacity-60">右下のボタンから追加できます</p>
-              </div>
-            ) : sorted.map(appt => {
-              const c = getTreatmentColor(appt.treatmentType || "");
-              const isNewPatient = appt.visitType === "first" || (appt.treatmentType || "").includes("初診");
-              const start = appt.startTime.slice(0, 5);
-              const showDivider = isToday && !dividerShown && timeToMins(start) >= nowMins;
-              if (showDivider) dividerShown = true;
+          <div className="flex-1 overflow-auto pb-24" ref={scrollRef}>
+            {hoursList.map(h => {
+              const label = `${String(h).padStart(2, "0")}:00`;
+              const st = getSlotStatus(label, dayHours);
+              const isLunch = st === "lunch";
+              const list = sorted.filter(a => Math.floor(timeToMins(a.startTime.slice(0, 5)) / 60) === h);
+              const isNowHour = isToday && nowHour === h;
               return (
-                <div key={appt.id}>
-                  {showDivider && (
-                    <div className="flex items-center gap-2 py-1.5">
-                      <div className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
-                      <div className="flex-1 h-px bg-red-500/50" />
-                      <span className="text-[10px] font-medium text-red-500">現在 {minsToTime(nowMins)}</span>
-                    </div>
-                  )}
-                  <button
-                    className="w-full flex items-stretch rounded-lg border border-border/60 overflow-hidden bg-card active:brightness-95 transition-all shadow-sm"
-                    onClick={() => onAppointmentClick(appt)}
-                    data-testid={`agenda-appt-${appt.id}`}
-                  >
-                    <div className={`w-1.5 shrink-0 ${c.bar}`} />
-                    <div className="flex-1 p-3 text-left min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-sm font-semibold">{start}〜{appt.endTime?.slice(0, 5)}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-                          {appt.chairNumber ? `ユニット${appt.chairNumber}` : appt.staff?.name || "未割当"}
-                        </span>
+                <div key={h} className="flex items-stretch border-b border-border/40 min-h-[52px]">
+                  {/* 時刻ラベル（左） */}
+                  <div className="w-14 shrink-0 pt-1.5 pr-2 text-right text-xs font-semibold text-muted-foreground tabular-nums border-r border-border/40">
+                    {label}
+                  </div>
+                  {/* その時間の予約 */}
+                  <div className="flex-1 min-w-0 p-1.5 space-y-1.5">
+                    {isNowHour && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                        <span className="text-[10px] font-medium text-red-500">現在 {minsToTime(nowMinsRaw)}</span>
                       </div>
-                      <div className="font-semibold mt-1 flex items-center gap-1.5 truncate">
-                        <span className="truncate">{appt.patient?.name || "患者不明"}</span>
-                        {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-1 shrink-0">初診</span>}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate mt-0.5">
-                        {appt.treatmentType}{appt.staff && appt.chairNumber ? ` ・ ${appt.staff.name}` : ""}
-                      </div>
-                    </div>
-                  </button>
+                    )}
+                    {isLunch ? (
+                      <div className="text-xs text-muted-foreground/50 py-1.5">昼休み</div>
+                    ) : list.length === 0 ? (
+                      <button
+                        className="w-full text-left text-xs text-muted-foreground/40 py-2 active:text-primary/70"
+                        onClick={() => onNewBooking(dateStr, label)}
+                        data-testid={`agenda-empty-${label}`}
+                      >
+                        ＋ 空き
+                      </button>
+                    ) : list.map(appt => {
+                      const c = getTreatmentColor(appt.treatmentType || "");
+                      const isNewPatient = appt.visitType === "first" || (appt.treatmentType || "").includes("初診");
+                      const start = appt.startTime.slice(0, 5);
+                      return (
+                        <button
+                          key={appt.id}
+                          className="w-full flex items-stretch rounded-lg border border-border/60 overflow-hidden bg-card active:brightness-95 transition-all shadow-sm"
+                          onClick={() => onAppointmentClick(appt)}
+                          data-testid={`agenda-appt-${appt.id}`}
+                        >
+                          <div className={`w-1.5 shrink-0 ${c.bar}`} />
+                          <div className="flex-1 p-2.5 text-left min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-sm font-semibold">{start}〜{appt.endTime?.slice(0, 5)}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                                {appt.chairNumber ? `ユニット${appt.chairNumber}` : appt.staff?.name || "未割当"}
+                              </span>
+                            </div>
+                            <div className="font-semibold mt-0.5 flex items-center gap-1.5 truncate">
+                              <span className="truncate">{appt.patient?.name || "患者不明"}</span>
+                              {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-1 shrink-0">初診</span>}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">{appt.treatmentType}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
