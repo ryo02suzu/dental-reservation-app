@@ -4,7 +4,7 @@ import { format, startOfWeek, addDays, isSameDay, parseISO, addMonths, subMonths
 import { ja } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Sun, Sunset, Eye, Ban, Clock, Users, Armchair, GripVertical, RotateCcw, Check, Minus, Circle } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Sun, Sunset, Eye, Ban, Users, Armchair, GripVertical, RotateCcw, Check, Minus } from "lucide-react";
 import { AppointmentModal } from "@/components/appointment-modal";
 import { getHolidayName } from "@/lib/holidays";
 import { apiRequest } from "@/lib/queryClient";
@@ -536,17 +536,17 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
   const [saving, setSaving] = useState(false);
   const [edits, setEdits] = useState<Record<string, HolidayDayEdit>>({});
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const chipsRef = useRef<HTMLDivElement>(null);
-  const [pageIdx, setPageIdx] = useState(0);
 
   const step = Math.min(60, Math.max(5, slotIntervalMinutes || 30));
   const holidayList = Array.isArray(clinicHolidays) ? clinicHolidays : [];
+  const TIME_W = 52; // 左の時刻列の幅(px)
+  const DAY_W = 68;  // 各日の列の幅(px)
 
-  // 今日〜3ヶ月先の月末までの日ページを構築（年末年始・お盆など先の臨時休診にも対応）
+  // 今日〜翌月末までの日を横並びで構築（横スクロールで今月以降をずらーっと表示）
   const days: EditorDay[] = (() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const rangeEnd = new Date(today.getFullYear(), today.getMonth() + 4, 0); // 3ヶ月先の月末
+    const rangeEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0); // 翌月末
     const list: EditorDay[] = [];
     for (let d = new Date(today); d <= rangeEnd; d = addDays(d, 1)) {
       const dow = d.getDay();
@@ -694,168 +694,114 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
     }
   };
 
-  const goTo = (i: number) => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const clamped = Math.max(0, Math.min(days.length - 1, i));
-    el.scrollTo({ left: clamped * el.clientWidth, behavior: "smooth" });
-  };
-
-  // 初期表示：カレンダーで見ていた日（過去や範囲外なら今日）のページへ
+  // 初期スクロール：カレンダーで見ていた日が範囲内なら、その列が見える位置へ
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const targetStr = format(initialDate, "yyyy-MM-dd");
-    const idx = Math.max(0, days.findIndex(d => d.dateStr === targetStr));
-    el.scrollLeft = idx * el.clientWidth;
-    setPageIdx(idx);
+    const idx = days.findIndex(d => d.dateStr === format(initialDate, "yyyy-MM-dd"));
+    if (idx > 0) el.scrollLeft = idx * DAY_W;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // アクティブな日チップを見える位置へ追従させる
-  useEffect(() => {
-    chipsRef.current?.querySelector<HTMLElement>(`[data-chip-idx="${pageIdx}"]`)
-      ?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [pageIdx]);
-
-  const onScroll = () => {
-    const el = scrollerRef.current;
-    if (!el || el.clientWidth === 0) return;
-    const idx = Math.max(0, Math.min(days.length - 1, Math.round(el.scrollLeft / el.clientWidth)));
-    if (idx !== pageIdx) setPageIdx(idx);
-  };
-
   const dayNamesJa = ["日", "月", "火", "水", "木", "金", "土"];
+
+  // 全日の営業スロットを縦軸（時刻の行）に統一。各日はこの時刻に対して open/lunch/対象外 を持つ
+  const axis: string[] = (() => {
+    const set = new Set<string>();
+    for (const d of days) for (const s of d.slots) set.add(s.start);
+    return Array.from(set).sort();
+  })();
+  const statusByDay = new Map<string, Map<string, "open" | "lunch">>();
+  for (const d of days) {
+    const m = new Map<string, "open" | "lunch">();
+    for (const s of d.slots) m.set(s.start, s.status);
+    statusByDay.set(d.dateStr, m);
+  }
+
+  const gridCols = `${TIME_W}px repeat(${days.length}, ${DAY_W}px)`;
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* 説明＋日付チップ */}
+      {/* 説明（凡例） */}
       <div className="shrink-0 border-b border-border px-3 md:px-6 pt-2.5 pb-2">
         <p className="text-xs text-muted-foreground leading-relaxed">
-          時間帯をタップして
-          <span className="inline-flex items-center gap-0.5 mx-1 text-emerald-600 dark:text-emerald-400 font-semibold"><Circle className="h-3 w-3" strokeWidth={3} />診療可能</span>
+          各マスをタップして
+          <span className="inline-flex items-center gap-1 mx-1 font-semibold text-emerald-600 dark:text-emerald-400"><span className="h-3 w-3 rounded-full bg-emerald-500 dark:bg-emerald-400" />診療可能</span>
           ⇄
-          <span className="inline-flex items-center gap-0.5 mx-1 text-red-500 font-semibold"><Minus className="h-3 w-3" strokeWidth={3} />休診</span>
-          を切り替え、最後に「保存」で反映します。左右スワイプで日を移動できます。
+          <span className="inline-flex items-center gap-0.5 mx-1 font-semibold text-red-500"><Minus className="h-3.5 w-3.5" strokeWidth={3} />休診</span>
+          を切り替え、最後に「保存」で反映します。<span className="whitespace-nowrap">横スクロールで先の日も設定できます。</span>
         </p>
-        <div ref={chipsRef} className="flex gap-1.5 mt-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-          {days.map((d, i) => {
-            const isDirty = dirtyDates.includes(d.dateStr);
-            const isActive = i === pageIdx;
-            const isOff = d.offReason !== "none";
-            const showMonth = i === 0 || d.date.getDate() === 1;
+      </div>
+
+      {/* 縦＝時刻／横＝日 のグリッド（横スクロールで今月以降をずらーっと表示） */}
+      <div ref={scrollerRef} className="flex-1 overflow-auto" data-testid="holiday-grid">
+        <div className="grid w-max" style={{ gridTemplateColumns: gridCols }}>
+          {/* 左上コーナー */}
+          <div className="sticky top-0 left-0 z-30 bg-background border-b border-r border-border" />
+          {/* 日付ヘッダー */}
+          {days.map((d, idx) => {
+            const isSun = d.dow === 0, isSat = d.dow === 6, isHol = !!d.holidayName;
+            const col = isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-foreground";
+            const showMonth = idx === 0 || d.date.getDate() === 1;
+            return (
+              <div key={`h-${d.dateStr}`} className="sticky top-0 z-20 bg-background border-b border-l border-border/60 px-0.5 py-1 text-center">
+                <div className={`text-[9px] leading-none ${isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-muted-foreground"}`}>{dayNamesJa[d.dow]}</div>
+                <div className={`text-[13px] font-bold leading-tight tabular-nums ${col}`}>
+                  {showMonth && <span className="text-[9px] font-medium">{d.date.getMonth() + 1}/</span>}{d.date.getDate()}
+                </div>
+                {dirtyDates.includes(d.dateStr) && <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />}
+              </div>
+            );
+          })}
+
+          {/* 終日行 */}
+          <div className="sticky left-0 z-10 bg-background border-b border-r border-border h-9 flex items-center justify-end pr-2 text-[10px] font-semibold text-muted-foreground">終日</div>
+          {days.map(d => {
+            const offDay = d.offReason !== "none";
+            const cellBase = "h-9 border-b border-l border-border/40 flex items-center justify-center";
+            if (offDay) return <div key={`a-${d.dateStr}`} className={`${cellBase} bg-muted/30 text-[9px] text-muted-foreground/50`}>休</div>;
+            const allStarts = openStarts(d);
+            const st = stateOf(d);
+            const fullyOff = st.allday || (allStarts.length > 0 && allStarts.every(s => st.closed.has(s)));
             return (
               <button
-                key={d.dateStr}
-                data-chip-idx={i}
-                onClick={() => goTo(i)}
-                className={`relative shrink-0 w-11 rounded-lg border py-1 text-center transition-all duration-150 active:scale-95 ${isActive ? "border-foreground bg-foreground text-background shadow" : isOff ? "border-border/50 bg-muted/40 text-muted-foreground/60" : "border-border bg-card text-foreground hover:bg-accent"}`}
-                data-testid={`holiday-chip-${d.dateStr}`}
+                key={`a-${d.dateStr}`}
+                onClick={() => toggleAllday(d)}
+                disabled={saving || allStarts.length === 0}
+                className={`${cellBase} transition-colors active:scale-95 disabled:opacity-40 ${fullyOff ? "bg-red-500" : "hover:bg-accent/50"}`}
+                title="終日休診の切り替え"
+                data-testid={`holiday-allday-${d.dateStr}`}
               >
-                <span className={`block text-[9px] leading-tight ${isActive ? "" : d.dow === 0 || d.holidayName ? "text-red-500" : d.dow === 6 ? "text-blue-500" : "text-muted-foreground"}`}>{dayNamesJa[d.dow]}</span>
-                <span className="block text-sm font-bold leading-tight tabular-nums">{showMonth ? `${d.date.getMonth() + 1}/` : ""}{d.date.getDate()}</span>
-                {isDirty && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-background" />}
+                {fullyOff ? <Minus className="h-4 w-4 text-white" strokeWidth={3} /> : <ChevronDown className="h-4 w-4 text-muted-foreground/50" />}
               </button>
             );
           })}
+
+          {/* 時刻ごとの行 */}
+          {axis.flatMap(t => [
+            <div key={`t-${t}`} className="sticky left-0 z-10 bg-background border-b border-r border-border h-10 flex items-center justify-end pr-2 text-[11px] font-medium tabular-nums text-muted-foreground">{t}</div>,
+            ...days.map(d => {
+              const cellBase = "h-10 border-b border-l border-border/40 flex items-center justify-center";
+              const status = statusByDay.get(d.dateStr)?.get(t);
+              if (d.offReason !== "none" || !status) return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/25`} />;
+              if (status === "lunch") return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/20 text-[9px] text-muted-foreground/50`}>昼</div>;
+              const closed = stateOf(d).closed.has(t);
+              return (
+                <button
+                  key={`c-${d.dateStr}-${t}`}
+                  onClick={() => toggleSlot(d, t)}
+                  disabled={saving}
+                  className={`${cellBase} transition-colors active:bg-accent disabled:opacity-60 ${closed ? "bg-red-50 dark:bg-red-950/30" : "hover:bg-accent/40"}`}
+                  data-testid={`holiday-slot-${d.dateStr}-${t}`}
+                >
+                  {closed
+                    ? <Minus className="h-4 w-4 text-red-500" strokeWidth={3} />
+                    : <span className="h-3.5 w-3.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />}
+                </button>
+              );
+            }),
+          ])}
         </div>
-      </div>
-
-      {/* 日ページ（横スワイプ・スナップ移動） */}
-      <div
-        ref={scrollerRef}
-        onScroll={onScroll}
-        className="flex-1 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory overscroll-x-contain"
-        style={{ scrollbarWidth: "none" }}
-        data-testid="holiday-pager"
-      >
-        {days.map((day, i) => {
-          // 表示中の前後だけ中身を描画してスワイプを軽くする
-          const near = Math.abs(i - pageIdx) <= 2;
-          if (!near) return <div key={day.dateStr} className="w-full shrink-0 snap-center" />;
-          const st = stateOf(day);
-          const all = openStarts(day);
-          const fullyOff = st.allday || (all.length > 0 && all.every(s => st.closed.has(s)));
-          return (
-            <div key={day.dateStr} className="w-full shrink-0 snap-center overflow-y-auto">
-              <div className="p-4 md:p-6 max-w-2xl mx-auto pb-8">
-                {/* ページヘッダー（日送り） */}
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 active:scale-95" onClick={() => goTo(i - 1)} disabled={i === 0} data-testid="holiday-page-prev">
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <div className="text-center min-w-0">
-                    <h3 className="text-base font-bold truncate">{day.label}</h3>
-                    {day.holidayName && <p className="text-[11px] text-red-500 font-medium leading-tight">{day.holidayName}</p>}
-                  </div>
-                  <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 active:scale-95" onClick={() => goTo(i + 1)} disabled={i === days.length - 1} data-testid="holiday-page-next">
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {day.offReason === "regular" ? (
-                  <div className="text-center py-14 text-muted-foreground">
-                    <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
-                    <p className="text-sm font-medium">定休日です</p>
-                    <p className="text-xs mt-1 opacity-60">診療時間設定で変更できます</p>
-                  </div>
-                ) : day.offReason === "national" ? (
-                  <div className="text-center py-14 text-muted-foreground">
-                    <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
-                    <p className="text-sm font-medium">祝日（休診）です</p>
-                    <p className="text-xs mt-1 opacity-60">祝日の診療は設定で変更できます</p>
-                  </div>
-                ) : day.slots.length === 0 ? (
-                  <div className="text-center py-14 text-muted-foreground">
-                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
-                    <p className="text-sm">この日の診療時間が設定されていません</p>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => toggleAllday(day)}
-                      disabled={saving}
-                      className={`w-full mb-3 h-10 rounded-lg text-xs font-semibold border transition-colors active:scale-[0.98] disabled:opacity-50 ${fullyOff ? "bg-red-500 text-white border-red-500" : "bg-background text-foreground border-border hover:bg-accent"}`}
-                      data-testid={`holiday-allday-${day.dateStr}`}
-                    >
-                      {fullyOff ? "終日休診（タップで解除）" : "終日休診にする"}
-                    </button>
-                    {/* 時刻の行（左＝時間、右＝〇診療可能／−休診）。行タップで切り替え */}
-                    <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
-                      {day.slots.map(s => {
-                        if (s.status === "lunch") return (
-                          <div key={s.start} className="flex items-center bg-muted/30 select-none">
-                            <span className="w-16 shrink-0 py-2.5 px-3 text-sm font-semibold tabular-nums text-muted-foreground/70 border-r border-border">{s.start}</span>
-                            <span className="flex-1 py-2.5 px-3 text-xs text-muted-foreground/60">昼休み</span>
-                          </div>
-                        );
-                        const closed = st.closed.has(s.start);
-                        return (
-                          <button
-                            key={s.start}
-                            onClick={() => toggleSlot(day, s.start)}
-                            disabled={saving}
-                            className={`w-full flex items-center text-left transition-colors active:bg-accent/60 disabled:opacity-50 ${closed ? "bg-red-50 dark:bg-red-950/30" : "bg-card hover:bg-accent/30"}`}
-                            data-testid={`holiday-slot-${day.dateStr}-${s.start}`}
-                          >
-                            <span className={`w-16 shrink-0 py-3 px-3 text-sm font-semibold tabular-nums border-r ${closed ? "border-red-200 dark:border-red-900 text-red-500" : "border-border text-foreground"}`}>{s.start}</span>
-                            <span className="flex-1 flex items-center gap-2 py-3 px-3">
-                              {closed ? (
-                                <><Minus className="h-5 w-5 text-red-500" strokeWidth={3} /><span className="text-sm font-medium text-red-500">休診</span></>
-                              ) : (
-                                <><Circle className="h-5 w-5 text-emerald-500 dark:text-emerald-400" strokeWidth={2.5} /><span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">診療可能</span></>
-                              )}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       {/* 保存バー（まとめて反映／リセット） */}
