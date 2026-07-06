@@ -20,7 +20,7 @@ export default function LoginPage() {
     description: "Arche 医院管理者ログインページ。歯科医院向けクラウド予約・患者管理システムにログインしてください。",
   });
   const [, setLocation] = useLocation();
-  const { user, loginMutation } = useAuth();
+  const { user, isLoading: isAuthLoading, loginMutation } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -52,7 +52,8 @@ export default function LoginPage() {
     defaultValues: { username: "", password: "" },
   });
 
-  if (user) return null;
+  // セッション確認中はフォームを出さない（ログイン済みならこの画面を経由せず管理画面へ）
+  if (isAuthLoading || user) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">

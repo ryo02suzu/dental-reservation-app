@@ -23,6 +23,7 @@ import { Loader2 } from "lucide-react";
 import { apiRequest } from "./lib/queryClient";
 import { Redirect } from "wouter";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { SplashScreen } from "@/components/splash-screen";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -66,12 +67,29 @@ function BookingPageWithSlug() {
   return <BookingPage slug={params.slug} />;
 }
 
+// ルート(/)を開いたら、ログイン済みならそのまま管理画面へ。
+// ログイン画面はセッションが無い時だけ表示され、普段は「アプリのように」直接開く。
+function RootGate() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (user) {
+    return <Redirect to={(user as any).isSuperAdmin ? "/super-admin" : "/admin"} />;
+  }
+  return <Redirect to="/login" />;
+}
+
 function Router() {
   return (
     <>
       <ScrollToTop />
       <Switch>
-        <Route path="/">{() => <Redirect to="/login" />}</Route>
+        <Route path="/" component={RootGate} />
         <Route path="/login" component={LoginPage} />
         <Route path="/setup" component={SetupPage} />
         {/* セルフ登録は廃止。医院の追加はスーパー管理者が手動で行う。
@@ -104,6 +122,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
+            <SplashScreen />
             <Router />
           </TooltipProvider>
         </AuthProvider>

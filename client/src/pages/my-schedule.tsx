@@ -1665,6 +1665,15 @@ function DoctorHygienistView({ me, clinic }: { me: StaffMe; clinic: Clinic | und
 // ─── Root ────────────────────────────────────────────────────────────────────
 
 export default function MySchedulePage() {
+  // このページから「ホーム画面に追加」した場合はスタッフ用スケジュールアプリとして
+  // インストールされるように、manifest をスケジュール用に差し替える。
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    const prev = link?.href;
+    if (link) link.href = "/manifest-schedule.json";
+    return () => { if (link && prev) link.href = prev; };
+  }, []);
+
   const { data: me, isLoading: meLoading, isError: meError } = useQuery<StaffMe>({
     queryKey: ["/api/staff/me"],
     queryFn: () => fetch("/api/staff/me", { credentials: "include" }).then(r => { if (!r.ok) throw new Error("unauthorized"); return r.json(); }),

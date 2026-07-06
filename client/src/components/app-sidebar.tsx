@@ -20,8 +20,8 @@ interface AppSidebarProps {
 type PlanFeature = "recall" | "report";
 
 const menuItems: Array<{ id: ViewType; icon: React.ElementType; label: string; addonKey?: string; planFeature?: PlanFeature; group?: string }> = [
+  { id: "calendar", icon: Calendar, label: "予約台帳", group: "診療" },
   { id: "dashboard", icon: LayoutDashboard, label: "ダッシュボード", group: "診療" },
-  { id: "calendar", icon: Calendar, label: "カレンダー", group: "診療" },
   { id: "patients", icon: Users, label: "患者一覧", group: "診療" },
   { id: "records", icon: FileText, label: "診療メモ", group: "診療" },
   { id: "reports", icon: BarChart3, label: "レポート", planFeature: "report", group: "経営" },

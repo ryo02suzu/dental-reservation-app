@@ -1,0 +1,22 @@
+{
+  "name": "Arche スケジュール",
+  "short_name": "Arche",
+  "description": "スタッフ用スケジュール確認アプリ",
+  "id": "/my-schedule",
+  "start_url": "/my-schedule",
+  "display": "standalone",
+  "background_color": "#faf7f2",
+  "theme_color": "#c4b5a1",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

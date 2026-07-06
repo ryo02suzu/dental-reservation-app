@@ -1,21 +1,32 @@
 {
-  "name": "Arche スケジュール",
+  "name": "Arche 予約管理",
   "short_name": "Arche",
-  "description": "スタッフ用スケジュール確認アプリ",
-  "start_url": "/my-schedule",
+  "description": "歯科医院向けクラウド予約・患者管理システム",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f0fdf4",
-  "theme_color": "#15803d",
+  "orientation": "any",
+  "background_color": "#faf7f2",
+  "theme_color": "#c4b5a1",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

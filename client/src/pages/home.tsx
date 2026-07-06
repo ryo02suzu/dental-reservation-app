@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Dashboard } from "@/components/dashboard";
-import { CalendarView } from "@/components/calendar-view";
+import { CalendarView, holidayEditorGuard } from "@/components/calendar-view";
 import { PatientList } from "@/components/patient-list";
 import { MedicalRecords } from "@/components/medical-records";
 import { Reports } from "@/components/reports";
@@ -18,16 +18,17 @@ import { apiRequest } from "@/lib/queryClient";
 
 export type ViewType = "dashboard" | "calendar" | "patients" | "records" | "reports" | "settings" | "recall" | "support" | "shiftboard" | "attendance";
 
+// 診療中に最も使う「予約台帳」を先頭・起動時のホームにする（ダッシュボードはレポート的位置づけ）
 const BOTTOM_NAV = [
-  { id: "dashboard" as ViewType, icon: LayoutDashboard, label: "ホーム" },
-  { id: "calendar" as ViewType, icon: Calendar, label: "予約" },
+  { id: "calendar" as ViewType, icon: Calendar, label: "台帳" },
+  { id: "dashboard" as ViewType, icon: LayoutDashboard, label: "ダッシュボード" },
   { id: "patients" as ViewType, icon: Users, label: "患者" },
   { id: "settings" as ViewType, icon: Settings, label: "設定" },
 ];
 
 const VIEW_TITLES: Record<ViewType, string> = {
   dashboard: "ダッシュボード",
-  calendar: "カレンダー",
+  calendar: "予約台帳",
   patients: "患者一覧",
   records: "診療メモ",
   reports: "レポート",
@@ -39,7 +40,7 @@ const VIEW_TITLES: Record<ViewType, string> = {
 };
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<ViewType>("dashboard");
+  const [activeView, setActiveView] = useState<ViewType>("calendar");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [calendarInitialDate, setCalendarInitialDate] = useState<Date | undefined>();
   const [, navigate] = useLocation();
@@ -65,6 +66,10 @@ export default function Home() {
   });
 
   const handleViewChange = (view: ViewType, date?: string) => {
+    // 休診エディタに未保存の変更がある場合、別画面へ移る前に確認する
+    if (activeView === "calendar" && view !== "calendar" && holidayEditorGuard.dirty) {
+      if (!window.confirm("保存していない休診の変更があります。破棄して移動しますか？")) return;
+    }
     setActiveView(view);
     setSidebarOpen(false);
     if (date) setCalendarInitialDate(new Date(date));
@@ -163,7 +168,7 @@ export default function Home() {
                   <span className="absolute top-0.5 right-2 w-2 h-2 bg-amber-500 rounded-full ring-2 ring-background" />
                 )}
               </div>
-              <span className={`text-[10px] leading-none ${isActive ? "font-semibold" : "font-medium"}`}>{label}</span>
+              <span className={`text-[10px] leading-none whitespace-nowrap ${isActive ? "font-semibold" : "font-medium"}`}>{label}</span>
             </button>
           );
         })}

@@ -1,18 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, startOfWeek, addDays, isSameDay, parseISO, addMonths, subMonths, addWeeks, subWeeks } from "date-fns";
 import { ja } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Sun, Sunset, Eye, Ban, Trash2, Clock, Users, Armchair, GripVertical } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { ChevronLeft, ChevronRight, Plus, Sun, Sunset, Eye, Ban, Clock, Users, Armchair, GripVertical, RotateCcw, Check, Minus, Circle } from "lucide-react";
 import { AppointmentModal } from "@/components/appointment-modal";
-import { getHolidayName, isHoliday } from "@/lib/holidays";
+import { getHolidayName } from "@/lib/holidays";
 import { apiRequest } from "@/lib/queryClient";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +14,9 @@ import { useToast } from "@/hooks/use-toast";
 type DayAxis = "staff" | "chair";
 
 type CalendarMode = "view" | "book" | "holiday";
+
+// 休診エディタに未保存の変更があるかを画面遷移側（ボトムナビ等）から参照するためのフラグ
+export const holidayEditorGuard = { dirty: false };
 
 interface Patient { id: string; name: string; patientNumber: string; cancellationCount: number; noShowCount: number; recallIntervalMonths?: number }
 interface Staff { id: string; name: string; role: string; showInCalendar?: boolean | null; employmentType?: string | null }
@@ -160,150 +157,6 @@ function computeHourRange(hours: BusinessHours[]): { startHour: number; endHour:
   };
 }
 
-function addMinutes(time: string, mins: number): string {
-  const total = toMins(time) + mins;
-  const h = Math.floor(total / 60) % 24;
-  const m = total % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function getPresetTimes(bh: BusinessHours | undefined, preset: "morning" | "afternoon"): [string, string] {
-  if (preset === "morning") {
-    const start = bh?.openTime?.slice(0, 5) ?? "09:00";
-    if (bh?.closeTime && bh?.afternoonOpenTime) {
-      return [start, bh.closeTime.slice(0, 5)];
-    } else if (bh?.closeTime) {
-      const endMins = toMins(bh.closeTime.slice(0, 5));
-      const startMins = toMins(start);
-      const mid = Math.round((startMins + endMins) / 2 / 30) * 30;
-      return [start, `${String(Math.floor(mid / 60)).padStart(2, "0")}:${String(mid % 60).padStart(2, "0")}`];
-    }
-    return [start, "13:00"];
-  } else {
-    if (bh?.afternoonOpenTime && bh?.afternoonCloseTime) {
-      return [bh.afternoonOpenTime.slice(0, 5), bh.afternoonCloseTime.slice(0, 5)];
-    } else if (bh?.afternoonOpenTime && bh?.closeTime) {
-      return [bh.afternoonOpenTime.slice(0, 5), bh.closeTime.slice(0, 5)];
-    } else if (bh?.openTime && bh?.closeTime) {
-      const startMins = toMins(bh.openTime.slice(0, 5));
-      const endMins = toMins(bh.closeTime.slice(0, 5));
-      const mid = Math.round((startMins + endMins) / 2 / 30) * 30;
-      const midStr = `${String(Math.floor(mid / 60)).padStart(2, "0")}:${String(mid % 60).padStart(2, "0")}`;
-      return [midStr, bh.closeTime.slice(0, 5)];
-    }
-    return ["13:00", "18:00"];
-  }
-}
-
-// 30分刻みの時間選択肢（06:00〜23:30）
-const TIME_OPTIONS: string[] = [];
-for (let h = 6; h <= 23; h++) {
-  TIME_OPTIONS.push(`${String(h).padStart(2, "0")}:00`);
-  if (h < 23) TIME_OPTIONS.push(`${String(h).padStart(2, "0")}:30`);
-}
-TIME_OPTIONS.push("23:30");
-
-function HolidayPopoverContent({
-  dateLabel, dateStr, dayHours, clinicHoliday, onQuickSave, onCustomSave, onDelete, onClose,
-}: {
-  dateLabel: string;
-  dateStr: string;
-  dayHours: BusinessHours | undefined;
-  clinicHoliday: Holiday | undefined;
-  onQuickSave: (preset: "morning" | "afternoon" | "allday") => Promise<void>;
-  onCustomSave: (startTime: string, endTime: string) => Promise<void>;
-  onDelete: () => Promise<void>;
-  onClose: () => void;
-}) {
-  const [morningStart, morningEnd] = getPresetTimes(dayHours, "morning");
-  const [afternoonStart, afternoonEnd] = getPresetTimes(dayHours, "afternoon");
-  const [customStart, setCustomStart] = useState(morningStart);
-  const [customEnd, setCustomEnd] = useState(morningEnd);
-  const [saving, setSaving] = useState(false);
-
-  const handleQuick = async (preset: "morning" | "afternoon" | "allday") => {
-    setSaving(true);
-    try { await onQuickSave(preset); } finally { setSaving(false); }
-    onClose();
-  };
-  const handleCustom = async () => {
-    if (!customStart || !customEnd || customStart >= customEnd) return;
-    setSaving(true);
-    try { await onCustomSave(customStart, customEnd); } finally { setSaving(false); }
-    onClose();
-  };
-  const handleDelete = async () => {
-    setSaving(true);
-    try { await onDelete(); } finally { setSaving(false); }
-    onClose();
-  };
-
-  const selClass = "flex-1 min-w-0 h-7 rounded border border-border bg-background text-xs px-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary";
-
-  return (
-    <div className="space-y-2.5">
-      <p className="text-xs font-semibold text-foreground">{dateLabel} の休診設定</p>
-      <div className="grid grid-cols-3 gap-1">
-        <button
-          className="flex flex-col items-center gap-0.5 rounded-md border border-border py-2 px-1 text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-50"
-          onClick={() => handleQuick("morning")} disabled={saving}
-          data-testid={`holiday-morning-${dateStr}`}
-        >
-          <Sun className="h-3.5 w-3.5 text-amber-500" />
-          <span>午前</span>
-          <span className="text-[9px] text-muted-foreground">{morningStart}〜{morningEnd}</span>
-        </button>
-        <button
-          className="flex flex-col items-center gap-0.5 rounded-md border border-border py-2 px-1 text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-50"
-          onClick={() => handleQuick("afternoon")} disabled={saving}
-          data-testid={`holiday-afternoon-${dateStr}`}
-        >
-          <Sunset className="h-3.5 w-3.5 text-orange-500" />
-          <span>午後</span>
-          <span className="text-[9px] text-muted-foreground">{afternoonStart}〜{afternoonEnd}</span>
-        </button>
-        <button
-          className="flex flex-col items-center gap-0.5 rounded-md border border-border py-2 px-1 text-[11px] font-medium hover:bg-accent transition-colors disabled:opacity-50"
-          onClick={() => handleQuick("allday")} disabled={saving}
-          data-testid={`holiday-allday-${dateStr}`}
-        >
-          <Ban className="h-3.5 w-3.5 text-destructive" />
-          <span>終日</span>
-          <span className="text-[9px] text-muted-foreground">全日</span>
-        </button>
-      </div>
-      {/* カスタム時間帯 */}
-      <div className="flex items-center gap-1 pt-0.5 border-t border-border/50">
-        <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
-        <select value={customStart} onChange={e => setCustomStart(e.target.value)} className={selClass} data-testid={`holiday-custom-start-${dateStr}`}>
-          {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <span className="text-[10px] text-muted-foreground shrink-0">〜</span>
-        <select value={customEnd} onChange={e => setCustomEnd(e.target.value)} className={selClass} data-testid={`holiday-custom-end-${dateStr}`}>
-          {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <button
-          onClick={handleCustom}
-          disabled={saving || customStart >= customEnd}
-          className="shrink-0 h-7 px-2 rounded bg-primary text-primary-foreground text-[10px] font-medium hover:bg-primary/90 transition-colors disabled:opacity-40"
-          data-testid={`holiday-custom-confirm-${dateStr}`}
-        >
-          確定
-        </button>
-      </div>
-      {clinicHoliday && (
-        <button
-          className="w-full flex items-center justify-center gap-1.5 rounded-md border border-destructive/40 py-1.5 text-[11px] font-medium text-destructive hover:bg-destructive/5 transition-colors disabled:opacity-50"
-          onClick={handleDelete} disabled={saving}
-          data-testid={`holiday-delete-${dateStr}`}
-        >
-          <Trash2 className="h-3 w-3" />休診を解除
-        </button>
-      )}
-    </div>
-  );
-}
-
 export function CalendarView({ initialDate }: { initialDate?: Date }) {
   const [viewMode, setViewMode] = useState<"day" | "week" | "month">("day");
   const [currentDate, setCurrentDate] = useState(initialDate ?? new Date());
@@ -312,57 +165,24 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
   const [initialSlotData, setInitialSlotData] = useState<{ date: string; time: string; staffId?: string; patientId?: string; patientName?: string } | null>(null);
   const [filterStaffId, setFilterStaffId] = useState<string | null>(null);
   const [calendarMode, setCalendarMode] = useState<CalendarMode>("view");
-  const [holidayModalDate, setHolidayModalDate] = useState<string | null>(null);
-  const [holidayModalInitialTime, setHolidayModalInitialTime] = useState<string | null>(null);
   const [dayAxis, setDayAxis] = useState<DayAxis>("staff");
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { toast } = useToast();
 
+  // 休診エディタに未保存の変更があるとき、モード切替で誤って破棄しないためのガード
+  const holidayDirtyRef = useRef(false);
+  const switchCalendarMode = (mode: CalendarMode) => {
+    if (calendarMode === "holiday" && mode !== "holiday" && holidayDirtyRef.current) {
+      if (!window.confirm("保存していない休診の変更があります。破棄して移動しますか？")) return;
+      holidayDirtyRef.current = false;
+    }
+    setCalendarMode(mode);
+  };
+
   const { data: businessHours = [] } = useQuery<BusinessHours[]>({
     queryKey: ["/api/business-hours"],
   });
-
-  const createHolidayMutation = useMutation({
-    mutationFn: (body: { date: string; startTime?: string; endTime?: string; reason?: string }) =>
-      apiRequest("POST", "/api/holidays", body),
-  });
-
-  const deleteHolidayMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/holidays/${id}`),
-  });
-
-  const handleHolidayQuickSave = useCallback(async (
-    date: string,
-    preset: "morning" | "afternoon" | "allday",
-    dayOfWeek: number,
-    existingId?: string,
-  ) => {
-    if (existingId) {
-      await apiRequest("DELETE", `/api/holidays/${existingId}`);
-    }
-    const bh = businessHours.find(h => h.dayOfWeek === dayOfWeek);
-    if (preset === "allday") {
-      await createHolidayMutation.mutateAsync({ date });
-    } else {
-      const [startTime, endTime] = getPresetTimes(bh, preset);
-      await createHolidayMutation.mutateAsync({ date, startTime, endTime });
-    }
-    await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
-  }, [businessHours, createHolidayMutation, queryClient]);
-
-  const handleHolidayCustomSave = useCallback(async (
-    date: string,
-    startTime: string,
-    endTime: string,
-    existingId?: string,
-  ) => {
-    if (existingId) {
-      await apiRequest("DELETE", `/api/holidays/${existingId}`);
-    }
-    await createHolidayMutation.mutateAsync({ date, startTime, endTime });
-    await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
-  }, [createHolidayMutation, queryClient]);
 
   const { data: clinicSettings } = useQuery<{ closedOnHolidays?: boolean; chairsCount?: number; slotIntervalMinutes?: number }>({
     queryKey: ["/api/clinic-settings"],
@@ -374,37 +194,6 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
   const { data: clinicHolidays = [] } = useQuery<Holiday[]>({
     queryKey: ["/api/holidays"],
   });
-
-  // 日ビューの休診エディタ用：時間帯をワンタップでトグル（楽観更新で即反映）
-  const handleSlotHolidayToggle = useCallback(async (date: string, slotStart: string, slotEnd: string) => {
-    const sMins = toMins(slotStart);
-    const list = Array.isArray(clinicHolidays) ? clinicHolidays : [];
-    const covering = list.find(h => h.date === date && h.startTime && h.endTime
-      && toMins(h.startTime.slice(0, 5)) <= sMins && sMins < toMins(h.endTime.slice(0, 5)));
-    const key = ["/api/holidays"];
-    if (covering) {
-      queryClient.setQueryData<Holiday[]>(key, (old) => (old ?? []).filter(h => h.id !== covering.id));
-      try { await deleteHolidayMutation.mutateAsync(covering.id); } finally { queryClient.invalidateQueries({ queryKey: key }); }
-    } else {
-      const temp = { id: `tmp-${Date.now()}`, date, startTime: `${slotStart}:00`, endTime: `${slotEnd}:00` } as unknown as Holiday;
-      queryClient.setQueryData<Holiday[]>(key, (old) => [...(old ?? []), temp]);
-      try { await createHolidayMutation.mutateAsync({ date, startTime: slotStart, endTime: slotEnd }); } finally { queryClient.invalidateQueries({ queryKey: key }); }
-    }
-  }, [clinicHolidays, createHolidayMutation, deleteHolidayMutation, queryClient]);
-
-  const handleAlldayHolidayToggle = useCallback(async (date: string) => {
-    const list = Array.isArray(clinicHolidays) ? clinicHolidays : [];
-    const allday = list.find(h => h.date === date && !h.startTime);
-    const key = ["/api/holidays"];
-    if (allday) {
-      queryClient.setQueryData<Holiday[]>(key, (old) => (old ?? []).filter(h => h.id !== allday.id));
-      try { await deleteHolidayMutation.mutateAsync(allday.id); } finally { queryClient.invalidateQueries({ queryKey: key }); }
-    } else {
-      const temp = { id: `tmp-${Date.now()}`, date } as unknown as Holiday;
-      queryClient.setQueryData<Holiday[]>(key, (old) => [...(old ?? []), temp]);
-      try { await createHolidayMutation.mutateAsync({ date }); } finally { queryClient.invalidateQueries({ queryKey: key }); }
-    }
-  }, [clinicHolidays, createHolidayMutation, deleteHolidayMutation, queryClient]);
 
   const dateRange = useCallback(() => {
     if (viewMode === "day") {
@@ -468,24 +257,24 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     else setCurrentDate(prev => dir === 1 ? addMonths(prev, 1) : subMonths(prev, 1));
   };
 
+  // カレンダーの空き枠タップ：予約モードのときだけ新規予約を開く（閲覧モードでは何もしない）
   const handleSlotClick = (date: string, time: string, staffId?: string) => {
-    if (calendarMode === "book") {
-      setSelectedAppointment(null);
-      setInitialSlotData({ date, time, staffId });
-      setIsModalOpen(true);
-    } else if (calendarMode === "holiday") {
-      setHolidayModalDate(date);
-      setHolidayModalInitialTime(time);
-    }
-    // view mode: do nothing
+    if (calendarMode !== "book") return;
+    setSelectedAppointment(null);
+    setInitialSlotData({ date, time, staffId });
+    setIsModalOpen(true);
+  };
+
+  // 予約詳細モーダル内の「次の予約」など、明示的な操作からの新規予約はモードに関係なく開く
+  const handleModalSlotPick = (date: string, time: string, staffId?: string, patientId?: string, patientName?: string) => {
+    setSelectedAppointment(null);
+    setInitialSlotData({ date, time, staffId, patientId, patientName });
+    setIsModalOpen(true);
   };
 
   const handleDayClick = (d: Date) => {
-    if (calendarMode !== "holiday") {
-      setCurrentDate(d);
-      setViewMode("day");
-    }
-    // holiday mode: handled by popover inside WeekView/MonthView
+    setCurrentDate(d);
+    setViewMode("day");
   };
 
   const handleApptClick = (appt: Appointment) => {
@@ -532,6 +321,9 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
       {/* Toolbar */}
       <div className="flex flex-col px-3 md:px-6 py-2 border-b border-border bg-background shrink-0 gap-2">
         <div className="flex items-center justify-between gap-2">
+          {calendarMode === "holiday" ? (
+            <h2 className="text-base md:text-lg font-bold tracking-tight min-w-0 flex-1 truncate leading-tight" data-testid="calendar-title">休診設定</h2>
+          ) : (
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             <Button size="icon" variant="outline" className="h-10 w-10 sm:h-9 sm:w-9 shrink-0 active:scale-95" onClick={() => navigate(-1)} data-testid="button-prev">
               <ChevronLeft className="h-4 w-4" />
@@ -542,26 +334,36 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             </Button>
             <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())} className="h-10 sm:h-9 text-xs ml-0.5 shrink-0 active:scale-95">今日</Button>
           </div>
-          {/* カレンダーモード切替 */}
-          <div className="flex border border-border rounded-md overflow-hidden shrink-0">
+          )}
+          {/* カレンダーモード切替（閲覧＝見るだけ / 予約＝空き枠タップで作成 / 休診＝まとめて編集） */}
+          <div className="flex border border-border rounded-lg overflow-hidden shrink-0 shadow-sm">
             {([
-              { mode: "view" as CalendarMode, icon: Eye, label: "閲覧" },
-              { mode: "book" as CalendarMode, icon: Plus, label: "予約" },
-              { mode: "holiday" as CalendarMode, icon: Ban, label: "休診" },
-            ] as const).map(({ mode, icon: Icon, label }, idx) => (
+              { mode: "view" as CalendarMode, icon: Eye, label: "閲覧", activeCls: "bg-foreground text-background" },
+              { mode: "book" as CalendarMode, icon: Plus, label: "予約", activeCls: "bg-primary text-primary-foreground" },
+              { mode: "holiday" as CalendarMode, icon: Ban, label: "休診", activeCls: "bg-red-500 text-white" },
+            ] as const).map(({ mode, icon: Icon, label, activeCls }, idx) => (
               <button
                 key={mode}
-                className={`flex items-center gap-1.5 h-10 sm:h-9 px-3 text-xs font-medium transition-colors active:scale-95 ${idx > 0 ? "border-l border-border" : ""} ${calendarMode === mode ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-accent"}`}
-                onClick={() => setCalendarMode(mode)}
+                className={`flex items-center gap-1.5 h-10 sm:h-9 px-3 sm:px-3.5 text-xs font-semibold transition-all duration-200 active:scale-95 ${idx > 0 ? "border-l border-border" : ""} ${calendarMode === mode ? `${activeCls} shadow-inner` : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+                onClick={() => switchCalendarMode(mode)}
                 data-testid={`calendar-mode-${mode}`}
               >
                 <Icon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{label}</span>
+                <span>{label}</span>
               </button>
             ))}
           </div>
         </div>
 
+        {/* 予約モードの案内（どのモードにいるかを常に分かりやすく） */}
+        {calendarMode === "book" && (
+          <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/25 px-2.5 py-1.5 text-[11px] font-medium text-foreground" data-testid="book-mode-hint">
+            <Plus className="h-3 w-3 shrink-0" />
+            予約モード：カレンダーの空き枠をタップすると新規予約を作成できます
+          </div>
+        )}
+
+        {calendarMode !== "holiday" && (
         <div className="flex items-center justify-between gap-2 flex-wrap">
           {/* ビュー切り替え */}
           <div className="flex border border-border rounded-md overflow-hidden w-fit">
@@ -631,25 +433,24 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Content（モバイルは横方向の移動を完全に無効化＝縦スクロールのみ） */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden md:overflow-auto">
-        {isLoading ? (
+      <div className={`flex-1 ${calendarMode === "holiday" ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden md:overflow-auto"}`}>
+        {calendarMode === "holiday" ? (
+          <HolidayBatchEditor initialDate={currentDate} businessHours={businessHours} clinicHolidays={clinicHolidays} slotIntervalMinutes={slotIntervalMinutes} closedOnHolidays={closedOnHolidays} onDirtyChange={(d) => { holidayDirtyRef.current = d; holidayEditorGuard.dirty = d; }} />
+        ) : isLoading ? (
           <div className="p-4 md:p-6 space-y-3">
             <Skeleton className="h-10 w-full rounded-lg" />
             {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
           </div>
         ) : viewMode === "day" ? (
-          calendarMode === "holiday" ? (
-            <HolidayDayEditor currentDate={currentDate} businessHours={businessHours} clinicHolidays={clinicHolidays} slotIntervalMinutes={slotIntervalMinutes} onSlotToggle={handleSlotHolidayToggle} onAlldayToggle={handleAlldayHolidayToggle} />
-          ) : (
-          <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} axis={dayAxis} chairsCount={chairsCount} slotIntervalMinutes={slotIntervalMinutes} isMobile={isMobile} onAppointmentClick={handleApptClick} onApptMove={handleApptMove} onNewBooking={handleNewBooking} onSlotClick={handleSlotClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} />
-          )
+          <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} axis={dayAxis} chairsCount={chairsCount} slotIntervalMinutes={slotIntervalMinutes} isMobile={isMobile} onAppointmentClick={handleApptClick} onApptMove={handleApptMove} onNewBooking={handleNewBooking} onSlotClick={handleSlotClick} />
         ) : viewMode === "week" ? (
-          <WeekView currentDate={currentDate} appointments={appointments} businessHours={businessHours} closedOnHolidays={closedOnHolidays} clinicHolidays={clinicHolidays} calendarMode={calendarMode} onAppointmentClick={handleApptClick} onDayClick={handleDayClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} onHolidayDetailOpen={(date) => { setHolidayModalDate(date); setHolidayModalInitialTime(null); }} />
+          <WeekView currentDate={currentDate} appointments={appointments} businessHours={businessHours} closedOnHolidays={closedOnHolidays} clinicHolidays={clinicHolidays} onAppointmentClick={handleApptClick} onDayClick={handleDayClick} />
         ) : (
-          <MonthView currentDate={currentDate} appointments={appointments} businessHours={businessHours} closedOnHolidays={closedOnHolidays} clinicHolidays={clinicHolidays} calendarMode={calendarMode} onAppointmentClick={handleApptClick} onDayClick={handleDayClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} onHolidayDetailOpen={(date) => { setHolidayModalDate(date); setHolidayModalInitialTime(null); }} />
+          <MonthView currentDate={currentDate} appointments={appointments} businessHours={businessHours} closedOnHolidays={closedOnHolidays} clinicHolidays={clinicHolidays} onAppointmentClick={handleApptClick} onDayClick={handleDayClick} />
         )}
       </div>
 
@@ -659,17 +460,9 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
         appointment={selectedAppointment}
         initialSlotData={initialSlotData}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ["/api/appointments"] })}
-        onSlotClick={handleSlotClick}
+        onSlotClick={handleModalSlotPick}
       />
 
-      <SpotHolidayModal
-        date={holidayModalDate}
-        initialTime={holidayModalInitialTime}
-        businessHours={businessHours}
-        existingHoliday={holidayModalDate ? (clinicHolidays.find(h => h.date === holidayModalDate) ?? null) : null}
-        onClose={() => { setHolidayModalDate(null); setHolidayModalInitialTime(null); }}
-        onSaved={() => { queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); setHolidayModalDate(null); setHolidayModalInitialTime(null); }}
-      />
     </div>
   );
 }
@@ -714,99 +507,368 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
   );
 }
 
-// ─── 休診エディタ（日ビュー・PC/スマホ共通・ワンタップトグル）──────────────────
-function HolidayDayEditor({ currentDate, businessHours, clinicHolidays, slotIntervalMinutes, onSlotToggle, onAlldayToggle }: {
-  currentDate: Date;
+// ─── 休診まとめて編集エディタ（丸＝診療可能／棒線＝休診・保存で一括反映）──────
+// 今日から翌月末までの日を横スワイプ（またはボタン）で移動しながら、
+// 時間帯をタップで 〇⇄— に切り替え、最後に「保存」でまとめてサーバへ反映する。
+// タブレット・PC・スマホで同じ操作体系。
+type HolidayDayEdit = { allday: boolean; closed: Set<string> };
+type EditorSlot = { start: string; end: string; status: "open" | "lunch" };
+type EditorDay = {
+  date: Date;
+  dateStr: string;
+  label: string;
+  dow: number;
+  holidayName: string | null;
+  offReason: "none" | "regular" | "national";
+  slots: EditorSlot[];
+};
+
+function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIntervalMinutes, closedOnHolidays, onDirtyChange }: {
+  initialDate: Date;
   businessHours: BusinessHours[];
   clinicHolidays: Holiday[];
   slotIntervalMinutes: number;
-  onSlotToggle: (date: string, slotStart: string, slotEnd: string) => Promise<void>;
-  onAlldayToggle: (date: string) => Promise<void>;
+  closedOnHolidays: boolean;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
-  const dow = currentDate.getDay();
-  const dayHours = businessHours.find(h => h.dayOfWeek === dow);
-  const dateStr = format(currentDate, "yyyy-MM-dd");
-  const dateLabel = format(currentDate, "M月d日（E）", { locale: ja });
-  const isRegularOff = !dayHours || dayHours.isClosed;
-  const holidays = (Array.isArray(clinicHolidays) ? clinicHolidays : []).filter(h => h.date === dateStr);
-  const alldayHoliday = holidays.find(h => !h.startTime);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [edits, setEdits] = useState<Record<string, HolidayDayEdit>>({});
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const [pageIdx, setPageIdx] = useState(0);
+
   const step = Math.min(60, Math.max(5, slotIntervalMinutes || 30));
+  const holidayList = Array.isArray(clinicHolidays) ? clinicHolidays : [];
 
-  const openMins = dayHours?.openTime ? toMins(dayHours.openTime) : null;
-  const lastClose = dayHours?.afternoonCloseTime
-    ? toMins(dayHours.afternoonCloseTime)
-    : (dayHours?.closeTime ? toMins(dayHours.closeTime) : null);
-
-  const slots: { start: string; end: string; status: "open" | "lunch"; closed: boolean }[] = [];
-  if (!isRegularOff && openMins !== null && lastClose !== null) {
-    for (let m = openMins; m + step <= lastClose; m += step) {
-      const start = minsToTime(m);
-      const st = getSlotStatus(start, dayHours);
-      if (st === "closed") continue;
-      const closed = !!alldayHoliday || holidays.some(h => h.startTime && h.endTime
-        && toMins(h.startTime.slice(0, 5)) <= m && m < toMins(h.endTime.slice(0, 5)));
-      slots.push({ start, end: minsToTime(m + step), status: st, closed });
+  // 今日〜3ヶ月先の月末までの日ページを構築（年末年始・お盆など先の臨時休診にも対応）
+  const days: EditorDay[] = (() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const rangeEnd = new Date(today.getFullYear(), today.getMonth() + 4, 0); // 3ヶ月先の月末
+    const list: EditorDay[] = [];
+    for (let d = new Date(today); d <= rangeEnd; d = addDays(d, 1)) {
+      const dow = d.getDay();
+      const dateStr = format(d, "yyyy-MM-dd");
+      const dayHours = businessHours.find(h => h.dayOfWeek === dow);
+      const holidayName = getHolidayName(dateStr);
+      const isRegularOff = !dayHours || dayHours.isClosed;
+      const isNationalOff = !!holidayName && closedOnHolidays;
+      const slots: EditorSlot[] = [];
+      if (!isRegularOff && !isNationalOff) {
+        const openMins = dayHours?.openTime ? toMins(dayHours.openTime) : null;
+        const lastClose = dayHours?.afternoonCloseTime
+          ? toMins(dayHours.afternoonCloseTime)
+          : (dayHours?.closeTime ? toMins(dayHours.closeTime) : null);
+        if (openMins !== null && lastClose !== null) {
+          for (let m = openMins; m + step <= lastClose; m += step) {
+            const start = minsToTime(m);
+            const st = getSlotStatus(start, dayHours);
+            if (st === "closed") continue;
+            slots.push({ start, end: minsToTime(m + step), status: st });
+          }
+        }
+      }
+      list.push({
+        date: new Date(d),
+        dateStr,
+        label: format(d, "M月d日（E）", { locale: ja }),
+        dow,
+        holidayName: holidayName ?? null,
+        offReason: isRegularOff ? "regular" : isNationalOff ? "national" : "none",
+        slots,
+      });
     }
-  }
+    return list;
+  })();
+
+  const byDate = new Map(days.map(d => [d.dateStr, d]));
+  const openStarts = (day: EditorDay) => day.slots.filter(s => s.status === "open").map(s => s.start);
+
+  // サーバに保存されている現状から、その日の編集初期値を作る
+  const baseStateOf = (day: EditorDay): HolidayDayEdit => {
+    const hs = holidayList.filter(h => h.date === day.dateStr);
+    const allday = hs.some(h => !h.startTime);
+    const closed = new Set<string>();
+    for (const s of openStarts(day)) {
+      const m = toMins(s);
+      if (allday || hs.some(h => h.startTime && h.endTime && toMins(h.startTime.slice(0, 5)) <= m && m < toMins(h.endTime.slice(0, 5)))) {
+        closed.add(s);
+      }
+    }
+    return { allday, closed };
+  };
+
+  const stateOf = (day: EditorDay): HolidayDayEdit => edits[day.dateStr] ?? baseStateOf(day);
+
+  const toggleSlot = (day: EditorDay, slot: string) => {
+    setEdits(prev => {
+      const cur = prev[day.dateStr] ?? baseStateOf(day);
+      const closed = new Set(cur.closed);
+      if (closed.has(slot)) closed.delete(slot); else closed.add(slot);
+      return { ...prev, [day.dateStr]: { allday: false, closed } };
+    });
+  };
+
+  const toggleAllday = (day: EditorDay) => {
+    setEdits(prev => {
+      const cur = prev[day.dateStr] ?? baseStateOf(day);
+      const all = openStarts(day);
+      const fullyOff = cur.allday || (all.length > 0 && all.every(s => cur.closed.has(s)));
+      return {
+        ...prev,
+        [day.dateStr]: fullyOff
+          ? { allday: false, closed: new Set<string>() }
+          : { allday: true, closed: new Set(all) },
+      };
+    });
+  };
+
+  const sameState = (a: HolidayDayEdit, b: HolidayDayEdit) =>
+    a.allday === b.allday && a.closed.size === b.closed.size && Array.from(a.closed).every(s => b.closed.has(s));
+
+  const dirtyDates = Object.keys(edits).filter(ds => {
+    const day = byDate.get(ds);
+    return day ? !sameState(edits[ds], baseStateOf(day)) : false;
+  });
+  const dirtyCount = dirtyDates.length;
+
+  const hasDirty = dirtyCount > 0;
+  useEffect(() => { onDirtyChange(hasDirty); }, [hasDirty]);
+  useEffect(() => () => onDirtyChange(false), []);
+
+  // タブを閉じる/リロードで未保存の変更が消える前に確認を出す
+  useEffect(() => {
+    if (!hasDirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasDirty]);
+
+  const handleSave = async () => {
+    if (dirtyCount === 0 || saving) return;
+    setSaving(true);
+    const targets = [...dirtyDates];
+    let saved = 0;
+    try {
+      for (const ds of targets) {
+        const day = byDate.get(ds)!;
+        const desired = edits[ds];
+        // 望みの状態を先に登録し、そのあと旧レコードを消す。
+        // 途中でネットワークが切れても「休診が消えて予約が入ってしまう」事故を防ぐ順序。
+        if (desired.allday) {
+          await apiRequest("POST", "/api/holidays", { date: ds });
+        } else {
+          // 連続した休診コマは1つの時間帯レコードにまとめる
+          const ranges: { start: string; end: string }[] = [];
+          for (const s of day.slots) {
+            if (s.status !== "open" || !desired.closed.has(s.start)) continue;
+            const last = ranges[ranges.length - 1];
+            if (last && last.end === s.start) last.end = s.end;
+            else ranges.push({ start: s.start, end: s.end });
+          }
+          for (const r of ranges) {
+            await apiRequest("POST", "/api/holidays", { date: ds, startTime: r.start, endTime: r.end });
+          }
+        }
+        for (const h of holidayList.filter(h => h.date === ds)) {
+          await apiRequest("DELETE", `/api/holidays/${h.id}`);
+        }
+        saved++;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
+      // 保存した日の編集だけを消す（保存中に加えた別の編集は保持）
+      setEdits(prev => {
+        const next = { ...prev };
+        for (const ds of targets) delete next[ds];
+        return next;
+      });
+      toast({ title: "休診設定を保存しました", description: `${saved}日分の変更を反映しました` });
+    } catch (e: any) {
+      const msg = String(e?.message || e).replace(/^\d+:\s*/, "");
+      toast({ title: "保存に失敗しました", description: msg, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const goTo = (i: number) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const clamped = Math.max(0, Math.min(days.length - 1, i));
+    el.scrollTo({ left: clamped * el.clientWidth, behavior: "smooth" });
+  };
+
+  // 初期表示：カレンダーで見ていた日（過去や範囲外なら今日）のページへ
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const targetStr = format(initialDate, "yyyy-MM-dd");
+    const idx = Math.max(0, days.findIndex(d => d.dateStr === targetStr));
+    el.scrollLeft = idx * el.clientWidth;
+    setPageIdx(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // アクティブな日チップを見える位置へ追従させる
+  useEffect(() => {
+    chipsRef.current?.querySelector<HTMLElement>(`[data-chip-idx="${pageIdx}"]`)
+      ?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [pageIdx]);
+
+  const onScroll = () => {
+    const el = scrollerRef.current;
+    if (!el || el.clientWidth === 0) return;
+    const idx = Math.max(0, Math.min(days.length - 1, Math.round(el.scrollLeft / el.clientWidth)));
+    if (idx !== pageIdx) setPageIdx(idx);
+  };
+
+  const dayNamesJa = ["日", "月", "火", "水", "木", "金", "土"];
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="min-w-0">
-          <h3 className="text-base font-bold text-foreground">{dateLabel} の休診設定</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">時間帯をタップで休診／もう一度タップで解除</p>
+    <div className="h-full flex flex-col bg-background">
+      {/* 説明＋日付チップ */}
+      <div className="shrink-0 border-b border-border px-3 md:px-6 pt-2.5 pb-2">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          時間帯をタップして
+          <span className="inline-flex items-center gap-0.5 mx-1 text-emerald-600 dark:text-emerald-400 font-semibold"><Circle className="h-3 w-3" strokeWidth={3} />診療可能</span>
+          ⇄
+          <span className="inline-flex items-center gap-0.5 mx-1 text-red-500 font-semibold"><Minus className="h-3 w-3" strokeWidth={3} />休診</span>
+          を切り替え、最後に「保存」で反映します。左右スワイプで日を移動できます。
+        </p>
+        <div ref={chipsRef} className="flex gap-1.5 mt-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+          {days.map((d, i) => {
+            const isDirty = dirtyDates.includes(d.dateStr);
+            const isActive = i === pageIdx;
+            const isOff = d.offReason !== "none";
+            const showMonth = i === 0 || d.date.getDate() === 1;
+            return (
+              <button
+                key={d.dateStr}
+                data-chip-idx={i}
+                onClick={() => goTo(i)}
+                className={`relative shrink-0 w-11 rounded-lg border py-1 text-center transition-all duration-150 active:scale-95 ${isActive ? "border-foreground bg-foreground text-background shadow" : isOff ? "border-border/50 bg-muted/40 text-muted-foreground/60" : "border-border bg-card text-foreground hover:bg-accent"}`}
+                data-testid={`holiday-chip-${d.dateStr}`}
+              >
+                <span className={`block text-[9px] leading-tight ${isActive ? "" : d.dow === 0 || d.holidayName ? "text-red-500" : d.dow === 6 ? "text-blue-500" : "text-muted-foreground"}`}>{dayNamesJa[d.dow]}</span>
+                <span className="block text-sm font-bold leading-tight tabular-nums">{showMonth ? `${d.date.getMonth() + 1}/` : ""}{d.date.getDate()}</span>
+                {isDirty && <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-background" />}
+              </button>
+            );
+          })}
         </div>
-        <button
-          onClick={() => onAlldayToggle(dateStr)}
-          className={`shrink-0 h-9 px-3 rounded-lg text-xs font-medium border transition-colors active:scale-95 ${alldayHoliday ? "bg-red-500 text-white border-red-500" : "bg-background text-foreground border-border hover:bg-accent"}`}
-          data-testid="btn-allday-holiday"
-        >
-          {alldayHoliday ? "終日休診を解除" : "終日休診にする"}
-        </button>
       </div>
 
-      {isRegularOff ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
-          <p className="text-sm font-medium">定休日です</p>
-        </div>
-      ) : slots.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
-          <p className="text-sm">この日の診療時間が設定されていません</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-            {slots.map(s => s.status === "lunch" ? (
-              <div key={s.start} className="rounded-lg border border-dashed border-border/60 py-2.5 text-center text-xs text-muted-foreground/60 bg-muted/20 select-none">
-                <span className="tabular-nums">{s.start}</span>
-                <span className="block text-[10px] mt-0.5">昼休み</span>
+      {/* 日ページ（横スワイプ・スナップ移動） */}
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        className="flex-1 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory overscroll-x-contain"
+        style={{ scrollbarWidth: "none" }}
+        data-testid="holiday-pager"
+      >
+        {days.map((day, i) => {
+          // 表示中の前後だけ中身を描画してスワイプを軽くする
+          const near = Math.abs(i - pageIdx) <= 2;
+          if (!near) return <div key={day.dateStr} className="w-full shrink-0 snap-center" />;
+          const st = stateOf(day);
+          const all = openStarts(day);
+          const fullyOff = st.allday || (all.length > 0 && all.every(s => st.closed.has(s)));
+          return (
+            <div key={day.dateStr} className="w-full shrink-0 snap-center overflow-y-auto">
+              <div className="p-4 md:p-6 max-w-2xl mx-auto pb-8">
+                {/* ページヘッダー（日送り） */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 active:scale-95" onClick={() => goTo(i - 1)} disabled={i === 0} data-testid="holiday-page-prev">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="text-center min-w-0">
+                    <h3 className="text-base font-bold truncate">{day.label}</h3>
+                    {day.holidayName && <p className="text-[11px] text-red-500 font-medium leading-tight">{day.holidayName}</p>}
+                  </div>
+                  <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 active:scale-95" onClick={() => goTo(i + 1)} disabled={i === days.length - 1} data-testid="holiday-page-next">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {day.offReason === "regular" ? (
+                  <div className="text-center py-14 text-muted-foreground">
+                    <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                    <p className="text-sm font-medium">定休日です</p>
+                    <p className="text-xs mt-1 opacity-60">診療時間設定で変更できます</p>
+                  </div>
+                ) : day.offReason === "national" ? (
+                  <div className="text-center py-14 text-muted-foreground">
+                    <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
+                    <p className="text-sm font-medium">祝日（休診）です</p>
+                    <p className="text-xs mt-1 opacity-60">祝日の診療は設定で変更できます</p>
+                  </div>
+                ) : day.slots.length === 0 ? (
+                  <div className="text-center py-14 text-muted-foreground">
+                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
+                    <p className="text-sm">この日の診療時間が設定されていません</p>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => toggleAllday(day)}
+                      disabled={saving}
+                      className={`w-full mb-3 h-10 rounded-lg text-xs font-semibold border transition-colors active:scale-[0.98] disabled:opacity-50 ${fullyOff ? "bg-red-500 text-white border-red-500" : "bg-background text-foreground border-border hover:bg-accent"}`}
+                      data-testid={`holiday-allday-${day.dateStr}`}
+                    >
+                      {fullyOff ? "終日休診（タップで解除）" : "終日休診にする"}
+                    </button>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {day.slots.map(s => s.status === "lunch" ? (
+                        <div key={s.start} className="rounded-xl border border-dashed border-border/60 py-2 text-center text-muted-foreground/60 bg-muted/20 select-none">
+                          <span className="block text-xs tabular-nums">{s.start}</span>
+                          <span className="block text-[10px] mt-1.5">昼休み</span>
+                        </div>
+                      ) : (
+                        <button
+                          key={s.start}
+                          onClick={() => toggleSlot(day, s.start)}
+                          disabled={saving}
+                          className={`rounded-xl border py-2 text-center transition-all duration-150 active:scale-95 disabled:opacity-50 ${st.closed.has(s.start) ? "bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800" : "bg-card border-border hover:border-emerald-400"}`}
+                          data-testid={`holiday-slot-${day.dateStr}-${s.start}`}
+                        >
+                          <span className="block text-xs font-semibold tabular-nums">{s.start}</span>
+                          {st.closed.has(s.start)
+                            ? <Minus className="h-5 w-5 mx-auto mt-1 text-red-500" strokeWidth={3} />
+                            : <Circle className="h-5 w-5 mx-auto mt-1 text-emerald-500 dark:text-emerald-400" strokeWidth={2.5} />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-            ) : (
-              <button
-                key={s.start}
-                onClick={() => { if (!alldayHoliday) onSlotToggle(dateStr, s.start, s.end); }}
-                disabled={!!alldayHoliday}
-                className={`rounded-lg border py-2.5 text-center transition-all active:scale-95 ${s.closed ? "bg-red-500 text-white border-red-500" : "bg-card border-border text-foreground hover:border-primary hover:bg-primary/5"} ${alldayHoliday ? "opacity-50 cursor-not-allowed" : ""}`}
-                data-testid={`holiday-slot-${s.start}`}
-              >
-                <span className="text-sm font-semibold tabular-nums">{s.start}</span>
-                <span className="block text-[10px] mt-0.5 opacity-80">{s.closed ? "休診" : "受付可"}</span>
-              </button>
-            ))}
-          </div>
-          {alldayHoliday && (
-            <p className="text-xs text-red-500 mt-3">この日は終日休診です。個別の時間帯を編集するには「終日休診を解除」してください。</p>
-          )}
-        </>
-      )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 保存バー（まとめて反映／リセット） */}
+      <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur px-3 md:px-6 py-2.5 flex items-center gap-2.5">
+        <span className={`text-xs flex-1 min-w-0 truncate ${dirtyCount > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground"}`} data-testid="holiday-dirty-count">
+          {dirtyCount > 0 ? `未保存の変更：${dirtyCount}日分` : "変更はありません"}
+        </span>
+        <Button variant="outline" className="h-10 active:scale-95" onClick={() => setEdits({})} disabled={dirtyCount === 0 || saving} data-testid="holiday-reset">
+          <RotateCcw className="h-4 w-4 mr-1.5" />
+          リセット
+        </Button>
+        <Button className="h-10 min-w-[120px] active:scale-95" onClick={handleSave} disabled={dirtyCount === 0 || saving} data-testid="holiday-save">
+          <Check className="h-4 w-4 mr-1.5" />
+          {saving ? "保存中..." : dirtyCount > 0 ? `保存（${dirtyCount}日分）` : "保存"}
+        </Button>
+      </div>
     </div>
   );
 }
 
 // ─── Day View ────────────────────────────────────────────────────────────────
-function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, businessHours, calendarMode, clinicHolidays, axis, chairsCount, slotIntervalMinutes, isMobile, onAppointmentClick, onApptMove, onNewBooking, onSlotClick, onHolidayQuickSave, onHolidayCustomSave, onHolidayDelete }: {
+function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, businessHours, calendarMode, clinicHolidays, axis, chairsCount, slotIntervalMinutes, isMobile, onAppointmentClick, onApptMove, onNewBooking, onSlotClick }: {
   currentDate: Date;
   appointments: Appointment[];
   staff: Staff[];
@@ -822,16 +884,14 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   onApptMove: (a: Appointment, patch: { date: string; startTime: string; endTime: string; staffId?: string | null; chairNumber?: number | null }) => void;
   onNewBooking: (date: string, time: string) => void;
   onSlotClick: (date: string, time: string, staffId?: string) => void;
-  onHolidayQuickSave: (date: string, preset: "morning" | "afternoon" | "allday", dayOfWeek: number) => Promise<void>;
-  onHolidayCustomSave: (date: string, startTime: string, endTime: string) => Promise<void>;
-  onHolidayDelete: (id: string) => Promise<void>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const [nowTop, setNowTop] = useState<number | null>(null);
   const [viewH, setViewH] = useState(0);
-  const [holidayPopoverOpen, setHolidayPopoverOpen] = useState(false);
   const isToday = isSameDay(currentDate, new Date());
+  // 予約の作成・ドラッグ移動は「予約」モードのときだけ（閲覧モードは見るだけ）
+  const canBook = calendarMode === "book";
 
   // 表示領域の高さを測り、行の高さ算出に使う（少人数でも縦を埋めるため）
   useEffect(() => {
@@ -852,8 +912,15 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   const { startHour, endHour } = computeHourRange(businessHours.length > 0 ? businessHours : [{ dayOfWeek: 0, openTime: "09:00", closeTime: "18:00", isClosed: false }]);
   const isDayOff = !dayHours || dayHours.isClosed;
   const dateStr = format(currentDate, "yyyy-MM-dd");
-  const clinicHoliday = clinicHolidays.find(h => h.date === dateStr);
-  const dateLabel = format(currentDate, "M月d日(E)", { locale: ja });
+  // この日の休診情報（表示専用。編集は「休診」モードのエディタで行う）
+  const dayHolidays = (Array.isArray(clinicHolidays) ? clinicHolidays : []).filter(h => h.date === dateStr);
+  const alldayHoliday = dayHolidays.find(h => !h.startTime);
+  const isSlotHoliday = (slot: string) => {
+    if (alldayHoliday) return true;
+    const m = toMins(slot);
+    return dayHolidays.some(h => h.startTime && h.endTime
+      && toMins(h.startTime.slice(0, 5)) <= m && m < toMins(h.endTime.slice(0, 5)));
+  };
 
   // 院の設定「時間刻み」を台帳のグリッドに反映（モジュール定数SLOT_MINUTESを局所的に上書き）
   const SLOT_MINUTES = Math.min(60, Math.max(5, slotIntervalMinutes || 30));
@@ -1018,7 +1085,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
   };
 
   const startDrag = (e: React.PointerEvent, appt: Appointment) => {
-    if (isMobile || e.button !== 0) return;
+    if (isMobile || !canBook || e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
     try { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); } catch {}
@@ -1033,31 +1100,13 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
 
   useEffect(() => () => removeDragListeners(), []);
 
-  const holidayButton = (
-    <Popover open={holidayPopoverOpen} onOpenChange={setHolidayPopoverOpen}>
-      <PopoverTrigger asChild>
-        <button
-          className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors shrink-0 ${clinicHoliday ? "bg-red-50 border-red-200 text-red-600 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400" : "border-border text-muted-foreground hover:bg-muted/60"}`}
-          data-testid="day-holiday-button"
-        >
-          <Ban className="h-3 w-3" />
-          {clinicHoliday ? "休診中" : "休診設定"}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="p-0 w-56" align="end">
-        <HolidayPopoverContent
-          dateLabel={dateLabel}
-          dateStr={dateStr}
-          dayHours={dayHours}
-          clinicHoliday={clinicHoliday}
-          onQuickSave={async (preset) => { await onHolidayQuickSave(dateStr, preset, dow); setHolidayPopoverOpen(false); }}
-          onCustomSave={async (s, e) => { await onHolidayCustomSave(dateStr, s, e); setHolidayPopoverOpen(false); }}
-          onDelete={async () => { if (clinicHoliday) { await onHolidayDelete(clinicHoliday.id); setHolidayPopoverOpen(false); } }}
-          onClose={() => setHolidayPopoverOpen(false)}
-        />
-      </PopoverContent>
-    </Popover>
-  );
+  // 休診の表示チップ（編集は「休診」モードで行う）
+  const holidayChip = dayHolidays.length > 0 ? (
+    <span className="flex items-center gap-1 text-xs px-2 py-1 rounded border shrink-0 bg-red-50 border-red-200 text-red-600 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400" data-testid="day-holiday-chip">
+      <Ban className="h-3 w-3" />
+      {alldayHoliday ? "終日休診" : "一部休診"}
+    </span>
+  ) : null;
 
   const summaryBar = (
     <div className="flex items-center gap-4 px-4 md:px-6 py-2 bg-muted/30 border-b border-border text-sm shrink-0 overflow-x-auto">
@@ -1077,7 +1126,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
           {dayHours.afternoonOpenTime && ` / ${dayHours.afternoonOpenTime.slice(0,5)}〜${dayHours.afternoonCloseTime?.slice(0,5) || ""}`}
         </div>
       )}
-      <div className="ml-auto">{holidayButton}</div>
+      {holidayChip && <div className="ml-auto">{holidayChip}</div>}
     </div>
   );
 
@@ -1132,14 +1181,23 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                     )}
                     {isLunch ? (
                       <div className="text-xs text-muted-foreground/50 py-1.5">昼休み</div>
+                    ) : isSlotHoliday(label) && list.length === 0 ? (
+                      <div className="flex items-center gap-1 text-xs text-red-400/90 py-1.5 select-none">
+                        <Ban className="h-3 w-3" />休診
+                      </div>
                     ) : list.length === 0 ? (
-                      <button
-                        className="w-full text-left text-xs text-muted-foreground/40 py-2 active:text-primary/70"
-                        onClick={() => onNewBooking(dateStr, label)}
-                        data-testid={`agenda-empty-${label}`}
-                      >
-                        ＋ 空き
-                      </button>
+                      canBook ? (
+                        <button
+                          className="w-full flex items-center gap-1.5 text-xs font-medium text-muted-foreground/70 py-2 px-2.5 rounded-lg border border-dashed border-border/80 hover:border-primary/60 hover:text-foreground active:scale-[0.98] active:bg-primary/10 transition-all"
+                          onClick={() => onNewBooking(dateStr, label)}
+                          data-testid={`agenda-empty-${label}`}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          予約を追加
+                        </button>
+                      ) : (
+                        <div className="text-xs text-muted-foreground/30 py-2 select-none">空き</div>
+                      )
                     ) : list.map(appt => {
                       const c = getTreatmentColor(appt.treatmentType || "");
                       const isNewPatient = appt.visitType === "first" || (appt.treatmentType || "").includes("初診");
@@ -1174,9 +1232,9 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
             })}
           </div>
         )}
-        {!isDayOff && (
+        {!isDayOff && canBook && (
           <button
-            className="absolute bottom-5 right-5 z-30 flex items-center gap-2 h-14 px-5 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform font-medium"
+            className="absolute bottom-5 right-5 z-30 flex items-center gap-2 h-14 px-5 rounded-full bg-primary text-primary-foreground shadow-lg font-medium transition-all duration-150 active:scale-90 active:shadow-md hover:shadow-xl"
             onClick={() => onNewBooking(dateStr, suggestTime())}
             data-testid="agenda-new-booking"
           >
@@ -1192,7 +1250,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
       <div className="h-full flex flex-col bg-background">
         <div className="flex items-center gap-6 px-6 py-2.5 bg-muted/30 border-b border-border text-sm shrink-0">
           <span className="text-muted-foreground">この日は定休日です</span>
-          <div className="ml-auto">{holidayButton}</div>
+          {holidayChip && <div className="ml-auto">{holidayChip}</div>}
         </div>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center text-muted-foreground">
@@ -1260,15 +1318,16 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
 
             {/* トラック領域（ドラッグ計算の基準要素・行の合計高さちょうど） */}
             <div className="relative shrink-0" ref={gridRef} style={{ width: trackWidth, height: rowsHeight }}>
-              {/* 縦の時間グリッド（全高） */}
+              {/* 縦の時間グリッド（全高）。休診の時間帯は赤系で塗って一目で分かるように */}
               {timeSlots.map((slot, i) => {
                 const st = getSlotStatus(slot, dayHours);
                 const hour = isHourStart(slot);
                 const hh = parseInt(slot, 10);
+                const holidaySlot = st === "open" && isSlotHoliday(slot);
                 return (
                   <div
                     key={slot}
-                    className={`absolute top-0 bottom-0 ${hour ? "border-l border-border/60" : "border-l border-border/15"} ${st === "closed" ? "bg-muted/30" : st === "lunch" ? "bg-muted/20" : hour && hh % 2 === 1 ? "bg-muted/[0.04]" : ""}`}
+                    className={`absolute top-0 bottom-0 ${hour ? "border-l border-border/60" : "border-l border-border/15"} ${holidaySlot ? "bg-red-100/60 dark:bg-red-950/25" : st === "closed" ? "bg-muted/30" : st === "lunch" ? "bg-muted/20" : hour && hh % 2 === 1 ? "bg-muted/[0.04]" : ""}`}
                     style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }}
                   />
                 );
@@ -1293,11 +1352,11 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                 >
                   {timeSlots.map((slot, i) => {
                     const st = getSlotStatus(slot, dayHours);
-                    const clickable = st === "open" && calendarMode !== "view";
+                    const clickable = st === "open" && canBook && !isSlotHoliday(slot);
                     return (
                       <div
                         key={slot}
-                        className={`absolute top-0 bottom-0 ${clickable ? "cursor-pointer hover:bg-primary/10" : st === "closed" ? "pointer-events-none" : ""}`}
+                        className={`absolute top-0 bottom-0 ${clickable ? "cursor-pointer hover:bg-primary/10 active:bg-primary/20 transition-colors" : st === "closed" ? "pointer-events-none" : ""}`}
                         style={{ left: i * SLOT_WIDTH, width: SLOT_WIDTH }}
                         onClick={() => clickable && onSlotClick(dateStr, slot, col.kind === "staff" ? col.key : undefined)}
                         data-testid={clickable ? `slot-${col.key}-${slot}` : undefined}
@@ -1339,12 +1398,13 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                       key={appt.id}
                       className="absolute z-10 group touch-none"
                       style={{ left: left + 1, width, top, height }}
-                      onPointerDown={(ev) => startDrag(ev, appt)}
+                      onPointerDown={canBook ? (ev) => startDrag(ev, appt) : undefined}
                     >
-                      <div className={`h-full ${dimmed ? "opacity-40" : "cursor-grab active:cursor-grabbing"}`}>
-                        <ApptCard appt={appt} height={height} onClick={() => {}} />
+                      <div className={`h-full ${dimmed ? "opacity-40" : canBook ? "cursor-grab active:cursor-grabbing" : ""}`}>
+                        {/* 予約モードではドラッグ移動（クリックはpointerup側で処理）、閲覧モードではタップで詳細 */}
+                        <ApptCard appt={appt} height={height} onClick={canBook ? () => {} : () => onAppointmentClick(appt)} />
                       </div>
-                      {!dimmed && <GripVertical className="absolute top-0.5 right-0.5 h-3 w-3 text-foreground/30 opacity-0 group-hover:opacity-100 pointer-events-none" />}
+                      {!dimmed && canBook && <GripVertical className="absolute top-0.5 right-0.5 h-3 w-3 text-foreground/30 opacity-0 group-hover:opacity-100 pointer-events-none" />}
                     </div>
                   );
                 });
@@ -1358,24 +1418,18 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
 }
 
 // ─── Week View ───────────────────────────────────────────────────────────────
-function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, clinicHolidays, calendarMode, onAppointmentClick, onDayClick, onHolidayQuickSave, onHolidayCustomSave, onHolidayDelete, onHolidayDetailOpen }: {
+function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, clinicHolidays, onAppointmentClick, onDayClick }: {
   currentDate: Date;
   appointments: Appointment[];
   businessHours: BusinessHours[];
   closedOnHolidays?: boolean;
   clinicHolidays: Holiday[];
-  calendarMode: CalendarMode;
   onAppointmentClick: (a: Appointment) => void;
   onDayClick: (d: Date) => void;
-  onHolidayQuickSave: (date: string, preset: "morning" | "afternoon" | "allday", dayOfWeek: number, existingId?: string) => Promise<void>;
-  onHolidayCustomSave: (date: string, startTime: string, endTime: string, existingId?: string) => Promise<void>;
-  onHolidayDelete: (id: string) => Promise<void>;
-  onHolidayDetailOpen: (date: string) => void;
 }) {
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
-  const [popoverDate, setPopoverDate] = useState<string | null>(null);
 
   return (
     <div className="p-2 md:p-4 overflow-x-hidden md:overflow-x-auto">
@@ -1396,15 +1450,11 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
           const morning = dayAppts.filter(a => parseInt(a.startTime) < 13).length;
           const afternoon = dayAppts.filter(a => parseInt(a.startTime) >= 13).length;
 
-          const isPopOpen = popoverDate === dateStr;
-          const [morningStart, morningEnd] = getPresetTimes(dayHours, "morning");
-          const [afternoonStart, afternoonEnd] = getPresetTimes(dayHours, "afternoon");
-
           const cellContent = (
             <div
-              className={`rounded-lg border cursor-pointer hover:shadow-md transition-all min-h-[104px] md:min-h-[180px] flex flex-col
-                ${isDayOff ? "bg-muted/30 border-border/40 opacity-70" : calendarMode === "holiday" ? (isPopOpen ? "ring-2 ring-destructive/60 border-destructive/40" : "hover:ring-2 hover:ring-destructive/40") : isToday ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-card hover:bg-accent/30"}`}
-              onClick={() => calendarMode === "holiday" ? setPopoverDate(isPopOpen ? null : dateStr) : onDayClick(day)}
+              className={`rounded-lg border cursor-pointer hover:shadow-md transition-all active:scale-[0.99] min-h-[104px] md:min-h-[180px] flex flex-col
+                ${isDayOff ? "bg-muted/30 border-border/40 opacity-70" : isToday ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-card hover:bg-accent/30"}`}
+              onClick={() => onDayClick(day)}
               data-testid={`week-day-${dateStr}`}
             >
               {/* Day header */}
@@ -1447,10 +1497,7 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
                         <div
                           key={a.id}
                           className={`flex items-center gap-1 rounded px-1 py-0.5 text-xs ${c.bg} ${c.text} overflow-hidden`}
-                          onClick={e => {
-                            if (calendarMode === "holiday") { e.stopPropagation(); setPopoverDate(isPopOpen ? null : dateStr); return; }
-                            e.stopPropagation(); onAppointmentClick(a);
-                          }}
+                          onClick={e => { e.stopPropagation(); onAppointmentClick(a); }}
                         >
                           <div className={`w-1 h-3.5 rounded-full shrink-0 ${c.bar}`} />
                           <span className="font-mono text-[10px] shrink-0 opacity-70">{a.startTime.slice(0, 5)}</span>
@@ -1467,27 +1514,7 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
             </div>
           );
 
-          if (calendarMode !== "holiday") {
-            return <div key={i}>{cellContent}</div>;
-          }
-
-          return (
-            <Popover key={i} open={isPopOpen} onOpenChange={open => !open && setPopoverDate(null)}>
-              <PopoverTrigger asChild>{cellContent}</PopoverTrigger>
-              <PopoverContent className="w-64 p-3" align="start" side="bottom" onClick={e => e.stopPropagation()}>
-                <HolidayPopoverContent
-                  dateLabel={format(day, "M月d日（E）", { locale: ja })}
-                  dateStr={dateStr}
-                  dayHours={businessHours.find(h => h.dayOfWeek === dow)}
-                  clinicHoliday={clinicHoliday}
-                  onQuickSave={async (preset) => onHolidayQuickSave(dateStr, preset, dow, clinicHoliday?.id)}
-                  onCustomSave={async (start, end) => onHolidayCustomSave(dateStr, start, end, clinicHoliday?.id)}
-                  onDelete={async () => onHolidayDelete(clinicHoliday!.id)}
-                  onClose={() => setPopoverDate(null)}
-                />
-              </PopoverContent>
-            </Popover>
-          );
+          return <div key={i}>{cellContent}</div>;
         })}
       </div>
     </div>
@@ -1495,23 +1522,17 @@ function WeekView({ currentDate, appointments, businessHours, closedOnHolidays, 
 }
 
 // ─── Month View ──────────────────────────────────────────────────────────────
-function MonthView({ currentDate, appointments, businessHours, closedOnHolidays, clinicHolidays, calendarMode, onAppointmentClick, onDayClick, onHolidayQuickSave, onHolidayCustomSave, onHolidayDelete, onHolidayDetailOpen }: {
+function MonthView({ currentDate, appointments, businessHours, closedOnHolidays, clinicHolidays, onAppointmentClick, onDayClick }: {
   currentDate: Date;
   appointments: Appointment[];
   businessHours: BusinessHours[];
   closedOnHolidays?: boolean;
   clinicHolidays: Holiday[];
-  calendarMode: CalendarMode;
   onAppointmentClick: (a: Appointment) => void;
   onDayClick: (d: Date) => void;
-  onHolidayQuickSave: (date: string, preset: "morning" | "afternoon" | "allday", dayOfWeek: number, existingId?: string) => Promise<void>;
-  onHolidayCustomSave: (date: string, startTime: string, endTime: string, existingId?: string) => Promise<void>;
-  onHolidayDelete: (id: string) => Promise<void>;
-  onHolidayDetailOpen: (date: string) => void;
 }) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const [popoverDate, setPopoverDate] = useState<string | null>(null);
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const startPad = firstDay.getDay();
@@ -1548,16 +1569,11 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
             const isSun = dow === 0;
             const isSat = dow === 6;
 
-            const isPopOpen = popoverDate === dateStr;
-            const [morningStart, morningEnd] = getPresetTimes(dayHours, "morning");
-            const [afternoonStart, afternoonEnd] = getPresetTimes(dayHours, "afternoon");
-
             const cellContent = (
               <div
-                className={`min-h-[58px] md:min-h-[90px] p-1 md:p-1.5 cursor-pointer transition-colors
-                  ${calendarMode === "holiday" ? (isPopOpen ? "bg-destructive/5 ring-1 ring-inset ring-destructive/40" : "hover:bg-destructive/5") : "hover:bg-accent/40"}
+                className={`min-h-[58px] md:min-h-[90px] p-1 md:p-1.5 cursor-pointer transition-colors hover:bg-accent/40
                   ${idx % 7 < 6 ? "border-r border-border/30" : ""} border-b border-border/30 ${isDayOff ? "bg-muted/30" : isToday ? "bg-primary/5" : ""}`}
-                onClick={() => calendarMode === "holiday" ? setPopoverDate(isPopOpen ? null : dateStr) : onDayClick(date)}
+                onClick={() => onDayClick(date)}
                 data-testid={`month-day-${dateStr}`}
               >
                 <div className={`text-sm font-semibold mb-0.5 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? "bg-primary text-primary-foreground" : (isSun || holidayName) ? "text-red-500" : isSat ? "text-blue-500" : isDayOff ? "text-muted-foreground" : ""}`}>
@@ -1575,10 +1591,7 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
                     {dayAppts.slice(0, 2).map(a => {
                       const c = getTreatmentColor(a.treatmentType || "");
                       return (
-                        <div key={a.id} className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] overflow-hidden ${c.bg} ${c.text}`} onClick={e => {
-                          if (calendarMode === "holiday") { e.stopPropagation(); setPopoverDate(isPopOpen ? null : dateStr); return; }
-                          e.stopPropagation(); onAppointmentClick(a);
-                        }}>
+                        <div key={a.id} className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] overflow-hidden ${c.bg} ${c.text}`} onClick={e => { e.stopPropagation(); onAppointmentClick(a); }}>
                           <div className={`w-0.5 h-3 rounded-full shrink-0 ${c.bar}`} />
                           <span className="truncate">{a.patient?.name || "—"}</span>
                         </div>
@@ -1605,10 +1618,7 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
                           <div
                             key={a.id}
                             className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] overflow-hidden ${c.bg} ${c.text}`}
-                            onClick={e => {
-                              if (calendarMode === "holiday") { e.stopPropagation(); setPopoverDate(isPopOpen ? null : dateStr); return; }
-                              e.stopPropagation(); onAppointmentClick(a);
-                            }}
+                            onClick={e => { e.stopPropagation(); onAppointmentClick(a); }}
                           >
                             <div className={`w-0.5 h-3 rounded-full shrink-0 ${c.bar}`} />
                             <span className="font-mono shrink-0 opacity-70">{a.startTime.slice(0, 5)}</span>
@@ -1625,198 +1635,10 @@ function MonthView({ currentDate, appointments, businessHours, closedOnHolidays,
               </div>
             );
 
-            if (calendarMode !== "holiday") {
-              return <div key={idx}>{cellContent}</div>;
-            }
-
-              return (
-              <Popover key={idx} open={isPopOpen} onOpenChange={open => !open && setPopoverDate(null)}>
-                <PopoverTrigger asChild>{cellContent}</PopoverTrigger>
-                <PopoverContent className="w-64 p-3" align="start" side="bottom" onClick={e => e.stopPropagation()}>
-                  <HolidayPopoverContent
-                    dateLabel={format(date, "M月d日（E）", { locale: ja })}
-                    dateStr={dateStr}
-                    dayHours={businessHours.find(h => h.dayOfWeek === dow)}
-                    clinicHoliday={clinicHoliday}
-                    onQuickSave={async (preset) => onHolidayQuickSave(dateStr, preset, dow, clinicHoliday?.id)}
-                    onCustomSave={async (start, end) => onHolidayCustomSave(dateStr, start, end, clinicHoliday?.id)}
-                    onDelete={async () => onHolidayDelete(clinicHoliday!.id)}
-                    onClose={() => setPopoverDate(null)}
-                  />
-                </PopoverContent>
-              </Popover>
-            );
+            return <div key={idx}>{cellContent}</div>;
           })}
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── SpotHolidayModal ────────────────────────────────────────────────────────
-function SpotHolidayModal({
-  date,
-  initialTime,
-  businessHours,
-  existingHoliday,
-  onClose,
-  onSaved,
-}: {
-  date: string | null;
-  initialTime?: string | null;
-  businessHours: BusinessHours[];
-  existingHoliday: Holiday | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [allDay, setAllDay] = useState(true);
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("12:00");
-  const [reason, setReason] = useState("");
-
-  // モーダルが開くたびに既存データをリセット
-  useEffect(() => {
-    if (date) {
-      if (existingHoliday) {
-        setAllDay(!existingHoliday.startTime);
-        setStartTime(existingHoliday.startTime?.slice(0, 5) ?? "09:00");
-        setEndTime(existingHoliday.endTime?.slice(0, 5) ?? "12:00");
-        setReason(existingHoliday.reason ?? "");
-      } else if (initialTime) {
-        setAllDay(false);
-        setStartTime(initialTime.slice(0, 5));
-        setEndTime(addMinutes(initialTime.slice(0, 5), 60));
-        setReason("");
-      } else {
-        setAllDay(true);
-        setStartTime("09:00");
-        setEndTime("12:00");
-        setReason("");
-      }
-    }
-  }, [date, existingHoliday, initialTime]);
-
-  const queryClient = useQueryClient();
-
-  const createMutation = useMutation({
-    mutationFn: (body: object) => apiRequest("POST", "/api/holidays", body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
-      onSaved();
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/holidays/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
-      onSaved();
-    },
-  });
-
-  if (!date) return null;
-
-  // 診療時間内の30分刻みの時間リストを生成
-  const timeOptions: string[] = [];
-  for (let h = 7; h <= 20; h++) {
-    for (const m of [0, 30]) {
-      timeOptions.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-    }
-  }
-
-  const displayDate = (() => {
-    try { return format(new Date(date + "T00:00:00"), "yyyy年M月d日（E）", { locale: ja }); } catch { return date; }
-  })();
-
-  const handleSave = () => {
-    createMutation.mutate({
-      date,
-      reason: reason || undefined,
-      startTime: allDay ? undefined : startTime,
-      endTime: allDay ? undefined : endTime,
-    });
-  };
-
-  return (
-    <Dialog open={!!date} onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{displayDate} の休診設定</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          {/* 終日トグル */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="allday-switch" className="text-sm font-medium">終日休診</Label>
-            <Switch
-              id="allday-switch"
-              checked={allDay}
-              onCheckedChange={setAllDay}
-              data-testid="switch-allday"
-            />
-          </div>
-
-          {/* 時間帯指定（終日OFFの時のみ） */}
-          {!allDay && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="mb-1.5 block text-sm">開始時間</Label>
-                <Select value={startTime} onValueChange={setStartTime}>
-                  <SelectTrigger className="h-10" data-testid="select-start-time">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="mb-1.5 block text-sm">終了時間</Label>
-                <Select value={endTime} onValueChange={setEndTime}>
-                  <SelectTrigger className="h-10" data-testid="select-end-time">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {timeOptions.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          {/* 理由 */}
-          <div>
-            <Label className="mb-1.5 block text-sm">理由（任意）</Label>
-            <Textarea
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              placeholder="例：院長外出、研修など"
-              className="h-20 resize-none text-sm"
-              data-testid="input-holiday-reason"
-            />
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          {existingHoliday && (
-            <Button
-              variant="destructive"
-              className="h-10 active:scale-95"
-              onClick={() => deleteMutation.mutate(existingHoliday.id)}
-              disabled={deleteMutation.isPending}
-              data-testid="button-delete-holiday"
-            >
-              削除する
-            </Button>
-          )}
-          <Button
-            className="h-10 active:scale-95"
-            onClick={handleSave}
-            disabled={createMutation.isPending}
-            data-testid="button-save-holiday"
-          >
-            設定する
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

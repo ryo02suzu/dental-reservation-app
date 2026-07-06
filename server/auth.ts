@@ -32,10 +32,10 @@ function resolveSessionSecret(): string {
   return randomBytes(32).toString("hex");
 }
 
-const REMEMBER_ME_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30日
+const REMEMBER_ME_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000; // 180日
 
 // 「ログイン状態を保持する」チェックに応じてセッションCookieの寿命を切り替える。
-//  - remember あり: 30日間有効な永続Cookie（ブラウザを閉じても維持）
+//  - remember あり: 180日間有効な永続Cookie（rolling併用で、使い続ける端末は実質ログインし続けられる）
 //  - remember なし: ブラウザを閉じると失効するセッションCookie
 // 各ログインエンドポイント（管理者/患者）から認証成功後に呼び出す。
 export function applyRememberMe(req: any, remember: unknown): void {
@@ -65,17 +65,20 @@ export function setupAuth(app: Express) {
     secret: resolveSessionSecret(),
     resave: false,
     saveUninitialized: false,
+    // アクセスのたびにCookie有効期限を延長（rolling）。
+    // 医院の端末のように日常的に使うデバイスは再ログイン不要で「アプリのように」開ける。
+    rolling: true,
     name: "sid",
     store: new PostgresStore({
       pool,
       createTableIfMissing: true,
-      ttl: 30 * 24 * 60 * 60,
+      ttl: 180 * 24 * 60 * 60,
     }),
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
+      maxAge: REMEMBER_ME_MAX_AGE_MS,
     },
   };
 
