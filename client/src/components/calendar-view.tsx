@@ -375,6 +375,37 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     queryKey: ["/api/holidays"],
   });
 
+  // 日ビューの休診エディタ用：時間帯をワンタップでトグル（楽観更新で即反映）
+  const handleSlotHolidayToggle = useCallback(async (date: string, slotStart: string, slotEnd: string) => {
+    const sMins = toMins(slotStart);
+    const list = Array.isArray(clinicHolidays) ? clinicHolidays : [];
+    const covering = list.find(h => h.date === date && h.startTime && h.endTime
+      && toMins(h.startTime.slice(0, 5)) <= sMins && sMins < toMins(h.endTime.slice(0, 5)));
+    const key = ["/api/holidays"];
+    if (covering) {
+      queryClient.setQueryData<Holiday[]>(key, (old) => (old ?? []).filter(h => h.id !== covering.id));
+      try { await deleteHolidayMutation.mutateAsync(covering.id); } finally { queryClient.invalidateQueries({ queryKey: key }); }
+    } else {
+      const temp = { id: `tmp-${Date.now()}`, date, startTime: `${slotStart}:00`, endTime: `${slotEnd}:00` } as unknown as Holiday;
+      queryClient.setQueryData<Holiday[]>(key, (old) => [...(old ?? []), temp]);
+      try { await createHolidayMutation.mutateAsync({ date, startTime: slotStart, endTime: slotEnd }); } finally { queryClient.invalidateQueries({ queryKey: key }); }
+    }
+  }, [clinicHolidays, createHolidayMutation, deleteHolidayMutation, queryClient]);
+
+  const handleAlldayHolidayToggle = useCallback(async (date: string) => {
+    const list = Array.isArray(clinicHolidays) ? clinicHolidays : [];
+    const allday = list.find(h => h.date === date && !h.startTime);
+    const key = ["/api/holidays"];
+    if (allday) {
+      queryClient.setQueryData<Holiday[]>(key, (old) => (old ?? []).filter(h => h.id !== allday.id));
+      try { await deleteHolidayMutation.mutateAsync(allday.id); } finally { queryClient.invalidateQueries({ queryKey: key }); }
+    } else {
+      const temp = { id: `tmp-${Date.now()}`, date } as unknown as Holiday;
+      queryClient.setQueryData<Holiday[]>(key, (old) => [...(old ?? []), temp]);
+      try { await createHolidayMutation.mutateAsync({ date }); } finally { queryClient.invalidateQueries({ queryKey: key }); }
+    }
+  }, [clinicHolidays, createHolidayMutation, deleteHolidayMutation, queryClient]);
+
   const dateRange = useCallback(() => {
     if (viewMode === "day") {
       const d = format(currentDate, "yyyy-MM-dd");
@@ -610,7 +641,11 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
             {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
           </div>
         ) : viewMode === "day" ? (
+          calendarMode === "holiday" ? (
+            <HolidayDayEditor currentDate={currentDate} businessHours={businessHours} clinicHolidays={clinicHolidays} slotIntervalMinutes={slotIntervalMinutes} onSlotToggle={handleSlotHolidayToggle} onAlldayToggle={handleAlldayHolidayToggle} />
+          ) : (
           <DayView currentDate={currentDate} appointments={appointments} staff={staffForDay} filterStaffId={filterStaffId} businessHours={businessHours} calendarMode={calendarMode} clinicHolidays={clinicHolidays} axis={dayAxis} chairsCount={chairsCount} slotIntervalMinutes={slotIntervalMinutes} isMobile={isMobile} onAppointmentClick={handleApptClick} onApptMove={handleApptMove} onNewBooking={handleNewBooking} onSlotClick={handleSlotClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} />
+          )
         ) : viewMode === "week" ? (
           <WeekView currentDate={currentDate} appointments={appointments} businessHours={businessHours} closedOnHolidays={closedOnHolidays} clinicHolidays={clinicHolidays} calendarMode={calendarMode} onAppointmentClick={handleApptClick} onDayClick={handleDayClick} onHolidayQuickSave={handleHolidayQuickSave} onHolidayCustomSave={handleHolidayCustomSave} onHolidayDelete={async (id) => { await deleteHolidayMutation.mutateAsync(id); await queryClient.invalidateQueries({ queryKey: ["/api/holidays"] }); }} onHolidayDetailOpen={(date) => { setHolidayModalDate(date); setHolidayModalInitialTime(null); }} />
         ) : (
@@ -676,6 +711,97 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
         )}
       </div>
     </button>
+  );
+}
+
+// ─── 休診エディタ（日ビュー・PC/スマホ共通・ワンタップトグル）──────────────────
+function HolidayDayEditor({ currentDate, businessHours, clinicHolidays, slotIntervalMinutes, onSlotToggle, onAlldayToggle }: {
+  currentDate: Date;
+  businessHours: BusinessHours[];
+  clinicHolidays: Holiday[];
+  slotIntervalMinutes: number;
+  onSlotToggle: (date: string, slotStart: string, slotEnd: string) => Promise<void>;
+  onAlldayToggle: (date: string) => Promise<void>;
+}) {
+  const dow = currentDate.getDay();
+  const dayHours = businessHours.find(h => h.dayOfWeek === dow);
+  const dateStr = format(currentDate, "yyyy-MM-dd");
+  const dateLabel = format(currentDate, "M月d日（E）", { locale: ja });
+  const isRegularOff = !dayHours || dayHours.isClosed;
+  const holidays = (Array.isArray(clinicHolidays) ? clinicHolidays : []).filter(h => h.date === dateStr);
+  const alldayHoliday = holidays.find(h => !h.startTime);
+  const step = Math.min(60, Math.max(5, slotIntervalMinutes || 30));
+
+  const openMins = dayHours?.openTime ? toMins(dayHours.openTime) : null;
+  const lastClose = dayHours?.afternoonCloseTime
+    ? toMins(dayHours.afternoonCloseTime)
+    : (dayHours?.closeTime ? toMins(dayHours.closeTime) : null);
+
+  const slots: { start: string; end: string; status: "open" | "lunch"; closed: boolean }[] = [];
+  if (!isRegularOff && openMins !== null && lastClose !== null) {
+    for (let m = openMins; m + step <= lastClose; m += step) {
+      const start = minsToTime(m);
+      const st = getSlotStatus(start, dayHours);
+      if (st === "closed") continue;
+      const closed = !!alldayHoliday || holidays.some(h => h.startTime && h.endTime
+        && toMins(h.startTime.slice(0, 5)) <= m && m < toMins(h.endTime.slice(0, 5)));
+      slots.push({ start, end: minsToTime(m + step), status: st, closed });
+    }
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-2xl mx-auto">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold text-foreground">{dateLabel} の休診設定</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">時間帯をタップで休診／もう一度タップで解除</p>
+        </div>
+        <button
+          onClick={() => onAlldayToggle(dateStr)}
+          className={`shrink-0 h-9 px-3 rounded-lg text-xs font-medium border transition-colors active:scale-95 ${alldayHoliday ? "bg-red-500 text-white border-red-500" : "bg-background text-foreground border-border hover:bg-accent"}`}
+          data-testid="btn-allday-holiday"
+        >
+          {alldayHoliday ? "終日休診を解除" : "終日休診にする"}
+        </button>
+      </div>
+
+      {isRegularOff ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
+          <p className="text-sm font-medium">定休日です</p>
+        </div>
+      ) : slots.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
+          <p className="text-sm">この日の診療時間が設定されていません</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+            {slots.map(s => s.status === "lunch" ? (
+              <div key={s.start} className="rounded-lg border border-dashed border-border/60 py-2.5 text-center text-xs text-muted-foreground/60 bg-muted/20 select-none">
+                <span className="tabular-nums">{s.start}</span>
+                <span className="block text-[10px] mt-0.5">昼休み</span>
+              </div>
+            ) : (
+              <button
+                key={s.start}
+                onClick={() => { if (!alldayHoliday) onSlotToggle(dateStr, s.start, s.end); }}
+                disabled={!!alldayHoliday}
+                className={`rounded-lg border py-2.5 text-center transition-all active:scale-95 ${s.closed ? "bg-red-500 text-white border-red-500" : "bg-card border-border text-foreground hover:border-primary hover:bg-primary/5"} ${alldayHoliday ? "opacity-50 cursor-not-allowed" : ""}`}
+                data-testid={`holiday-slot-${s.start}`}
+              >
+                <span className="text-sm font-semibold tabular-nums">{s.start}</span>
+                <span className="block text-[10px] mt-0.5 opacity-80">{s.closed ? "休診" : "受付可"}</span>
+              </button>
+            ))}
+          </div>
+          {alldayHoliday && (
+            <p className="text-xs text-red-500 mt-3">この日は終日休診です。個別の時間帯を編集するには「終日休診を解除」してください。</p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
