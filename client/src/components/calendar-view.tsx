@@ -703,6 +703,36 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // スワイプの方向ロック：指を動かし始めた方向（横／縦）だけにスクロールを固定し、
+  // 斜めの「グワングワン」した動きを防ぐ（タッチ操作時のみ）
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    let axisLock: "x" | "y" | null = null;
+    let sx = 0, sy = 0;
+    const onStart = (e: TouchEvent) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; axisLock = null; };
+    const onMove = (e: TouchEvent) => {
+      if (axisLock) return;
+      const t = e.touches[0];
+      const dx = Math.abs(t.clientX - sx), dy = Math.abs(t.clientY - sy);
+      if (dx < 8 && dy < 8) return;
+      axisLock = dx > dy ? "x" : "y";
+      el.style.overflowX = axisLock === "x" ? "auto" : "hidden";
+      el.style.overflowY = axisLock === "y" ? "auto" : "hidden";
+    };
+    const reset = () => { axisLock = null; el.style.overflowX = "auto"; el.style.overflowY = "auto"; };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", reset, { passive: true });
+    el.addEventListener("touchcancel", reset, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", reset);
+      el.removeEventListener("touchcancel", reset);
+    };
+  }, []);
+
   const dayNamesJa = ["日", "月", "火", "水", "木", "金", "土"];
 
   // 全日の営業スロットを縦軸（時刻の行）に統一。各日はこの時刻に対して open/lunch/対象外 を持つ
@@ -734,7 +764,7 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
       </div>
 
       {/* 縦＝時刻／横＝日 のグリッド（横スクロールで今月以降をずらーっと表示） */}
-      <div ref={scrollerRef} className="flex-1 overflow-auto" data-testid="holiday-grid">
+      <div ref={scrollerRef} className="flex-1 overflow-auto [scroll-snap-type:none]" style={{ overscrollBehavior: "contain" }} data-testid="holiday-grid">
         <div className="grid w-max" style={{ gridTemplateColumns: gridCols }}>
           {/* 左上コーナー */}
           <div className="sticky top-0 left-0 z-30 bg-background border-b border-r border-border" />
