@@ -715,6 +715,57 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
     if (scrollerRef.current) { scrollerRef.current.scrollLeft = 0; scrollerRef.current.scrollTop = 0; }
   }, [viewYear, viewMonth]);
 
+  // スワイプの方向ロック（斜め移動を無くす）。
+  // 最初に動いた方向（縦／横）だけにスクロールを固定し、指でスクロールを直接駆動する。
+  // touch-action:none でブラウザ標準の2Dスクロールを止め、指を離した後の慣性も自前で付ける。
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    let axis: "x" | "y" | null = null;
+    let sx = 0, sy = 0, lx = 0, ly = 0, vx = 0, vy = 0, lt = 0, raf = 0;
+    const stopInertia = () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } };
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) { axis = null; return; }
+      stopInertia();
+      const t = e.touches[0];
+      axis = null; sx = lx = t.clientX; sy = ly = t.clientY; vx = vy = 0; lt = e.timeStamp;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      if (!axis) {
+        const dx = Math.abs(t.clientX - sx), dy = Math.abs(t.clientY - sy);
+        if (dx < 6 && dy < 6) return;        // タップ／微小移動は無視（マスのタップを妨げない）
+        axis = dx > dy ? "x" : "y";          // 動き始めた方向に固定
+      }
+      const dt = Math.max(1, e.timeStamp - lt);
+      if (axis === "x") { const d = t.clientX - lx; el.scrollLeft -= d; vx = d / dt; }
+      else { const d = t.clientY - ly; el.scrollTop -= d; vy = d / dt; }
+      lx = t.clientX; ly = t.clientY; lt = e.timeStamp;
+    };
+    const onEnd = () => {
+      const a = axis; axis = null;
+      if (!a) return;
+      const step = () => {
+        if (a === "x") { if (Math.abs(vx) < 0.03) return; el.scrollLeft -= vx * 16; vx *= 0.94; }
+        else { if (Math.abs(vy) < 0.03) return; el.scrollTop -= vy * 16; vy *= 0.94; }
+        raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    el.addEventListener("touchcancel", onEnd, { passive: true });
+    return () => {
+      stopInertia();
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
   const goMonth = (delta: number) => {
     const next = viewIdx + delta;
     if (next < curMonthIdx) return; // 今月より前へは戻さない
@@ -800,7 +851,7 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
           </div>
         </div>
       ) : (
-      <div ref={scrollerRef} className="flex-1 min-h-0 overflow-auto pb-3" style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as any} data-testid="holiday-grid">
+      <div ref={scrollerRef} className="flex-1 min-h-0 overflow-auto touch-none pb-3" style={{ overscrollBehavior: "contain" }} data-testid="holiday-grid">
         <div className="grid w-max" style={{ gridTemplateColumns: gridCols }}>
           {/* 左上コーナー（上・左とも固定） */}
           <div className="sticky top-0 left-0 z-30 bg-background border-b border-r border-border" />
