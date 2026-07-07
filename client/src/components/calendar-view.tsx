@@ -180,7 +180,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
     setCalendarMode(mode);
   };
 
-  const { data: businessHours = [] } = useQuery<BusinessHours[]>({
+  const { data: businessHours = [], isLoading: businessHoursLoading } = useQuery<BusinessHours[]>({
     queryKey: ["/api/business-hours"],
   });
 
@@ -439,7 +439,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
       {/* Content（モバイルは横方向の移動を完全に無効化＝縦スクロールのみ） */}
       <div className={`flex-1 ${calendarMode === "holiday" ? "overflow-hidden" : "overflow-y-auto overflow-x-hidden md:overflow-auto"}`}>
         {calendarMode === "holiday" ? (
-          <HolidayBatchEditor initialDate={currentDate} businessHours={businessHours} clinicHolidays={clinicHolidays} slotIntervalMinutes={slotIntervalMinutes} closedOnHolidays={closedOnHolidays} onDirtyChange={(d) => { holidayDirtyRef.current = d; holidayEditorGuard.dirty = d; }} />
+          <HolidayBatchEditor initialDate={currentDate} businessHours={businessHours} businessHoursLoading={businessHoursLoading} clinicHolidays={clinicHolidays} slotIntervalMinutes={slotIntervalMinutes} closedOnHolidays={closedOnHolidays} onDirtyChange={(d) => { holidayDirtyRef.current = d; holidayEditorGuard.dirty = d; }} />
         ) : isLoading ? (
           <div className="p-4 md:p-6 space-y-3">
             <Skeleton className="h-10 w-full rounded-lg" />
@@ -523,9 +523,10 @@ type EditorDay = {
   slots: EditorSlot[];
 };
 
-function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIntervalMinutes, closedOnHolidays, onDirtyChange }: {
+function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, clinicHolidays, slotIntervalMinutes, closedOnHolidays, onDirtyChange }: {
   initialDate: Date;
   businessHours: BusinessHours[];
+  businessHoursLoading: boolean;
   clinicHolidays: Holiday[];
   slotIntervalMinutes: number;
   closedOnHolidays: boolean;
@@ -782,11 +783,19 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
           ・時刻の列は左に固定（縦スクロールで一緒に動く）
           ・縦スクロール（vScroll: touch-action pan-y）と横スクロール（hScroll: pan-x）を
             別レイヤーに分離し、ブラウザ標準の軸ロックで斜め移動・位置リセットを防ぐ */}
-      {businessHours.length === 0 ? (
+      {businessHours.length === 0 && businessHoursLoading ? (
         <div className="flex-1 flex items-center justify-center p-6 text-center text-muted-foreground">
           <div>
             <Clock className="h-8 w-8 mx-auto mb-2 opacity-25 animate-pulse" />
             <p className="text-sm">診療時間を読み込み中...</p>
+          </div>
+        </div>
+      ) : businessHours.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center p-6 text-center text-muted-foreground">
+          <div>
+            <Clock className="h-8 w-8 mx-auto mb-2 opacity-25" />
+            <p className="text-sm font-medium">診療時間が設定されていません</p>
+            <p className="text-xs mt-1 opacity-60">「設定」→診療時間 から登録してください</p>
           </div>
         </div>
       ) : axis.length === 0 ? (
@@ -821,7 +830,7 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
         </div>
 
         {/* 本体（縦スクロール）：左＝時刻列 ＋ 右＝セル（横スクロール） */}
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden" style={{ touchAction: "pan-y", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as any} data-testid="holiday-grid">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-3" style={{ touchAction: "pan-y", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as any} data-testid="holiday-grid">
           <div className="flex" style={{ minWidth: "100%" }}>
             {/* 時刻の固定列 */}
             <div className="shrink-0 border-r border-border bg-background" style={{ width: TIME_W }}>

@@ -75,8 +75,9 @@ export default function Home() {
     if (date) setCalendarInitialDate(new Date(date));
   };
 
+  // h-screen(=100vh)はモバイルSafariでアドレスバー分だけ下が切れるため、100dvhを併用
   return (
-    <div className="flex flex-col h-screen bg-background overflow-hidden">
+    <div className="flex flex-col h-screen [height:100dvh] bg-background overflow-hidden">
       {impersonation?.active && (
         <div className="shrink-0 bg-amber-500 text-white px-4 py-2 flex items-center justify-between gap-3 text-sm z-50" data-testid="banner-impersonation">
           <div className="flex items-center gap-2">
