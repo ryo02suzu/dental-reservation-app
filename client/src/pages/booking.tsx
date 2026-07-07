@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, createContext, useContext, useCallback } from "react";
 import liff from "@line/liff";
 import { usePageMeta } from "@/hooks/use-page-meta";
+import { ClinicSplash } from "@/components/clinic-splash";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1480,6 +1481,8 @@ export default function BookingPage({ slug }: { slug?: string }) {
 
   return (
     <ClinicColorContext.Provider value={colors}>
+    {/* 医院専用スプラッシュ（患者がネット予約に入った時。Archeのアニメは出さない） */}
+    <ClinicSplash name={clinicName} bgColor={colors.header} storageKey={`clinic-splash-${slug || "default"}`} />
     <PageShell
       clinicName={clinicName}
       patientName={patientName}

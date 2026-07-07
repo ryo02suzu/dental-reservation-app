@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 
-// 起動スプラッシュ。アプリを開いた直後にブランドアニメーションを表示する。
+// 起動スプラッシュ（Archeブランド）。歯科医院側（管理・ログイン）でのみ表示する。
 // - 1ブラウザセッションにつき1回だけ（タブ内の画面遷移では再表示しない）
 // - prefers-reduced-motion の場合は表示しない
-// - 表示中に裏で認証チェックが走るので、体感の待ち時間はほぼゼロ
+// - 患者/スタッフ向けページ（予約・マイページ等）には出さない
 const SPLASH_KEY = "arche-splash-seen";
 const SPLASH_DURATION_MS = 1450;
 const SPLASH_FADE_MS = 450;
+
+// 患者・スタッフ向けページ（ここではArcheスプラッシュを出さない）
+const NON_ADMIN_ROUTE = /^\/(book|booking|my-appointments|review|checkin|qr-clock-in|my-schedule|privacy|terms)(\/|$)/;
 
 function shouldShowSplash(): boolean {
   try {
@@ -20,8 +24,9 @@ function shouldShowSplash(): boolean {
 }
 
 export function SplashScreen() {
+  const [location] = useLocation();
   const [phase, setPhase] = useState<"show" | "leaving" | "gone">(() =>
-    shouldShowSplash() ? "show" : "gone",
+    (!NON_ADMIN_ROUTE.test(location) && shouldShowSplash()) ? "show" : "gone",
   );
 
   useEffect(() => {
