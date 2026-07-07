@@ -4,7 +4,7 @@ import { format, startOfWeek, addDays, isSameDay, parseISO, addMonths, subMonths
 import { ja } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Sun, Sunset, Eye, Ban, Users, Armchair, GripVertical, RotateCcw, Check, Minus } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Sun, Sunset, Eye, Ban, Clock, Users, Armchair, GripVertical, RotateCcw, Check, Minus } from "lucide-react";
 import { AppointmentModal } from "@/components/appointment-modal";
 import { getHolidayName } from "@/lib/holidays";
 import { apiRequest } from "@/lib/queryClient";
@@ -538,8 +538,11 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
   const headerRef = useRef<HTMLDivElement>(null);  // 日付ヘッダー行（横スクロール追従）
   const hScrollRef = useRef<HTMLDivElement>(null);  // セルの横スクロール領域
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
-  const [viewYear, setViewYear] = useState(initialDate.getFullYear());
-  const [viewMonth, setViewMonth] = useState(initialDate.getMonth()); // 0-11
+  const curMonthIdx = today.getFullYear() * 12 + today.getMonth();
+  // 初期表示月は「今月」を下限にクランプ（過去月では開かない）
+  const initIdx = Math.max(initialDate.getFullYear() * 12 + initialDate.getMonth(), curMonthIdx);
+  const [viewYear, setViewYear] = useState(Math.floor(initIdx / 12));
+  const [viewMonth, setViewMonth] = useState(initIdx % 12);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const step = Math.min(60, Math.max(5, slotIntervalMinutes || 30));
@@ -595,7 +598,8 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
   })();
 
   const openStarts = (day: EditorDay) => day.slots.filter(s => s.status === "open").map(s => s.start);
-  const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
+  const viewIdx = viewYear * 12 + viewMonth;
+  const isCurrentMonth = viewIdx <= curMonthIdx; // 今月（以前）＝これ以上戻れない
 
   // サーバに保存されている現状から、その日の編集初期値を作る
   const baseStateOf = (day: EditorDay): HolidayDayEdit => {
@@ -713,11 +717,10 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
   }, [viewYear, viewMonth]);
 
   const goMonth = (delta: number) => {
-    // 過去の月へは戻さない（今月が下限）
-    if (delta < 0 && isCurrentMonth) return;
-    const d = new Date(viewYear, viewMonth + delta, 1);
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth());
+    const next = viewIdx + delta;
+    if (next < curMonthIdx) return; // 今月より前へは戻さない
+    setViewYear(Math.floor(next / 12));
+    setViewMonth(next % 12);
   };
 
   // セルを横スクロールしたら、日付ヘッダー行を同じ位置へ追従させる
@@ -779,7 +782,14 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
           ・時刻の列は左に固定（縦スクロールで一緒に動く）
           ・縦スクロール（vScroll: touch-action pan-y）と横スクロール（hScroll: pan-x）を
             別レイヤーに分離し、ブラウザ標準の軸ロックで斜め移動・位置リセットを防ぐ */}
-      {axis.length === 0 ? (
+      {businessHours.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center p-6 text-center text-muted-foreground">
+          <div>
+            <Clock className="h-8 w-8 mx-auto mb-2 opacity-25 animate-pulse" />
+            <p className="text-sm">診療時間を読み込み中...</p>
+          </div>
+        </div>
+      ) : axis.length === 0 ? (
         <div className="flex-1 flex items-center justify-center p-6 text-center text-muted-foreground">
           <div>
             <Ban className="h-9 w-9 mx-auto mb-2 opacity-25" />
@@ -984,7 +994,7 @@ function MonthYearPicker({ year, month, curYear, curMonth, maxYear, onClose, onA
         </div>
         <div className="flex gap-2 mt-4">
           <Button variant="outline" className="flex-1 h-11 active:scale-95" onClick={onClose}>キャンセル</Button>
-          <Button className="flex-1 h-11 active:scale-95" onClick={() => onApply(y, Math.max(m, minMonth))} data-testid="holiday-picker-apply">この月を表示</Button>
+          <Button className="flex-1 h-11 active:scale-95" onClick={() => onApply(Math.max(y, curYear), Math.max(m, minMonth))} data-testid="holiday-picker-apply">この月を表示</Button>
         </div>
       </div>
     </div>
