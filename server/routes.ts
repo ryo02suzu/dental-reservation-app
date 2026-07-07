@@ -1093,11 +1093,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!date) return res.status(400).json({ message: "date required" });
       const duration = parseInt(durationMinutes || "30") || 30;
 
+      // ログイン患者は自院の診療時間/休診で計算する（/api/public/info と整合）。
+      // 未ログインはデフォルト医院。医院別URL(/book/:slug)は別エンドポイントで確実に医院特定。
+      let clinicId = DEFAULT_CLINIC_ID;
+      const patientId = (req.session as any).patientId;
+      if (patientId) {
+        const patient = await storage.getPatientById(patientId);
+        if (patient?.clinicId) clinicId = patient.clinicId;
+      }
+
       const [hours, holidays, appointments, settings] = await Promise.all([
-        storage.getBusinessHours(),
-        storage.getHolidays(),
-        storage.getAppointments({ date }),
-        storage.getClinicSettings(),
+        storage.getBusinessHours(clinicId),
+        storage.getHolidays(clinicId),
+        storage.getAppointments({ clinicId, date }),
+        storage.getClinicSettings(clinicId),
       ]);
 
       const fullDayHoliday2 = holidays.find(h => h.date === date && !h.startTime);
