@@ -338,7 +338,7 @@ export function CalendarView({ initialDate }: { initialDate?: Date }) {
           {/* カレンダーモード切替（閲覧＝見るだけ / 予約＝空き枠タップで作成 / 休診＝まとめて編集） */}
           <div className="flex w-full sm:w-auto sm:shrink-0 border border-border rounded-lg overflow-hidden shadow-sm">
             {([
-              { mode: "view" as CalendarMode, icon: Eye, label: "閲覧", activeCls: "bg-foreground text-background" },
+              { mode: "view" as CalendarMode, icon: Eye, label: "閲覧", activeCls: "bg-primary text-primary-foreground" },
               { mode: "book" as CalendarMode, icon: Plus, label: "予約", activeCls: "bg-primary text-primary-foreground" },
               { mode: "holiday" as CalendarMode, icon: Ban, label: "休診", activeCls: "bg-red-500 text-white" },
             ] as const).map(({ mode, icon: Icon, label, activeCls }, idx) => (
@@ -484,7 +484,7 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
           <>
             <div className="flex items-center gap-1">
               <span className="text-xs font-semibold truncate">{appt.patient?.name || "患者不明"}</span>
-              {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">初診</span>}
+              {isNewPatient && <span className="text-[9px] bg-primary text-primary-foreground rounded px-0.5 shrink-0">初診</span>}
             </div>
             <div className="text-[10px] opacity-70 truncate mt-0.5">
               {appt.startTime.slice(0, 5)}〜{appt.endTime?.slice(0, 5)} {appt.treatmentType}
@@ -493,13 +493,13 @@ function ApptCard({ appt, height, onClick }: { appt: Appointment; height: number
         ) : height >= 36 ? (
           <div className="flex items-center gap-1 h-full">
             <span className="text-xs font-semibold truncate leading-tight">{appt.patient?.name || "患者不明"}</span>
-            {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">初診</span>}
+            {isNewPatient && <span className="text-[9px] bg-primary text-primary-foreground rounded px-0.5 shrink-0">初診</span>}
             {appt.treatmentType && <span className="text-[10px] opacity-60 truncate shrink-0 hidden sm:block">{appt.treatmentType}</span>}
           </div>
         ) : (
           <div className="flex items-center gap-1 h-full">
             <span className="text-[10px] font-semibold truncate leading-none">{appt.patient?.name || "患者不明"}</span>
-            {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-0.5 shrink-0">初診</span>}
+            {isNewPatient && <span className="text-[9px] bg-primary text-primary-foreground rounded px-0.5 shrink-0">初診</span>}
           </div>
         )}
       </div>
@@ -726,7 +726,7 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
       <div className="shrink-0 border-b border-border px-3 md:px-6 pt-2.5 pb-2">
         <p className="text-xs text-muted-foreground leading-relaxed">
           各マスをタップして
-          <span className="inline-flex items-center gap-1 mx-1 font-semibold text-emerald-600 dark:text-emerald-400"><span className="h-3 w-3 rounded-full bg-emerald-500 dark:bg-emerald-400" />診療可能</span>
+          <span className="inline-flex items-center gap-1 mx-1 font-semibold text-foreground"><span className="h-3 w-3 rounded-full bg-primary" />診療可能</span>
           ⇄
           <span className="inline-flex items-center gap-0.5 mx-1 font-semibold text-red-500"><Minus className="h-3.5 w-3.5" strokeWidth={3} />休診</span>
           を切り替え、最後に「保存」で反映します。<span className="whitespace-nowrap">横スクロールで先の日も設定できます。</span>
@@ -796,7 +796,7 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
                 >
                   {closed
                     ? <Minus className="h-4 w-4 text-red-500" strokeWidth={3} />
-                    : <span className="h-3.5 w-3.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />}
+                    : <span className="h-3.5 w-3.5 rounded-full bg-primary" />}
                 </button>
               );
             }),
@@ -1067,14 +1067,14 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     <div className="flex items-center gap-4 px-4 md:px-6 py-2 bg-muted/30 border-b border-border text-sm shrink-0 overflow-x-auto">
       <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
         <Sun className="h-3.5 w-3.5" />午前 <strong className="text-foreground">{morningCount}</strong>件
-        {morningNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(初診{morningNew}名)</span>}
+        {morningNew > 0 && <span className="text-foreground text-xs font-medium ml-0.5">(初診{morningNew}名)</span>}
       </div>
       <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
         <Sunset className="h-3.5 w-3.5" />午後 <strong className="text-foreground">{afternoonCount}</strong>件
-        {afternoonNew > 0 && <span className="text-emerald-600 dark:text-emerald-400 text-xs font-medium ml-0.5">(初診{afternoonNew}名)</span>}
+        {afternoonNew > 0 && <span className="text-foreground text-xs font-medium ml-0.5">(初診{afternoonNew}名)</span>}
       </div>
       <div className="text-muted-foreground shrink-0">計 <strong className="text-foreground">{activeAppts.length}</strong>件</div>
-      {!isDayOff && <div className="text-emerald-600 dark:text-emerald-400 shrink-0">空き <strong>{freeCount}</strong>枠</div>}
+      {!isDayOff && <div className="text-foreground shrink-0">空き <strong>{freeCount}</strong>枠</div>}
       {dayHours?.openTime && (
         <div className="text-xs text-muted-foreground shrink-0 hidden sm:block">
           診療時間: {dayHours.openTime.slice(0,5)}〜{dayHours.closeTime?.slice(0,5) || ""}
@@ -1174,7 +1174,7 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                             </div>
                             <div className="font-semibold mt-0.5 flex items-center gap-1.5 truncate">
                               <span className="truncate">{appt.patient?.name || "患者不明"}</span>
-                              {isNewPatient && <span className="text-[9px] bg-emerald-500 text-white rounded px-1 shrink-0">初診</span>}
+                              {isNewPatient && <span className="text-[9px] bg-primary text-primary-foreground rounded px-1 shrink-0">初診</span>}
                             </div>
                             <div className="text-xs text-muted-foreground truncate">{appt.treatmentType}</div>
                           </div>

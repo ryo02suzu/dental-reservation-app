@@ -439,7 +439,7 @@ export function Dashboard() {
                           {/* 患者・治療 */}
                           <div className="flex-1 min-w-0 flex flex-col justify-center">
                             <div className="font-semibold truncate text-sm flex items-center gap-1.5">
-                              {(apt.visitType === "first" || (apt.treatmentType || "").includes("初診")) && <span className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">初診</span>}
+                              {(apt.visitType === "first" || (apt.treatmentType || "").includes("初診")) && <span className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary text-primary-foreground">初診</span>}
                               <span className="truncate">{apt.patient?.name || "不明"}</span>
                             </div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap mt-0.5">
@@ -480,7 +480,7 @@ export function Dashboard() {
                               apt.status === "no_show" ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
                               apt.status === "cancelled" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
                               isDone ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                              "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              "bg-primary/20 text-primary-foreground dark:bg-primary/25 dark:text-primary"
                             }`}>
                               {apt.status === "no_show" ? "無断キャンセル" : apt.status === "cancelled" ? "キャンセル" : isDone && !isActuallyCompleted ? "時間経過" : isDone ? "完了" : "予約済"}
                             </span>
@@ -550,7 +550,7 @@ export function Dashboard() {
                       {/* アクションボタン */}
                       <div className="grid grid-cols-1 gap-2 pt-1">
                         <Button
-                          className="w-full justify-start gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          className="w-full justify-start gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
                           onClick={() => arriveNowMutation.mutate(appt)}
                           disabled={arriveNowMutation.isPending}
                           data-testid="button-arrive-now"
