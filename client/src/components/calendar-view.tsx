@@ -536,8 +536,7 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [edits, setEdits] = useState<Record<string, HolidayDayEdit>>({});
-  const headerRef = useRef<HTMLDivElement>(null);  // 日付ヘッダー行（横スクロール追従）
-  const hScrollRef = useRef<HTMLDivElement>(null);  // セルの横スクロール領域
+  const scrollerRef = useRef<HTMLDivElement>(null); // グリッド全体の単一スクロール領域
   const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
   const curMonthIdx = today.getFullYear() * 12 + today.getMonth();
   // 初期表示月は「今月」を下限にクランプ（過去月では開かない）
@@ -711,10 +710,9 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
     }
   };
 
-  // 月を切り替えたら横スクロールを先頭へ戻す（今月は今日、翌月以降は1日が先頭）
+  // 月を切り替えたらスクロールを先頭へ戻す
   useEffect(() => {
-    if (hScrollRef.current) hScrollRef.current.scrollLeft = 0;
-    if (headerRef.current) headerRef.current.scrollLeft = 0;
+    if (scrollerRef.current) { scrollerRef.current.scrollLeft = 0; scrollerRef.current.scrollTop = 0; }
   }, [viewYear, viewMonth]);
 
   const goMonth = (delta: number) => {
@@ -722,11 +720,6 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
     if (next < curMonthIdx) return; // 今月より前へは戻さない
     setViewYear(Math.floor(next / 12));
     setViewMonth(next % 12);
-  };
-
-  // セルを横スクロールしたら、日付ヘッダー行を同じ位置へ追従させる
-  const syncHeader = () => {
-    if (headerRef.current && hScrollRef.current) headerRef.current.scrollLeft = hScrollRef.current.scrollLeft;
   };
 
   const dayNamesJa = ["日", "月", "火", "水", "木", "金", "土"];
@@ -744,7 +737,7 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
     statusByDay.set(d.dateStr, m);
   }
 
-  const daysWidth = days.length * DAY_W;
+  const gridCols = `${TIME_W}px repeat(${days.length}, ${DAY_W}px)`;
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -807,96 +800,73 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
           </div>
         </div>
       ) : (
-      <>
-        {/* 固定ヘッダー行（コーナー＋日付） */}
-        <div className="shrink-0 flex border-b border-border bg-background">
-          <div className="shrink-0 border-r border-border" style={{ width: TIME_W }} />
-          <div ref={headerRef} className="flex-1 overflow-hidden">
-            <div className="flex" style={{ width: daysWidth }}>
-              {days.map((d) => {
-                const isSun = d.dow === 0, isSat = d.dow === 6, isHol = !!d.holidayName;
-                const isToday = d.dateStr === todayStr;
-                const col = isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-foreground";
-                return (
-                  <div key={`h-${d.dateStr}`} className={`shrink-0 border-l border-border/60 px-0.5 py-1 text-center ${isToday ? "bg-primary/15" : ""}`} style={{ width: DAY_W }}>
-                    <div className={`text-[9px] leading-none ${isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-muted-foreground"}`}>{dayNamesJa[d.dow]}</div>
-                    <div className={`text-[13px] font-bold leading-tight tabular-nums ${col}`}>{d.date.getDate()}</div>
-                    {dirtyDates.includes(d.dateStr) && <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* 本体（縦スクロール）：左＝時刻列 ＋ 右＝セル（横スクロール） */}
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-3" style={{ touchAction: "pan-y", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as any} data-testid="holiday-grid">
-          <div className="flex" style={{ minWidth: "100%" }}>
-            {/* 時刻の固定列 */}
-            <div className="shrink-0 border-r border-border bg-background" style={{ width: TIME_W }}>
-              <div className="h-9 border-b border-border flex items-center justify-end pr-2 text-[10px] font-semibold text-muted-foreground">終日</div>
-              {axis.map(t => (
-                <div key={`t-${t}`} className="h-10 border-b border-border/60 flex items-center justify-end pr-2 text-[11px] font-medium tabular-nums text-muted-foreground">{t}</div>
-              ))}
-            </div>
-            {/* セル（横スクロール） */}
-            <div ref={hScrollRef} onScroll={syncHeader} className="flex-1 overflow-x-auto overflow-y-hidden" style={{ touchAction: "pan-x", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as any}>
-              <div style={{ width: daysWidth }}>
-                {/* 終日行 */}
-                <div className="flex h-9">
-                  {days.map(d => {
-                    const offDay = d.offReason !== "none";
-                    const cellBase = "shrink-0 h-9 border-b border-l border-border/40 flex items-center justify-center";
-                    if (offDay) return <div key={`a-${d.dateStr}`} className={`${cellBase} bg-muted/30 text-[9px] text-muted-foreground/50`} style={{ width: DAY_W }}>休</div>;
-                    const allStarts = openStarts(d);
-                    const st = stateOf(d);
-                    const fullyOff = st.allday || (allStarts.length > 0 && allStarts.every(s => st.closed.has(s)));
-                    return (
-                      <button
-                        key={`a-${d.dateStr}`}
-                        onClick={() => toggleAllday(d)}
-                        disabled={saving || allStarts.length === 0}
-                        className={`${cellBase} transition-colors active:scale-95 disabled:opacity-40 ${fullyOff ? "bg-red-500" : "hover:bg-accent/50"}`}
-                        style={{ width: DAY_W }}
-                        title="終日休診の切り替え"
-                        data-testid={`holiday-allday-${d.dateStr}`}
-                      >
-                        {fullyOff ? <Minus className="h-4 w-4 text-white" strokeWidth={3} /> : <ChevronDown className="h-4 w-4 text-muted-foreground/50" />}
-                      </button>
-                    );
-                  })}
-                </div>
-                {/* 時刻ごとの行 */}
-                {axis.map(t => (
-                  <div key={`row-${t}`} className="flex h-10">
-                    {days.map(d => {
-                      const cellBase = "shrink-0 h-10 border-b border-l border-border/40 flex items-center justify-center";
-                      const status = statusByDay.get(d.dateStr)?.get(t);
-                      if (d.offReason !== "none" || !status) return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/25`} style={{ width: DAY_W }} />;
-                      if (status === "lunch") return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/20 text-[9px] text-muted-foreground/50`} style={{ width: DAY_W }}>昼</div>;
-                      const closed = stateOf(d).closed.has(t);
-                      return (
-                        <button
-                          key={`c-${d.dateStr}-${t}`}
-                          onClick={() => toggleSlot(d, t)}
-                          disabled={saving}
-                          className={`${cellBase} transition-colors active:bg-accent disabled:opacity-60 ${closed ? "bg-red-50 dark:bg-red-950/30" : "hover:bg-accent/40"}`}
-                          style={{ width: DAY_W }}
-                          data-testid={`holiday-slot-${d.dateStr}-${t}`}
-                        >
-                          {closed
-                            ? <Minus className="h-4 w-4 text-red-500" strokeWidth={3} />
-                            : <span className="h-3.5 w-3.5 rounded-full bg-primary" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
+      <div ref={scrollerRef} className="flex-1 min-h-0 overflow-auto pb-3" style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" } as any} data-testid="holiday-grid">
+        <div className="grid w-max" style={{ gridTemplateColumns: gridCols }}>
+          {/* 左上コーナー（上・左とも固定） */}
+          <div className="sticky top-0 left-0 z-30 bg-background border-b border-r border-border" />
+          {/* 日付ヘッダー（上に固定） */}
+          {days.map((d) => {
+            const isSun = d.dow === 0, isSat = d.dow === 6, isHol = !!d.holidayName;
+            const isToday = d.dateStr === todayStr;
+            const col = isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-foreground";
+            return (
+              <div key={`h-${d.dateStr}`} className="sticky top-0 z-20 bg-background border-b border-l border-border/60 px-0.5 py-1 text-center">
+                <div className={`text-[9px] leading-none ${isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-muted-foreground"}`}>{dayNamesJa[d.dow]}</div>
+                <div className={`text-[13px] font-bold leading-tight tabular-nums ${isToday ? "bg-primary text-primary-foreground rounded-md inline-block px-1.5" : col}`}>{d.date.getDate()}</div>
+                {dirtyDates.includes(d.dateStr) && <span className="block mx-auto mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />}
               </div>
-            </div>
-          </div>
+            );
+          })}
+
+          {/* 終日行（左ラベルは左に固定） */}
+          <div className="sticky left-0 z-10 bg-background border-b border-r border-border h-9 flex items-center justify-end pr-2 text-[10px] font-semibold text-muted-foreground">終日</div>
+          {days.map(d => {
+            const offDay = d.offReason !== "none";
+            const cellBase = "h-9 border-b border-l border-border/40 flex items-center justify-center";
+            if (offDay) return <div key={`a-${d.dateStr}`} className={`${cellBase} bg-muted/30 text-[9px] text-muted-foreground/50`}>休</div>;
+            const allStarts = openStarts(d);
+            const st = stateOf(d);
+            const fullyOff = st.allday || (allStarts.length > 0 && allStarts.every(s => st.closed.has(s)));
+            return (
+              <button
+                key={`a-${d.dateStr}`}
+                onClick={() => toggleAllday(d)}
+                disabled={saving || allStarts.length === 0}
+                className={`${cellBase} transition-colors active:scale-95 disabled:opacity-40 ${fullyOff ? "bg-red-500" : "hover:bg-accent/50"}`}
+                title="終日休診の切り替え"
+                data-testid={`holiday-allday-${d.dateStr}`}
+              >
+                {fullyOff ? <Minus className="h-4 w-4 text-white" strokeWidth={3} /> : <ChevronDown className="h-4 w-4 text-muted-foreground/50" />}
+              </button>
+            );
+          })}
+
+          {/* 時刻ごとの行（左の時刻ラベルは左に固定） */}
+          {axis.flatMap(t => [
+            <div key={`t-${t}`} className="sticky left-0 z-10 bg-background border-b border-r border-border h-10 flex items-center justify-end pr-2 text-[11px] font-medium tabular-nums text-muted-foreground">{t}</div>,
+            ...days.map(d => {
+              const cellBase = "h-10 border-b border-l border-border/40 flex items-center justify-center";
+              const status = statusByDay.get(d.dateStr)?.get(t);
+              if (d.offReason !== "none" || !status) return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/25`} />;
+              if (status === "lunch") return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/20 text-[9px] text-muted-foreground/50`}>昼</div>;
+              const closed = stateOf(d).closed.has(t);
+              return (
+                <button
+                  key={`c-${d.dateStr}-${t}`}
+                  onClick={() => toggleSlot(d, t)}
+                  disabled={saving}
+                  className={`${cellBase} transition-colors active:bg-accent disabled:opacity-60 ${closed ? "bg-red-50 dark:bg-red-950/30" : "hover:bg-accent/40"}`}
+                  data-testid={`holiday-slot-${d.dateStr}-${t}`}
+                >
+                  {closed
+                    ? <Minus className="h-4 w-4 text-red-500" strokeWidth={3} />
+                    : <span className="h-3.5 w-3.5 rounded-full bg-primary" />}
+                </button>
+              );
+            }),
+          ])}
         </div>
-      </>
+      </div>
       )}
 
       {/* 保存バー（まとめて反映／リセット） */}
