@@ -536,55 +536,61 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
   const [saving, setSaving] = useState(false);
   const [edits, setEdits] = useState<Record<string, HolidayDayEdit>>({});
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const today = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+  const [viewYear, setViewYear] = useState(initialDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initialDate.getMonth()); // 0-11
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const step = Math.min(60, Math.max(5, slotIntervalMinutes || 30));
   const holidayList = Array.isArray(clinicHolidays) ? clinicHolidays : [];
   const TIME_W = 52; // 左の時刻列の幅(px)
   const DAY_W = 68;  // 各日の列の幅(px)
+  const todayStr = format(today, "yyyy-MM-dd");
 
-  // 今日〜翌月末までの日を横並びで構築（横スクロールで今月以降をずらーっと表示）
-  const days: EditorDay[] = (() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const rangeEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0); // 翌月末
-    const list: EditorDay[] = [];
-    for (let d = new Date(today); d <= rangeEnd; d = addDays(d, 1)) {
-      const dow = d.getDay();
-      const dateStr = format(d, "yyyy-MM-dd");
-      const dayHours = businessHours.find(h => h.dayOfWeek === dow);
-      const holidayName = getHolidayName(dateStr);
-      const isRegularOff = !dayHours || dayHours.isClosed;
-      const isNationalOff = !!holidayName && closedOnHolidays;
-      const slots: EditorSlot[] = [];
-      if (!isRegularOff && !isNationalOff) {
-        const openMins = dayHours?.openTime ? toMins(dayHours.openTime) : null;
-        const lastClose = dayHours?.afternoonCloseTime
-          ? toMins(dayHours.afternoonCloseTime)
-          : (dayHours?.closeTime ? toMins(dayHours.closeTime) : null);
-        if (openMins !== null && lastClose !== null) {
-          for (let m = openMins; m + step <= lastClose; m += step) {
-            const start = minsToTime(m);
-            const st = getSlotStatus(start, dayHours);
-            if (st === "closed") continue;
-            slots.push({ start, end: minsToTime(m + step), status: st });
-          }
+  // 任意の日付の編集用データ（営業時間・スロット・休診理由）を構築する
+  const buildDay = (d: Date): EditorDay => {
+    const dow = d.getDay();
+    const dateStr = format(d, "yyyy-MM-dd");
+    const dayHours = businessHours.find(h => h.dayOfWeek === dow);
+    const holidayName = getHolidayName(dateStr);
+    const isRegularOff = !dayHours || dayHours.isClosed;
+    const isNationalOff = !!holidayName && closedOnHolidays;
+    const slots: EditorSlot[] = [];
+    if (!isRegularOff && !isNationalOff) {
+      const openMins = dayHours?.openTime ? toMins(dayHours.openTime) : null;
+      const lastClose = dayHours?.afternoonCloseTime
+        ? toMins(dayHours.afternoonCloseTime)
+        : (dayHours?.closeTime ? toMins(dayHours.closeTime) : null);
+      if (openMins !== null && lastClose !== null) {
+        for (let m = openMins; m + step <= lastClose; m += step) {
+          const start = minsToTime(m);
+          const st = getSlotStatus(start, dayHours);
+          if (st === "closed") continue;
+          slots.push({ start, end: minsToTime(m + step), status: st });
         }
       }
-      list.push({
-        date: new Date(d),
-        dateStr,
-        label: format(d, "M月d日（E）", { locale: ja }),
-        dow,
-        holidayName: holidayName ?? null,
-        offReason: isRegularOff ? "regular" : isNationalOff ? "national" : "none",
-        slots,
-      });
     }
+    return {
+      date: new Date(d),
+      dateStr,
+      label: format(d, "M月d日（E）", { locale: ja }),
+      dow,
+      holidayName: holidayName ?? null,
+      offReason: isRegularOff ? "regular" : isNationalOff ? "national" : "none",
+      slots,
+    };
+  };
+
+  // 表示中の月の全日を構築（横スクロールでその月の中を移動）
+  const days: EditorDay[] = (() => {
+    const last = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const list: EditorDay[] = [];
+    for (let dnum = 1; dnum <= last; dnum++) list.push(buildDay(new Date(viewYear, viewMonth, dnum)));
     return list;
   })();
 
-  const byDate = new Map(days.map(d => [d.dateStr, d]));
   const openStarts = (day: EditorDay) => day.slots.filter(s => s.status === "open").map(s => s.start);
+  const isPastDay = (day: EditorDay) => day.dateStr < todayStr;
 
   // サーバに保存されている現状から、その日の編集初期値を作る
   const baseStateOf = (day: EditorDay): HolidayDayEdit => {
@@ -628,9 +634,10 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
   const sameState = (a: HolidayDayEdit, b: HolidayDayEdit) =>
     a.allday === b.allday && a.closed.size === b.closed.size && Array.from(a.closed).every(s => b.closed.has(s));
 
+  // 編集は月をまたいで保持されるので、表示中の月に限らず全編集日を対象に差分判定
   const dirtyDates = Object.keys(edits).filter(ds => {
-    const day = byDate.get(ds);
-    return day ? !sameState(edits[ds], baseStateOf(day)) : false;
+    const day = buildDay(new Date(ds + "T00:00:00"));
+    return !sameState(edits[ds], baseStateOf(day));
   });
   const dirtyCount = dirtyDates.length;
 
@@ -653,7 +660,7 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
     let saved = 0;
     try {
       for (const ds of targets) {
-        const day = byDate.get(ds)!;
+        const day = buildDay(new Date(ds + "T00:00:00"));
         const desired = edits[ds];
         // 望みの状態を先に登録し、そのあと旧レコードを消す。
         // 途中でネットワークが切れても「休診が消えて予約が入ってしまう」事故を防ぐ順序。
@@ -694,14 +701,23 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
     }
   };
 
-  // 初期スクロール：カレンダーで見ていた日が範囲内なら、その列が見える位置へ
+  // 月を切り替えたら横スクロールをリセット。今月なら「今日」の列が見える位置へ
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const idx = days.findIndex(d => d.dateStr === format(initialDate, "yyyy-MM-dd"));
-    if (idx > 0) el.scrollLeft = idx * DAY_W;
+    if (viewYear === today.getFullYear() && viewMonth === today.getMonth()) {
+      el.scrollLeft = Math.max(0, (today.getDate() - 1) * DAY_W - DAY_W);
+    } else {
+      el.scrollLeft = 0;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [viewYear, viewMonth]);
+
+  const goMonth = (delta: number) => {
+    const d = new Date(viewYear, viewMonth + delta, 1);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+  };
 
   // スワイプの方向ロック：指を動かし始めた方向（横／縦）だけにスクロールを固定し、
   // 斜めの「グワングワン」した動きを防ぐ（タッチ操作時のみ）
@@ -752,33 +768,51 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* 説明（凡例） */}
-      <div className="shrink-0 border-b border-border px-3 md:px-6 pt-2.5 pb-2">
-        <p className="text-xs text-muted-foreground leading-relaxed">
+      {/* 月ナビ（月送り＋タップで年月ピッカー） */}
+      <div className="shrink-0 border-b border-border px-3 md:px-6 py-2 flex items-center gap-2">
+        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 active:scale-95" onClick={() => goMonth(-1)} data-testid="holiday-month-prev">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <button
+          onClick={() => setPickerOpen(true)}
+          className="flex-1 h-9 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card hover:bg-accent active:scale-[0.99] transition-colors font-bold tracking-tight"
+          data-testid="holiday-month-label"
+        >
+          {viewYear}年{viewMonth + 1}月
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        </button>
+        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 active:scale-95" onClick={() => goMonth(1)} data-testid="holiday-month-next">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" size="sm" className="h-9 text-xs shrink-0 active:scale-95" onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); }} data-testid="holiday-month-today">今月</Button>
+      </div>
+
+      {/* 凡例 */}
+      <div className="shrink-0 border-b border-border px-3 md:px-6 py-1.5">
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
           各マスをタップして
           <span className="inline-flex items-center gap-1 mx-1 font-semibold text-foreground"><span className="h-3 w-3 rounded-full bg-primary" />診療可能</span>
           ⇄
           <span className="inline-flex items-center gap-0.5 mx-1 font-semibold text-red-500"><Minus className="h-3.5 w-3.5" strokeWidth={3} />休診</span>
-          を切り替え、最後に「保存」で反映します。<span className="whitespace-nowrap">横スクロールで先の日も設定できます。</span>
+          。最後に「保存」で反映します。
         </p>
       </div>
 
-      {/* 縦＝時刻／横＝日 のグリッド（横スクロールで今月以降をずらーっと表示） */}
+      {/* 縦＝時刻／横＝日 のグリッド（その月の中を横スクロール） */}
       <div ref={scrollerRef} className="flex-1 overflow-auto [scroll-snap-type:none]" style={{ overscrollBehavior: "contain" }} data-testid="holiday-grid">
         <div className="grid w-max" style={{ gridTemplateColumns: gridCols }}>
           {/* 左上コーナー */}
           <div className="sticky top-0 left-0 z-30 bg-background border-b border-r border-border" />
           {/* 日付ヘッダー */}
-          {days.map((d, idx) => {
+          {days.map((d) => {
             const isSun = d.dow === 0, isSat = d.dow === 6, isHol = !!d.holidayName;
-            const col = isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-foreground";
-            const showMonth = idx === 0 || d.date.getDate() === 1;
+            const past = isPastDay(d);
+            const isToday = d.dateStr === todayStr;
+            const col = past ? "text-muted-foreground/40" : isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-foreground";
             return (
-              <div key={`h-${d.dateStr}`} className="sticky top-0 z-20 bg-background border-b border-l border-border/60 px-0.5 py-1 text-center">
-                <div className={`text-[9px] leading-none ${isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-muted-foreground"}`}>{dayNamesJa[d.dow]}</div>
-                <div className={`text-[13px] font-bold leading-tight tabular-nums ${col}`}>
-                  {showMonth && <span className="text-[9px] font-medium">{d.date.getMonth() + 1}/</span>}{d.date.getDate()}
-                </div>
+              <div key={`h-${d.dateStr}`} className={`sticky top-0 z-20 border-b border-l border-border/60 px-0.5 py-1 text-center ${isToday ? "bg-primary/15" : "bg-background"}`}>
+                <div className={`text-[9px] leading-none ${past ? "text-muted-foreground/40" : isSun || isHol ? "text-red-500" : isSat ? "text-blue-500" : "text-muted-foreground"}`}>{dayNamesJa[d.dow]}</div>
+                <div className={`text-[13px] font-bold leading-tight tabular-nums ${col}`}>{d.date.getDate()}</div>
                 {dirtyDates.includes(d.dateStr) && <span className="inline-block mt-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />}
               </div>
             );
@@ -788,7 +822,9 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
           <div className="sticky left-0 z-10 bg-background border-b border-r border-border h-9 flex items-center justify-end pr-2 text-[10px] font-semibold text-muted-foreground">終日</div>
           {days.map(d => {
             const offDay = d.offReason !== "none";
+            const past = isPastDay(d);
             const cellBase = "h-9 border-b border-l border-border/40 flex items-center justify-center";
+            if (past) return <div key={`a-${d.dateStr}`} className={`${cellBase} bg-muted/40`} />;
             if (offDay) return <div key={`a-${d.dateStr}`} className={`${cellBase} bg-muted/30 text-[9px] text-muted-foreground/50`}>休</div>;
             const allStarts = openStarts(d);
             const st = stateOf(d);
@@ -813,6 +849,7 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
             ...days.map(d => {
               const cellBase = "h-10 border-b border-l border-border/40 flex items-center justify-center";
               const status = statusByDay.get(d.dateStr)?.get(t);
+              if (isPastDay(d)) return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/40`} />;
               if (d.offReason !== "none" || !status) return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/25`} />;
               if (status === "lunch") return <div key={`c-${d.dateStr}-${t}`} className={`${cellBase} bg-muted/20 text-[9px] text-muted-foreground/50`}>昼</div>;
               const closed = stateOf(d).closed.has(t);
@@ -847,6 +884,90 @@ function HolidayBatchEditor({ initialDate, businessHours, clinicHolidays, slotIn
           <Check className="h-4 w-4 mr-1.5" />
           {saving ? "保存中..." : dirtyCount > 0 ? `保存（${dirtyCount}日分）` : "保存"}
         </Button>
+      </div>
+
+      {pickerOpen && (
+        <MonthYearPicker
+          year={viewYear}
+          month={viewMonth}
+          minYear={today.getFullYear()}
+          maxYear={today.getFullYear() + 2}
+          onClose={() => setPickerOpen(false)}
+          onApply={(y, m) => { setViewYear(y); setViewMonth(m); setPickerOpen(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── 年月スロットピッカー ───────────────────────────────────────────
+function WheelColumn({ items, value, onChange }: {
+  items: { value: number; label: string }[];
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const ITEM_H = 40;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const idx = Math.max(0, items.findIndex(i => i.value === value));
+    el.scrollTop = idx * ITEM_H;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    const idx = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / ITEM_H)));
+    const v = items[idx]?.value;
+    if (v !== undefined && v !== value) onChange(v);
+  };
+  return (
+    <div className="relative flex-1">
+      {/* 中央のハイライト帯 */}
+      <div className="pointer-events-none absolute inset-x-1 top-1/2 -translate-y-1/2 h-10 rounded-lg bg-primary/15 border border-primary/40 z-10" />
+      <div ref={ref} onScroll={onScroll} className="h-[200px] overflow-y-auto snap-y snap-mandatory" style={{ scrollbarWidth: "none" }}>
+        <div style={{ height: 80 }} />
+        {items.map(it => (
+          <button
+            key={it.value}
+            onClick={() => { onChange(it.value); ref.current?.scrollTo({ top: items.findIndex(x => x.value === it.value) * ITEM_H, behavior: "smooth" }); }}
+            className={`h-10 w-full flex items-center justify-center snap-center text-base tabular-nums transition-colors ${it.value === value ? "font-bold text-foreground scale-110" : "text-muted-foreground/50"}`}
+          >
+            {it.label}
+          </button>
+        ))}
+        <div style={{ height: 80 }} />
+      </div>
+    </div>
+  );
+}
+
+function MonthYearPicker({ year, month, minYear, maxYear, onClose, onApply }: {
+  year: number;
+  month: number;
+  minYear: number;
+  maxYear: number;
+  onClose: () => void;
+  onApply: (year: number, month: number) => void;
+}) {
+  const [y, setY] = useState(year);
+  const [m, setM] = useState(month);
+  const years: { value: number; label: string }[] = [];
+  for (let yy = minYear; yy <= maxYear; yy++) years.push({ value: yy, label: `${yy}年` });
+  const months = Array.from({ length: 12 }, (_, i) => ({ value: i, label: `${i + 1}月` }));
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/40" onClick={onClose} data-testid="holiday-month-picker">
+      <div className="w-full sm:max-w-xs bg-background rounded-t-2xl sm:rounded-2xl shadow-xl p-4 pb-6" onClick={e => e.stopPropagation()}>
+        <p className="text-sm font-bold text-center mb-3">年月を選択</p>
+        <div className="flex gap-3">
+          <WheelColumn items={years} value={y} onChange={setY} />
+          <WheelColumn items={months} value={m} onChange={setM} />
+        </div>
+        <div className="flex gap-2 mt-4">
+          <Button variant="outline" className="flex-1 h-11 active:scale-95" onClick={onClose}>キャンセル</Button>
+          <Button className="flex-1 h-11 active:scale-95" onClick={() => onApply(y, m)} data-testid="holiday-picker-apply">この月を表示</Button>
+        </div>
       </div>
     </div>
   );
