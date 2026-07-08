@@ -19,21 +19,23 @@ async function getClinicLimits(clinicId: string) {
 
 let schedulerTimer: NodeJS.Timeout | null = null;
 
-function getTomorrowDateStr(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// 本番サーバはUTCで動くため、日付はすべて日本時間(JST=UTC+9)で算出する。
+// 送信時刻判定(getCurrentTimeHHMM)もJSTなので、対象日/当日判定と整合させる。
+function jstNow(): Date {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000);
+}
+function ymdJST(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 function getTodayDateStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return ymdJST(jstNow());
 }
 
 function getDateStrDaysAhead(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const d = jstNow();
+  d.setUTCDate(d.getUTCDate() + n);
+  return ymdJST(d);
 }
 
 function formatDateJP(dateStr: string): string {
@@ -157,8 +159,9 @@ async function checkAndRunReminders(): Promise<void> {
         const cfg = await storage.getReminderSettings(clinic.id);
         if (!cfg?.autoReminderEnabled) continue;
         const sendTime = cfg.reminderSendTime || "09:00";
-        if (currentTime !== sendTime) continue;
-        // Already sent today for this clinic — skip
+        // 送信時刻「以降」で当日未送信なら送る（分の取りこぼし・再起動でもキャッチアップ）。
+        // lastReminderRunDate で1日1回に限定するので、遅れて発火しても二重にはならない。
+        if (currentTime < sendTime) continue;
         if (cfg.lastReminderRunDate === today) continue;
 
         await runRemindersForClinic(clinic, cfg);
@@ -241,6 +244,9 @@ async function autoCancelUnconfirmed(): Promise<void> {
         for (const a of appts) {
           if (a.status !== "confirmed" && a.status !== "pending") continue;
           if (a.confirmationStatus === "confirmed") continue;
+          // 確認手段(メール/LINE)が無い患者は確認しようが無いので自動キャンセルしない
+          const patient = (a as any).patient;
+          if (!patient?.email && !patient?.lineUserId) continue;
           if (!a.date || !a.startTime) continue;
           // 予約開始時刻（JST）をUTC msに換算
           const apptJst = new Date(`${a.date}T${a.startTime}`).getTime();
@@ -273,15 +279,24 @@ async function autoCancelUnconfirmed(): Promise<void> {
   }
 }
 
+// 再入ガード：前回のtickが60秒以内に終わらなくても、次のtickは走らせない。
+// （送信中に重複起動して二重送信するのを防ぐ）
+let tickRunning = false;
 async function tick(): Promise<void> {
-  await checkAndRunReminders();
-  await processScheduledMessages();
-  await autoCancelUnconfirmed();
+  if (tickRunning) return;
+  tickRunning = true;
+  try {
+    await checkAndRunReminders();
+    await processScheduledMessages();
+    await autoCancelUnconfirmed();
+  } finally {
+    tickRunning = false;
+  }
 }
 
 export function startScheduler(): void {
   if (schedulerTimer) return;
-  schedulerTimer = setInterval(tick, 60 * 1000);
+  schedulerTimer = setInterval(() => { void tick(); }, 60 * 1000);
   console.log("[Scheduler] Started. Checking every minute for reminders & follow-ups.");
 }
 

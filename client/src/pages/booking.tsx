@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, createContext, useContext, useCallback } f
 import liff from "@line/liff";
 import { usePageMeta } from "@/hooks/use-page-meta";
 import { ClinicSplash } from "@/components/clinic-splash";
+import { isHoliday as isNationalHoliday } from "@/lib/holidays";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -89,6 +90,7 @@ interface ClinicInfo {
   slotIntervalMinutes?: number;
   bookingAdvanceDays?: number;
   bookingBufferMinutes?: number;
+  closedOnHolidays?: boolean;
 }
 interface SlotInfo { available: boolean; slots: string[]; bookedSlots?: string[] }
 interface PatientSession { loggedIn: boolean; patient?: { id: string; name: string; phone: string } }
@@ -913,9 +915,10 @@ function DateTimeGridStep({
     const dow = d.getDay();
     const isPast = d < today;
     const isBeyondAdvance = d > lastAllowedDate;
-    const isHoliday = info.holidays.some(h => h.date === toYMD(d) && !h.startTime);
+    const isManualHoliday = info.holidays.some(h => h.date === toYMD(d) && !h.startTime);
+    const isNatHoliday = info.closedOnHolidays !== false && isNationalHoliday(toYMD(d));
     const dayHours = info.hours.find(h => h.dayOfWeek === dow);
-    const isClosed = isPast || isBeyondAdvance || isHoliday || !dayHours || dayHours.isClosed;
+    const isClosed = isPast || isBeyondAdvance || isManualHoliday || isNatHoliday || !dayHours || dayHours.isClosed;
     return { date: d, isClosed, dow };
   });
 
@@ -927,12 +930,15 @@ function DateTimeGridStep({
   const maxClose = closeTimes.sort().reverse()[0] ?? "18:00";
   const allTimeSlots = generateTimeSlots(minOpen, maxClose, info.slotIntervalMinutes || 10);
 
+  // 施術の所要時間を空き枠取得に渡す（渡さないと30分前提で枠が出て、長い施術だと
+  // 診療終了間際/休診帯にかかる枠が「表示は空き→予約時に409」になる）
+  const durationMin = selectedService.duration || 30;
   const slotQueries = useQueries({
     queries: weekDays.map(({ date, isClosed }) => ({
-      queryKey: [apiBase + "/slots", toYMD(date)],
+      queryKey: [apiBase + "/slots", toYMD(date), durationMin],
       queryFn: async (): Promise<SlotInfo> => {
         if (isClosed) return { available: false, slots: [] };
-        const res = await fetch(`${apiBase}/slots?date=${toYMD(date)}`);
+        const res = await fetch(`${apiBase}/slots?date=${toYMD(date)}&durationMinutes=${durationMin}`);
         if (!res.ok) return { available: false, slots: [] };
         const data = await res.json();
         return { ...data, slots: Array.isArray(data?.slots) ? data.slots : [] };

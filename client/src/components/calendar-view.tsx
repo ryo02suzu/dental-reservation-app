@@ -147,7 +147,9 @@ function computeHourRange(hours: BusinessHours[]): { startHour: number; endHour:
   const closes: number[] = [];
   for (const h of hours) {
     if (h.isClosed) continue;
+    // 午前がない日（午後のみ診療）は午後開始を範囲の開始に含める
     if (h.openTime) opens.push(Math.floor(toMins(h.openTime) / 60));
+    else if (h.afternoonOpenTime) opens.push(Math.floor(toMins(h.afternoonOpenTime) / 60));
     if (h.afternoonCloseTime) closes.push(Math.ceil(toMins(h.afternoonCloseTime) / 60));
     else if (h.closeTime) closes.push(Math.ceil(toMins(h.closeTime) / 60));
   }
@@ -1304,13 +1306,22 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
     const sorted = [...activeAppts].sort((a, b) => a.startTime.localeCompare(b.startTime));
     const nowMinsRaw = new Date().getHours() * 60 + new Date().getMinutes();
     const suggestTime = () => {
-      const open = dayHours?.openTime ? timeToMins(dayHours.openTime.slice(0, 5)) : startHour * 60;
-      const close = dayHours?.closeTime ? timeToMins(dayHours.closeTime.slice(0, 5)) : endHour * 60;
-      if (!isToday) return minsToTime(open);
+      // 午前・午後の両方を考慮（午後のみ診療の日や昼休みをまたぐ日でも正しい開始時刻を出す）
+      const mOpen = dayHours?.openTime ? timeToMins(dayHours.openTime.slice(0, 5)) : null;
+      const mClose = dayHours?.closeTime ? timeToMins(dayHours.closeTime.slice(0, 5)) : null;
+      const aOpen = dayHours?.afternoonOpenTime ? timeToMins(dayHours.afternoonOpenTime.slice(0, 5)) : null;
+      const aClose = dayHours?.afternoonCloseTime ? timeToMins(dayHours.afternoonCloseTime.slice(0, 5)) : null;
+      const firstOpen = mOpen ?? aOpen ?? startHour * 60;
+      const inHours = (t: number) =>
+        (mOpen != null && mClose != null && t >= mOpen && t < mClose) ||
+        (aOpen != null && aClose != null && t >= aOpen && t < aClose);
+      if (!isToday) return minsToTime(firstOpen);
       const now = new Date();
-      let m = Math.ceil((now.getHours() * 60 + now.getMinutes()) / SLOT_MINUTES) * SLOT_MINUTES;
-      if (m < open || m > close - SLOT_MINUTES) m = open;
-      return minsToTime(m);
+      const m = Math.ceil((now.getHours() * 60 + now.getMinutes()) / SLOT_MINUTES) * SLOT_MINUTES;
+      if (inHours(m)) return minsToTime(m);
+      // 現在が診療時間外なら、mより後で最も近い診療開始（午前/午後）へ。無ければ先頭。
+      const nextStarts = [mOpen, aOpen].filter((x): x is number => x != null && x >= m).sort((a, b) => a - b);
+      return minsToTime(nextStarts.length ? nextStarts[0] : firstOpen);
     };
     // 設定の「スロット間隔」に追従して時刻の目盛りを刻む（例: 30分なら 9:00, 9:30, …）
     const slotList: number[] = [];
@@ -1348,8 +1359,10 @@ function DayView({ currentDate, appointments, staff: allStaff, filterStaffId, bu
                         <span className="text-[10px] font-medium text-red-500">現在 {minsToTime(nowMinsRaw)}</span>
                       </div>
                     )}
-                    {isLunch ? (
+                    {isLunch && list.length === 0 ? (
                       <div className="text-xs text-muted-foreground/50 py-1.5">昼休み</div>
+                    ) : st === "closed" && list.length === 0 ? (
+                      <div className="text-xs text-muted-foreground/30 py-1.5 select-none">受付時間外</div>
                     ) : isSlotHoliday(label) && list.length === 0 ? (
                       <div className="flex items-center gap-1 text-xs text-red-400/90 py-1.5 select-none">
                         <Ban className="h-3 w-3" />休診

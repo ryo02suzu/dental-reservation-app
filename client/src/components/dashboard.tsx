@@ -201,7 +201,7 @@ export function Dashboard() {
   const nowTimeStr = format(new Date(), "HH:mm:ss");
   const isEffectivelyDone = (apt: Appointment) => {
     if (apt.status === "completed") return true;
-    if (apt.status === "cancelled") return false;
+    if (apt.status === "cancelled" || apt.status === "no_show") return false; // 無断キャンセルは完了に含めない
     if (dateStr < todayStr) return true; // 過去の日付はすべて完了扱い
     if (dateStr > todayStr) return false; // 未来の日付は完了としない
     return apt.endTime <= nowTimeStr; // 今日は時刻で判定

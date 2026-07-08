@@ -676,6 +676,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         bookingBufferMinutes: settings?.bookingBufferMinutes ?? 15,
         enableReferral: settings?.enableReferral ?? true,
         enablePatientConfirmation: settings?.enablePatientConfirmation ?? false,
+        closedOnHolidays: settings?.closedOnHolidays !== false,
       });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
@@ -711,6 +712,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const maxConcurrent = settings?.allowDoubleBooking ? 9999 : (settings?.chairsCount ?? settings?.maxConcurrentAppointments ?? 1);
+      // スタッフ指定時は個別の「同時対応人数」を反映（既定1）
+      const staffListForSlots = staffId ? await storage.getStaff(clinic.id) : [];
+      const staffMax = staffId ? (settings?.allowDoubleBooking ? 9999 : ((staffListForSlots.find(s => s.id === staffId) as any)?.maxConcurrentAppointments ?? 1)) : 1;
       const stepMins = settings?.slotIntervalMinutes ?? 15;
       const bufferMins = settings?.bookingBufferMinutes ?? 15;
 
@@ -742,14 +746,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const morningSlots = morningOpen && morningClose ? buildSlots(morningOpen, morningClose) : [];
       const afternoonSlots = afOpen && afClose ? buildSlots(afOpen, afClose) : [];
       const allSlots = [...morningSlots, ...afternoonSlots];
-      // スポット休診（時間帯指定）のスロットを除外
+      // スポット休診（時間帯指定）にかかるスロットを除外。
+      // 所要時間分の「区間の重なり」で判定（予約確定時の checkSlotStillAvailable と同じ基準）。
       const slots = partialHolidays.length > 0
         ? allSlots.filter(slot => {
-            const slotMins = timeToMins(slot);
+            const slotStart = timeToMins(slot);
+            const slotEnd = slotStart + duration;
             return !partialHolidays.some(ph => {
               const phStart = timeToMins(ph.startTime!.slice(0, 5));
               const phEnd = timeToMins(ph.endTime!.slice(0, 5));
-              return slotMins >= phStart && slotMins < phEnd;
+              return slotStart < phEnd && slotEnd > phStart;
             });
           })
         : allSlots;
@@ -766,11 +772,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const slotEnd = slotStart + duration;
         if (staffId) {
           const staffAppts = activeAppts.filter(a => !a.staffId || a.staffId === staffId);
-          return !staffAppts.some(a => {
+          const overlapCount = staffAppts.filter(a => {
             const aStart = timeToMins(a.startTime.slice(0, 5));
             const aEnd = a.endTime ? timeToMins(a.endTime.slice(0, 5)) : aStart + 30;
             return aStart < slotEnd && aEnd > slotStart;
-          });
+          }).length;
+          return overlapCount < staffMax;
         }
         const overlapping = activeAppts.filter(a => {
           const aStart = timeToMins(a.startTime.slice(0, 5));
@@ -843,8 +850,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return aStart < slotEnd && aEnd > slotStart;
     };
     if (opts?.staffId) {
+      // スタッフ個別の「同時対応人数」を反映（既定1）。allowDoubleBookingなら実質無制限。
+      const staffList = await storage.getStaff(clinicId);
+      const staffMax = settings?.allowDoubleBooking ? 9999 : ((staffList.find(s => s.id === opts.staffId) as any)?.maxConcurrentAppointments ?? 1);
       const staffAppts = activeAppts.filter(a => !a.staffId || a.staffId === opts.staffId);
-      if (staffAppts.some(overlaps)) return { ok: false, reason: "選択した時間は既に予約で埋まっています" };
+      if (staffAppts.filter(overlaps).length >= staffMax) return { ok: false, reason: "選択した時間は既に予約で埋まっています" };
     } else if (activeAppts.filter(overlaps).length >= maxConcurrent) {
       return { ok: false, reason: "選択した時間は既に予約で埋まっています" };
     }
@@ -1083,7 +1093,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         storage.getStaff(clinicId),
         storage.getClinicSettings(clinicId),
       ]);
-      res.json({ clinic, hours, holidays, services: services.filter(s => s.isActive), staff: staffList.map(s => ({ id: s.id, name: s.name, role: s.role })), enableReferral: settings?.enableReferral ?? true, enablePatientConfirmation: settings?.enablePatientConfirmation ?? false });
+      res.json({ clinic, hours, holidays, services: services.filter(s => s.isActive), staff: staffList.map(s => ({ id: s.id, name: s.name, role: s.role })), enableReferral: settings?.enableReferral ?? true, enablePatientConfirmation: settings?.enablePatientConfirmation ?? false, closedOnHolidays: settings?.closedOnHolidays !== false, primaryColor: settings?.primaryColor || "#C4B5A0", slotIntervalMinutes: settings?.slotIntervalMinutes ?? 30, bookingAdvanceDays: settings?.bookingAdvanceDays ?? 60, bookingBufferMinutes: settings?.bookingBufferMinutes ?? 15 });
     } catch (e: any) { res.status(500).json({ message: e.message }); }
   });
 
@@ -1124,6 +1134,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const maxConcurrent = settings?.allowDoubleBooking ? 9999 : (settings?.chairsCount ?? settings?.maxConcurrentAppointments ?? 1);
+      // スタッフ指定時は個別の「同時対応人数」を反映（既定1）
+      const staffListForSlots = staffId ? await storage.getStaff(clinicId) : [];
+      const staffMax = staffId ? (settings?.allowDoubleBooking ? 9999 : ((staffListForSlots.find(s => s.id === staffId) as any)?.maxConcurrentAppointments ?? 1)) : 1;
       const stepMins = settings?.slotIntervalMinutes ?? 15;
       const bufferMins = settings?.bookingBufferMinutes ?? 15;
 
@@ -1156,11 +1169,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const allSlots2 = [...morningSlots2, ...afternoonSlots2];
       const slots = partialHolidays2.length > 0
         ? allSlots2.filter(slot => {
-            const slotMins = timeToMins(slot);
+            const slotStart = timeToMins(slot);
+            const slotEnd = slotStart + duration;
             return !partialHolidays2.some(ph => {
               const phStart = timeToMins(ph.startTime!.slice(0, 5));
               const phEnd = timeToMins(ph.endTime!.slice(0, 5));
-              return slotMins >= phStart && slotMins < phEnd;
+              return slotStart < phEnd && slotEnd > phStart;
             });
           })
         : allSlots2;
@@ -1177,11 +1191,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         const slotEnd = slotStart + duration;
         if (staffId) {
           const staffAppts = activeAppts.filter(a => !a.staffId || a.staffId === staffId);
-          return !staffAppts.some(a => {
+          const overlapCount = staffAppts.filter(a => {
             const aStart = timeToMins(a.startTime.slice(0, 5));
             const aEnd = a.endTime ? timeToMins(a.endTime.slice(0, 5)) : aStart + 30;
             return aStart < slotEnd && aEnd > slotStart;
-          });
+          }).length;
+          return overlapCount < staffMax;
         }
         const overlapping = activeAppts.filter(a => {
           const aStart = timeToMins(a.startTime.slice(0, 5));
@@ -2891,6 +2906,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       if (!body.staffId) body.staffId = null;
       if (!body.serviceId) body.serviceId = null;
+      // 医院スタッフが手動登録した予約は「患者確認」の対象外（既に確定扱い）。
+      // これを付けないと confirmationStatus 既定=pending となり、患者確認機能ONの医院で
+      // 電話/来院の当日〜翌日予約が自動キャンセルされてしまう。
+      if (body.confirmationStatus === undefined || body.confirmationStatus === null) {
+        body.confirmationStatus = "confirmed";
+      }
       if (body.staffId && body.date && body.startTime && body.endTime) {
         const conflict = await storage.checkStaffConflict({ clinicId: body.clinicId, date: body.date, startTime: body.startTime, endTime: body.endTime, staffId: body.staffId });
         if (conflict) return res.status(409).json({ message: "その担当者はその時間帯に既に別の予約があります" });
