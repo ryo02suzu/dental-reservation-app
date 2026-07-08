@@ -561,7 +561,12 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
     const isNationalOff = !!holidayName && closedOnHolidays;
     const slots: EditorSlot[] = [];
     if (!isRegularOff && !isNationalOff) {
-      const openMins = dayHours?.openTime ? toMins(dayHours.openTime) : null;
+      // 午前がない日（午後のみ診療）は afternoonOpenTime を開始基準にする。
+      // これを openTime だけで見ていると、午後のみの日のスロットが全く作られず
+      // カレンダー上で午後まで「対象外」になってしまうため両方を考慮する。
+      const openMins = dayHours?.openTime
+        ? toMins(dayHours.openTime)
+        : (dayHours?.afternoonOpenTime ? toMins(dayHours.afternoonOpenTime) : null);
       const lastClose = dayHours?.afternoonCloseTime
         ? toMins(dayHours.afternoonCloseTime)
         : (dayHours?.closeTime ? toMins(dayHours.closeTime) : null);
