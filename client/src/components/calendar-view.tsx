@@ -700,7 +700,7 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
         for (const ds of targets) delete next[ds];
         return next;
       });
-      toast({ title: "休診設定を保存しました", description: `${saved}日分の変更を反映しました` });
+      toast({ title: "休診設定を保存しました", description: `設定した時間帯どおりに反映しました（対象 ${saved} 日）` });
     } catch (e: any) {
       const msg = String(e?.message || e).replace(/^\d+:\s*/, "");
       toast({ title: "保存に失敗しました", description: msg, variant: "destructive" });
@@ -923,7 +923,7 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
       {/* 保存バー（まとめて反映／リセット） */}
       <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur px-3 md:px-6 py-2.5 flex items-center gap-2.5">
         <span className={`text-xs flex-1 min-w-0 truncate ${dirtyCount > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground"}`} data-testid="holiday-dirty-count">
-          {dirtyCount > 0 ? `未保存の変更：${dirtyCount}日分` : "変更はありません"}
+          {dirtyCount > 0 ? `未保存：${dirtyCount}日を編集中` : "変更はありません"}
         </span>
         <Button variant="outline" className="h-10 active:scale-95" onClick={() => setEdits({})} disabled={dirtyCount === 0 || saving} data-testid="holiday-reset">
           <RotateCcw className="h-4 w-4 mr-1.5" />
@@ -931,7 +931,7 @@ function HolidayBatchEditor({ initialDate, businessHours, businessHoursLoading, 
         </Button>
         <Button className="h-10 min-w-[120px] active:scale-95" onClick={handleSave} disabled={dirtyCount === 0 || saving} data-testid="holiday-save">
           <Check className="h-4 w-4 mr-1.5" />
-          {saving ? "保存中..." : dirtyCount > 0 ? `保存（${dirtyCount}日分）` : "保存"}
+          {saving ? "保存中..." : dirtyCount > 0 ? `保存（${dirtyCount}日）` : "保存"}
         </Button>
       </div>
 
