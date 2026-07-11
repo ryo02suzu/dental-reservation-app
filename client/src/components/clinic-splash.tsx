@@ -1,11 +1,16 @@
 import { useEffect, useState, type CSSProperties } from "react";
 
 // 患者予約ページ用の医院ブランドスプラッシュ。
-// 医院のテーマカラーから淡い上品な配色を自動生成し、
-// 細線の歯ロゴ＋金のモノグラム・英字表記・波の装飾・光の粒で構成する。
+// 専用画像が登録されている医院はその画像をそのまま全画面表示し、
+// ない医院はテーマカラーから自動生成したデザインで表示する。
 // 1ブラウザセッションにつき医院ごとに1回だけ表示。
 const DURATION_MS = 2200;
 const FADE_MS = 500;
+
+// 医院ごとの専用スプラッシュ画像（client/public/clinic-splash/ に配置）
+const SPLASH_IMAGES: Record<string, string> = {
+  "imaizumi-dental": "/clinic-splash/imaizumi-dental.webp",
+};
 const GOLD = "#c2a36b";
 const GOLD_DEEP = "#b0904f";
 
@@ -172,6 +177,26 @@ export function ClinicSplash({ name, bgColor, slug, storageKey }: {
   }, [phase]);
 
   if (phase === "gone") return null;
+
+  // 専用画像がある医院は画像をそのまま全画面表示
+  const splashImage = slug ? SPLASH_IMAGES[slug] : undefined;
+  if (splashImage) {
+    return (
+      <div
+        className={`fixed inset-0 z-[200] overflow-hidden ${phase === "leaving" ? "splash-leave" : ""}`}
+        style={{ backgroundColor: "#e9f0f8" }}
+        aria-hidden="true"
+        data-testid="clinic-splash"
+      >
+        <img
+          src={splashImage}
+          alt=""
+          className="h-full w-full object-cover select-none"
+          draggable={false}
+        />
+      </div>
+    );
+  }
 
   const hsl = hexToHsl(bgColor);
   const h = hsl ? hsl[0] : 204;
