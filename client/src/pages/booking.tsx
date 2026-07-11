@@ -1488,7 +1488,7 @@ export default function BookingPage({ slug }: { slug?: string }) {
   return (
     <ClinicColorContext.Provider value={colors}>
     {/* 医院専用スプラッシュ（患者がネット予約に入った時。Archeのアニメは出さない） */}
-    <ClinicSplash name={clinicName} bgColor={colors.header} storageKey={`clinic-splash-${slug || "default"}`} />
+    <ClinicSplash name={clinicName} bgColor={info?.primaryColor || colors.header} storageKey={`clinic-splash-${slug || "default"}`} />
     <PageShell
       clinicName={clinicName}
       patientName={patientName}
