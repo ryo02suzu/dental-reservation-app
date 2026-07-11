@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 // 患者予約ページ用の医院ブランドスプラッシュ。
-// 医院のテーマカラーから上品な淡色グラデーション背景・波飾り・金の差し色を自動生成し、
-// 歯モチーフのロゴマーク＋医院名を表示する。Archeの起動アニメとは別物。
+// 医院のテーマカラーから淡い上品な配色を自動生成し、
+// 細線の歯ロゴ＋金のモノグラム・英字表記・波の装飾・光の粒で構成する。
 // 1ブラウザセッションにつき医院ごとに1回だけ表示。
-const DURATION_MS = 1900;
-const FADE_MS = 450;
-const GOLD = "#bd9a63";
+const DURATION_MS = 2200;
+const FADE_MS = 500;
+const GOLD = "#c2a36b";
+const GOLD_DEEP = "#b0904f";
 
 function hexToHsl(hex: string): [number, number, number] | null {
   if (!hex || !hex.startsWith("#") || hex.length < 7) return null;
@@ -25,88 +26,114 @@ function hexToHsl(hex: string): [number, number, number] | null {
   return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
 }
 
-function WaveLayer({ color, flip }: { color: string; flip?: boolean }) {
+// スラッグから英字表記を作る（imaizumi-dental → "IMAIZUMI DENTAL OFFICE"）。
+// 汎用語や短すぎるトークンしか残らない場合は "DENTAL OFFICE" のみ。
+const GENERIC_TOKENS = new Set(["dental", "dentist", "clinic", "office", "shika", "dc", "demo", "default", "test"]);
+function englishLine(slug?: string): string {
+  const base = (slug || "")
+    .toLowerCase()
+    .split(/[-_]/)
+    .filter(t => /^[a-z]{3,}$/.test(t) && !GENERIC_TOKENS.has(t));
+  if (base.length === 0) return "DENTAL OFFICE";
+  return `${base.join(" ").toUpperCase()} DENTAL OFFICE`;
+}
+
+// 4条の光（スパークル）
+function Sparkle({ size = 14, color = GOLD, className = "", style }: {
+  size?: number; color?: string; className?: string; style?: CSSProperties;
+}) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className} style={style} aria-hidden="true">
+      <path
+        d="M12 0 C12.4 7.2 13.8 9.6 21 10.5 C13.8 11.4 12.4 13.8 12 21 C11.6 13.8 10.2 11.4 3 10.5 C10.2 9.6 11.6 7.2 12 0 Z"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+// 淡く流れる波の装飾（上下端）。半透明レイヤー＋細い金線。
+function Waves({ tint, flip }: { tint: string; flip?: boolean }) {
   return (
     <svg
-      className="csplash-wave absolute left-0 w-full"
-      style={flip ? { bottom: -1, transform: "scaleY(-1)" } : { top: -1 }}
-      viewBox="0 0 400 150"
+      className="absolute left-0 w-full"
+      style={{
+        height: "24%",
+        ...(flip ? { bottom: -1, transform: "scaleY(-1) scaleX(-1)" } : { top: -1 }),
+      }}
+      viewBox="0 0 430 220"
       preserveAspectRatio="none"
       aria-hidden="true"
     >
+      <path d="M0,110 C70,60 150,150 240,95 C320,45 380,110 430,70 L430,0 L0,0 Z" fill={tint} opacity={0.5} />
+      <path d="M0,150 C90,90 170,185 260,125 C340,75 390,140 430,105 L430,0 L0,0 Z" fill={tint} opacity={0.3} />
+      <path d="M0,185 C100,120 180,215 275,155 C350,105 395,165 430,140 L430,0 L0,0 Z" fill={tint} opacity={0.18} />
       <path
-        d="M0,55 C90,10 160,95 250,55 C320,25 360,70 400,40 L400,0 L0,0 Z"
-        fill={color}
-        opacity={0.35}
-      />
-      <path
-        d="M0,80 C110,40 170,120 260,80 C330,55 370,95 400,70 L400,0 L0,0 Z"
-        fill={color}
-        opacity={0.18}
-      />
-      <path
-        d="M0,68 C100,26 165,105 255,66 C325,38 365,80 400,54"
-        fill="none"
-        stroke={GOLD}
-        strokeWidth={0.8}
-        opacity={0.55}
+        d="M0,132 C85,75 165,168 255,110 C335,60 385,125 430,88"
+        fill="none" stroke={GOLD} strokeWidth={1} opacity={0.6}
       />
     </svg>
   );
 }
 
-function Sparkle({ size = 14, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path
-        d="M12 0 C12.5 7 14 9.5 21 10.5 C14 11.5 12.5 14 12 21 C11.5 14 10 11.5 3 10.5 C10 9.5 11.5 7 12 0 Z"
-        fill={GOLD}
-      />
-    </svg>
-  );
-}
+// 光の粒（ぼかした白い円）を静的な配置で散らす
+const BOKEH: Array<[number, number, number, number]> = [
+  // [left%, top%, size(px), opacity]
+  [12, 9, 10, 0.8], [78, 6, 7, 0.6], [88, 14, 12, 0.5], [22, 17, 6, 0.7],
+  [8, 30, 8, 0.4], [92, 36, 9, 0.45], [15, 62, 7, 0.35], [85, 58, 8, 0.4],
+  [10, 82, 11, 0.6], [70, 88, 8, 0.55], [30, 92, 9, 0.5], [90, 80, 6, 0.6],
+];
 
-function ToothMark({ color, initial }: { color: string; initial: string }) {
+// 歯のアウトライン＋金のモノグラム＋金のスワッシュ
+function ToothLogo({ stroke, initial }: { stroke: string; initial: string }) {
   return (
-    <div className="relative h-24 w-24 flex items-center justify-center">
-      <svg viewBox="0 0 100 100" className="csplash-mark h-full w-full">
+    <div className="csplash-mark relative" style={{ width: 168, height: 168 }}>
+      <svg viewBox="0 0 168 168" className="h-full w-full" aria-hidden="true">
+        {/* 歯のアウトライン（細線・毛筆調の一筆書きイメージ） */}
         <path
-          d="M30,22 C30,11 40,9 50,13 C60,9 70,11 70,22 C72,32 68,46 65,61 C63,73 58,81 55,86 C53,89 50,89 49,85 C47,77 46,67 45,61 C44,67 43,77 41,85 C40,89 37,89 35,86 C32,81 27,73 25,61 C22,46 28,32 30,22 Z"
-          fill="none"
-          stroke={color}
-          strokeWidth={2.5}
-          strokeLinejoin="round"
+          d="M44,46 C38,26 56,14 76,22 C79,23 81,25 84,28 C87,25 89,23 92,22 C112,14 130,26 124,46 C130,62 126,82 118,102 C113,118 106,131 100,139 C97,144 92,144 91,138 C88,125 86,111 84,101 C82,111 80,125 77,138 C76,144 71,144 68,139 C62,131 55,118 50,102 C42,82 38,62 44,46 Z"
+          fill="none" stroke={stroke} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"
         />
+        {/* 金のスワッシュ（歯の下をくぐって右上へ抜ける曲線） */}
+        <path
+          d="M30,128 C56,150 118,148 132,110 C140,86 132,62 118,52"
+          fill="none" stroke={GOLD} strokeWidth={2.2} strokeLinecap="round" opacity={0.9}
+        />
+        {/* モノグラム（金・セリフ体） */}
+        <text
+          x="84" y="86"
+          textAnchor="middle" dominantBaseline="middle"
+          fill={GOLD_DEEP}
+          style={{ fontFamily: "Georgia, 'Times New Roman', 'Noto Serif JP', serif", fontSize: 52, fontWeight: 500 }}
+        >
+          {initial}
+        </text>
       </svg>
-      <span
-        className="absolute text-2xl font-semibold select-none"
-        style={{ color, fontFamily: "Georgia, 'Noto Serif JP', serif", top: "34%" }}
-      >
-        {initial}
-      </span>
-      <Sparkle size={16} className="csplash-sparkle absolute -top-1 right-1" />
+      <Sparkle size={20} className="csplash-sparkle absolute" style={{ top: 18, right: 10 }} />
+      <Sparkle size={10} color={stroke} className="csplash-sparkle absolute" style={{ top: 44, right: 2, animationDelay: "0.8s", opacity: 0.7 }} />
     </div>
   );
 }
 
+// ドット型ローディングリング（医院色＋1粒だけ金）
 function DotRing({ color }: { color: string }) {
   const dots = Array.from({ length: 8 });
   return (
-    <div className="relative h-10 w-10">
+    <div className="relative h-12 w-12">
       {dots.map((_, i) => {
         const angle = (360 / dots.length) * i;
-        const isGold = i === 6;
+        const isGold = i === 2;
         return (
           <span
             key={i}
-            className="csplash-dot absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full"
+            className="csplash-dot absolute left-1/2 top-1/2 rounded-full"
             style={{
+              width: 7, height: 7,
               backgroundColor: isGold ? GOLD : color,
-              transform: `rotate(${angle}deg) translate(0, -16px)`,
+              transform: `rotate(${angle}deg) translate(0, -19px)`,
               transformOrigin: "0 0",
-              marginLeft: -3,
-              marginTop: -3,
-              animationDelay: `${i * 0.13}s`,
+              marginLeft: -3.5, marginTop: -3.5,
+              animationDelay: `${i * 0.15}s`,
             }}
           />
         );
@@ -115,9 +142,10 @@ function DotRing({ color }: { color: string }) {
   );
 }
 
-export function ClinicSplash({ name, bgColor, storageKey }: {
+export function ClinicSplash({ name, bgColor, slug, storageKey }: {
   name: string;
   bgColor: string;      // 医院のテーマ色（primaryColor推奨、HEX優先）
+  slug?: string;        // 英字表記の生成に使用
   storageKey: string;   // 医院ごとのセッションキー
 }) {
   const [phase, setPhase] = useState<"show" | "leaving" | "gone">(() => {
@@ -146,48 +174,97 @@ export function ClinicSplash({ name, bgColor, storageKey }: {
   if (phase === "gone") return null;
 
   const hsl = hexToHsl(bgColor);
-  const accent = hsl ? `hsl(${hsl[0]}, ${Math.max(hsl[1] - 5, 35)}%, ${Math.min(hsl[2] + 5, 55)}%)` : bgColor;
-  const tint1 = hsl ? `hsl(${hsl[0]}, ${Math.max(hsl[1] - 20, 25)}%, 95%)` : "#eef4f8";
-  const tint2 = hsl ? `hsl(${hsl[0]}, ${Math.max(hsl[1] - 25, 20)}%, 88%)` : "#dbe8f0";
-  const initial = (name || "歯").trim().charAt(0) || "歯";
+  const h = hsl ? hsl[0] : 204;
+  const s = hsl ? Math.min(Math.max(hsl[1], 30), 55) : 45;
+  // 医院名・本文用（落ち着いた中間色）
+  const accent = `hsl(${h}, ${s}%, 52%)`;
+  // 歯のアウトライン用（すこし明るめ）
+  const stroke = `hsl(${h}, ${s}%, 60%)`;
+  // 波・背景の淡いトーン
+  const waveTint = `hsl(${h}, ${Math.min(s + 10, 60)}%, 86%)`;
+  const bgTop = `hsl(${h}, 50%, 97%)`;
+  const bgMid = "#fdfeff";
+  const bgBottom = `hsl(${h}, 45%, 95%)`;
+
+  const en = englishLine(slug);
+  const initial = (en !== "DENTAL OFFICE" ? en.charAt(0) : (name || "D").trim().charAt(0)) || "D";
 
   return (
     <div
       className={`fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden ${phase === "leaving" ? "splash-leave" : ""}`}
-      style={{ background: `radial-gradient(120% 90% at 50% 42%, #ffffff 0%, ${tint1} 55%, ${tint2} 100%)` }}
+      style={{ background: `linear-gradient(180deg, ${bgTop} 0%, ${bgMid} 45%, ${bgBottom} 100%)` }}
       aria-hidden="true"
       data-testid="clinic-splash"
     >
-      <WaveLayer color={accent} />
-      <WaveLayer color={accent} flip />
+      <Waves tint={waveTint} />
+      <Waves tint={waveTint} flip />
 
-      <div className="relative flex flex-col items-center px-8">
-        <ToothMark color={accent} initial={initial} />
+      {/* 光の粒 */}
+      {BOKEH.map(([l, t, size, o], i) => (
+        <span
+          key={i}
+          className="absolute rounded-full bg-white pointer-events-none"
+          style={{ left: `${l}%`, top: `${t}%`, width: size, height: size, opacity: o, filter: "blur(1.5px)" }}
+        />
+      ))}
+      <Sparkle size={12} className="csplash-sparkle absolute" style={{ left: "18%", top: "26%", opacity: 0.7 }} />
+      <Sparkle size={9} className="csplash-sparkle absolute" style={{ right: "14%", bottom: "24%", opacity: 0.6, animationDelay: "1.1s" }} />
 
+      <div className="relative flex flex-col items-center px-8 -mt-6">
+        <ToothLogo stroke={stroke} initial={initial} />
+
+        {/* 医院名（明朝体・広めの字間） */}
         <h1
-          className="csplash-rise mt-4 text-2xl font-bold tracking-[0.12em] text-center leading-tight select-none"
-          style={{ color: accent, animationDelay: "0.15s" }}
+          className="csplash-rise mt-6 text-center leading-tight select-none"
+          style={{
+            color: accent,
+            fontFamily: "'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif",
+            fontSize: "1.9rem",
+            fontWeight: 500,
+            letterSpacing: "0.28em",
+            marginRight: "-0.28em",
+            animationDelay: "0.2s",
+          }}
         >
           {name}
         </h1>
 
-        <div className="csplash-rise mt-3 flex items-center gap-3" style={{ animationDelay: "0.3s" }}>
-          <span className="h-px w-9" style={{ background: `linear-gradient(90deg, transparent, ${GOLD})` }} />
-          <Sparkle size={10} />
-          <span className="h-px w-9" style={{ background: `linear-gradient(90deg, ${GOLD}, transparent)` }} />
+        {/* 英字表記（金） */}
+        <p
+          className="csplash-rise mt-3 text-center select-none"
+          style={{
+            color: GOLD_DEEP,
+            fontSize: "0.72rem",
+            letterSpacing: "0.32em",
+            marginRight: "-0.32em",
+            animationDelay: "0.35s",
+          }}
+        >
+          {en}
+        </p>
+
+        {/* 金の区切り線＋中央スパークル */}
+        <div className="csplash-rise mt-4 flex items-center gap-3" style={{ animationDelay: "0.45s" }}>
+          <span className="h-px w-24" style={{ background: `linear-gradient(90deg, transparent, ${GOLD})` }} />
+          <Sparkle size={12} />
+          <span className="h-px w-24" style={{ background: `linear-gradient(90deg, ${GOLD}, transparent)` }} />
         </div>
 
-        <div className="csplash-rise mt-7" style={{ animationDelay: "0.45s" }}>
-          <DotRing color={accent} />
+        {/* ローディング */}
+        <div className="csplash-rise mt-14" style={{ animationDelay: "0.55s" }}>
+          <DotRing color={stroke} />
         </div>
 
         <p
-          className="csplash-rise mt-4 text-sm font-medium text-center select-none"
-          style={{ color: accent, animationDelay: "0.55s" }}
+          className="csplash-rise mt-6 text-center select-none"
+          style={{ color: accent, fontSize: "0.95rem", letterSpacing: "0.12em", animationDelay: "0.65s" }}
         >
           予約ページを準備しています
         </p>
-        <p className="csplash-rise mt-1 text-xs text-slate-400 text-center select-none" style={{ animationDelay: "0.65s" }}>
+        <p
+          className="csplash-rise mt-2 text-center select-none"
+          style={{ color: "#9aa3ad", fontSize: "0.8rem", letterSpacing: "0.12em", animationDelay: "0.75s" }}
+        >
           しばらくお待ちください
         </p>
       </div>
