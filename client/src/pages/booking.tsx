@@ -1462,33 +1462,50 @@ export default function BookingPage({ slug }: { slug?: string }) {
 
   const colors = computeClinicColors(info?.primaryColor);
 
+  // 医院専用スプラッシュ（患者がネット予約に入った時。Archeのアニメは出さない）。
+  // API応答を待つ間の白画面/スピナーも覆えるよう、全分岐の先頭で常にマウントする。
+  const splash = (
+    <ClinicSplash
+      name={clinicName}
+      bgColor={info ? (info.primaryColor || colors.header) : undefined}
+      slug={slug || undefined}
+      storageKey={`clinic-splash-${slug || "default"}`}
+    />
+  );
+
   if (sessionLoading || infoLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin border-gray-300" />
-      </div>
+      <>
+        {splash}
+        <div className="min-h-screen flex items-center justify-center bg-white">
+          <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin border-gray-300" />
+        </div>
+      </>
     );
   }
 
   if (infoError || !info) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6 text-center gap-4">
-        <p className="text-base font-semibold text-gray-800">クリニック情報を読み込めませんでした</p>
-        <p className="text-sm text-gray-500">通信状況をご確認のうえ、再度お試しください。</p>
-        <button
-          onClick={() => qc.invalidateQueries({ queryKey: [apiBase + "/info"] })}
-          className="px-5 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-medium"
-        >
-          再読み込み
-        </button>
-      </div>
+      <>
+        {splash}
+        <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6 text-center gap-4">
+          <p className="text-base font-semibold text-gray-800">クリニック情報を読み込めませんでした</p>
+          <p className="text-sm text-gray-500">通信状況をご確認のうえ、再度お試しください。</p>
+          <button
+            onClick={() => qc.invalidateQueries({ queryKey: [apiBase + "/info"] })}
+            className="px-5 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-medium"
+          >
+            再読み込み
+          </button>
+        </div>
+      </>
     );
   }
 
   return (
+    <>
+    {splash}
     <ClinicColorContext.Provider value={colors}>
-    {/* 医院専用スプラッシュ（患者がネット予約に入った時。Archeのアニメは出さない） */}
-    <ClinicSplash name={clinicName} bgColor={info?.primaryColor || colors.header} slug={slug || undefined} storageKey={`clinic-splash-${slug || "default"}`} />
     <PageShell
       clinicName={clinicName}
       patientName={patientName}
@@ -1636,5 +1653,6 @@ export default function BookingPage({ slug }: { slug?: string }) {
       )}
     </PageShell>
     </ClinicColorContext.Provider>
+    </>
   );
 }

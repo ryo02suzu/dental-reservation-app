@@ -3,6 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <script>
+      // 専用スプラッシュのある医院の予約ページでは、JSバンドル読込中の白画面を
+      // ぼかし下地（plate）で先に覆い、素材を先読みしておく。
+      // フォントCSSより前に置くこと（後ろに置くとCSS読込完了まで実行がブロックされる）。
+      // 本体スプラッシュ（React側）がマウント後にこの下地を回収する。
+      (function () {
+        try {
+          var scenes = { "imaizumi-dental": { bg: "#eef3f9", dir: "/clinic-splash/imaizumi-dental" } };
+          var m = location.pathname.match(/^\/book\/([^\/]+)/);
+          var sc = m && scenes[m[1]];
+          if (!sc) return;
+          if (sessionStorage.getItem("clinic-splash-" + m[1])) return;
+          if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+          ["plate", "top", "logo", "name", "english", "mid", "text", "bottom", "star"].forEach(function (f) {
+            var l = document.createElement("link");
+            l.rel = "preload"; l.as = "image"; l.href = sc.dir + "/" + f + ".webp";
+            document.head.appendChild(l);
+          });
+          var d = document.createElement("div");
+          d.id = "clinic-pre-splash";
+          d.style.cssText = "position:fixed;inset:0;z-index:199;background:" + sc.bg + " url(" + sc.dir + "/plate.webp) center/cover no-repeat";
+          document.documentElement.appendChild(d);
+          // 万一Reactが起動しなかった場合の保険
+          setTimeout(function () {
+            var e = document.getElementById("clinic-pre-splash");
+            if (e) e.remove();
+          }, 8000);
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Primary SEO -->
     <title>Arche | 歯科医院向けクラウド予約・患者管理システム | Sourirette合同会社</title>

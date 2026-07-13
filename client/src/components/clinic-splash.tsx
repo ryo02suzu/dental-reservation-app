@@ -10,13 +10,15 @@ const FADE_MS = 450;
 // 専用スプラッシュの構成（画像を横帯に分解し、時間差でふわっと組み上げる）。
 // 素材は client/public/clinic-splash/<slug>/ に配置。
 // y0/y1 は元画像のピクセル座標、delay は表示開始秒。
+// deco は画像から切り出した装飾レイヤー（元画像ピクセルの矩形指定）で、
+// 星の瞬きなどベクター重ね描きだと二重に見える演出を画像そのもので行う。
 type SplashScene = {
   dir: string;
   w: number; h: number;                 // 元画像サイズ
   bg: string;                           // 読み込み中の下地色
   bands: Array<{ file: string; y0: number; y1: number; delay: number; motion: "fade" | "rise" }>;
   loader: { cx: number; cy: number; size: number; color: string; gold: string; delay: number }; // %座標
-  sparkles: Array<{ x: number; y: number; size: number; delay: number }>;                        // %座標
+  deco: Array<{ file: string; x: number; y: number; w: number; h: number; delay: number; anim: "twinkle" }>;
 };
 
 const SPLASH_SCENES: Record<string, SplashScene> = {
@@ -34,13 +36,17 @@ const SPLASH_SCENES: Record<string, SplashScene> = {
       { file: "text", y0: 1220, y1: 1330, delay: 1.35, motion: "rise" },
     ],
     loader: { cx: 50.4, cy: 62.55, size: 12.8, color: "#6b98c8", gold: "#c9a35c", delay: 1.25 },
-    sparkles: [
-      { x: 65.5, y: 32.2, size: 26, delay: 0.9 },   // ロゴ右上の✦に重ねる
-      { x: 14, y: 12, size: 12, delay: 1.6 },
-      { x: 86, y: 84, size: 11, delay: 2.0 },
+    // ロゴ右上の金の星（logo.webpからは除去済み。この1枚だけが本物の星）
+    deco: [
+      { file: "star", x: 536, y: 570, w: 48, h: 54, delay: 0.55, anim: "twinkle" },
     ],
   },
 };
+
+// index.htmlが先出ししたプレスプラッシュ（ぼかし下地）を回収する
+function removePreSplash() {
+  try { document.getElementById("clinic-pre-splash")?.remove(); } catch { /* noop */ }
+}
 const GOLD = "#c2a36b";
 const GOLD_DEEP = "#b0904f";
 
@@ -179,20 +185,38 @@ function DotRing({ color }: { color: string }) {
 
 export function ClinicSplash({ name, bgColor, slug, storageKey }: {
   name: string;
-  bgColor: string;      // 医院のテーマ色（primaryColor推奨、HEX優先）
-  slug?: string;        // 英字表記の生成に使用
+  bgColor?: string;     // 医院のテーマ色（未取得の間は空でよい。専用シーンの医院は不要）
+  slug?: string;        // 専用シーンの選択・英字表記の生成に使用
   storageKey: string;   // 医院ごとのセッションキー
 }) {
-  const [phase, setPhase] = useState<"show" | "leaving" | "gone">(() => {
+  const scene = slug ? SPLASH_SCENES[slug] : undefined;
+  // 専用シーンはAPI応答を待たず即表示できる。自動生成版は色が届いてから。
+  const ready = !!scene || !!bgColor;
+
+  const [phase, setPhase] = useState<"wait" | "show" | "leaving" | "gone">(() => {
     try {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return "gone";
       if (sessionStorage.getItem(storageKey)) return "gone";
       sessionStorage.setItem(storageKey, "1");
-      return "show";
+      return ready ? "show" : "wait";
     } catch {
       return "gone";
     }
   });
+
+  // 色の到着待ちだった場合、届き次第開始
+  useEffect(() => {
+    if (phase === "wait" && ready) setPhase("show");
+  }, [phase, ready]);
+
+  // index.htmlのプレスプラッシュを回収（本体が画面を覆ってから/不要なら即）
+  useEffect(() => {
+    if (phase === "show") {
+      const t = setTimeout(removePreSplash, 600);
+      return () => clearTimeout(t);
+    }
+    if (phase === "gone") removePreSplash();
+  }, [phase]);
 
   useEffect(() => {
     if (phase !== "show") return;
@@ -206,10 +230,9 @@ export function ClinicSplash({ name, bgColor, slug, storageKey }: {
     return () => clearTimeout(t);
   }, [phase]);
 
-  if (phase === "gone") return null;
+  if (phase === "gone" || phase === "wait") return null;
 
   // 専用シーンがある医院は画像レイヤーの段階演出で表示
-  const scene = slug ? SPLASH_SCENES[slug] : undefined;
   if (scene) {
     const ratio = scene.w / scene.h;
     return (
@@ -277,21 +300,24 @@ export function ClinicSplash({ name, bgColor, slug, storageKey }: {
               );
             })}
           </svg>
-          {/* スパークルの瞬き（位置決めはラッパー、パルスは中身に分離） */}
-          {scene.sparkles.map((sp, i) => (
+          {/* 装飾レイヤー（画像から切り出した本物の星など）。
+              位置決めはラッパー、瞬きは中身に分離してtransform競合を避ける */}
+          {scene.deco.map(d => (
             <div
-              key={i}
+              key={d.file}
               className="absolute"
               style={{
-                left: `${sp.x}%`,
-                top: `${sp.y}%`,
-                transform: "translate(-50%, -50%)",
+                left: `${(d.x / scene.w) * 100}%`,
+                top: `${(d.y / scene.h) * 100}%`,
+                width: `${(d.w / scene.w) * 100}%`,
+                height: `${(d.h / scene.h) * 100}%`,
               }}
             >
-              <Sparkle
-                size={sp.size}
-                className="csplash-sparkle block"
-                style={{ animationDelay: `${sp.delay}s` }}
+              <img
+                src={`${scene.dir}/${d.file}.webp`}
+                alt="" draggable={false}
+                className="csplash-deco h-full w-full select-none"
+                style={{ animationDelay: `${d.delay}s, ${d.delay + 0.9}s` }}
               />
             </div>
           ))}
@@ -300,7 +326,7 @@ export function ClinicSplash({ name, bgColor, slug, storageKey }: {
     );
   }
 
-  const hsl = hexToHsl(bgColor);
+  const hsl = hexToHsl(bgColor || "");
   const h = hsl ? hsl[0] : 204;
   const s = hsl ? Math.min(Math.max(hsl[1], 30), 55) : 45;
   // 医院名・本文用（落ち着いた中間色）

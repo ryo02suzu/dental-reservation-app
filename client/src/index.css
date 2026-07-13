@@ -407,6 +407,17 @@
 }
 .csplash-fade { opacity: 0; animation: csplash-fade-in 0.5s ease-out both; }
 .csplash-piece { opacity: 0; animation: csplash-piece-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* 画像から切り出した装飾（星）：ふわっと現れてから、ゆっくり呼吸するように瞬く */
+@keyframes csplash-twinkle {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50%      { transform: scale(0.88); filter: brightness(1.06); }
+}
+.csplash-deco {
+  opacity: 0;
+  animation:
+    csplash-fade-in 0.6s ease-out both,
+    csplash-twinkle 2.6s ease-in-out infinite;
+}
 .csplash-mark { animation: csplash-mark-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .csplash-rise { opacity: 0; animation: csplash-rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .csplash-sparkle { animation: csplash-sparkle-pulse 2.2s ease-in-out infinite; }
