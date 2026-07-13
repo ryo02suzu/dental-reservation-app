@@ -1,15 +1,45 @@
 import { useEffect, useState, type CSSProperties } from "react";
 
 // 患者予約ページ用の医院ブランドスプラッシュ。
-// 専用画像が登録されている医院はその画像をそのまま全画面表示し、
+// 専用画像が登録されている医院はその画像を段階演出付きで全画面表示し、
 // ない医院はテーマカラーから自動生成したデザインで表示する。
 // 1ブラウザセッションにつき医院ごとに1回だけ表示。
-const DURATION_MS = 2200;
-const FADE_MS = 500;
+const DURATION_MS = 2500;
+const FADE_MS = 450;
 
-// 医院ごとの専用スプラッシュ画像（client/public/clinic-splash/ に配置）
-const SPLASH_IMAGES: Record<string, string> = {
-  "imaizumi-dental": "/clinic-splash/imaizumi-dental.webp",
+// 専用スプラッシュの構成（画像を横帯に分解し、時間差でふわっと組み上げる）。
+// 素材は client/public/clinic-splash/<slug>/ に配置。
+// y0/y1 は元画像のピクセル座標、delay は表示開始秒。
+type SplashScene = {
+  dir: string;
+  w: number; h: number;                 // 元画像サイズ
+  bg: string;                           // 読み込み中の下地色
+  bands: Array<{ file: string; y0: number; y1: number; delay: number; motion: "fade" | "rise" }>;
+  loader: { cx: number; cy: number; size: number; color: string; gold: string; delay: number }; // %座標
+  sparkles: Array<{ x: number; y: number; size: number; delay: number }>;                        // %座標
+};
+
+const SPLASH_SCENES: Record<string, SplashScene> = {
+  "imaizumi-dental": {
+    dir: "/clinic-splash/imaizumi-dental",
+    w: 853, h: 1844,
+    bg: "#eef3f9",
+    bands: [
+      { file: "top", y0: 0, y1: 500, delay: 0.1, motion: "fade" },
+      { file: "mid", y0: 1005, y1: 1090, delay: 0.1, motion: "fade" },
+      { file: "bottom", y0: 1330, y1: 1844, delay: 0.1, motion: "fade" },
+      { file: "logo", y0: 500, y1: 800, delay: 0.4, motion: "rise" },
+      { file: "name", y0: 800, y1: 915, delay: 0.8, motion: "rise" },
+      { file: "english", y0: 915, y1: 1005, delay: 1.05, motion: "fade" },
+      { file: "text", y0: 1220, y1: 1330, delay: 1.35, motion: "rise" },
+    ],
+    loader: { cx: 50.4, cy: 62.55, size: 12.8, color: "#6b98c8", gold: "#c9a35c", delay: 1.25 },
+    sparkles: [
+      { x: 65.5, y: 32.2, size: 26, delay: 0.9 },   // ロゴ右上の✦に重ねる
+      { x: 14, y: 12, size: 12, delay: 1.6 },
+      { x: 86, y: 84, size: 11, delay: 2.0 },
+    ],
+  },
 };
 const GOLD = "#c2a36b";
 const GOLD_DEEP = "#b0904f";
@@ -178,22 +208,94 @@ export function ClinicSplash({ name, bgColor, slug, storageKey }: {
 
   if (phase === "gone") return null;
 
-  // 専用画像がある医院は画像をそのまま全画面表示
-  const splashImage = slug ? SPLASH_IMAGES[slug] : undefined;
-  if (splashImage) {
+  // 専用シーンがある医院は画像レイヤーの段階演出で表示
+  const scene = slug ? SPLASH_SCENES[slug] : undefined;
+  if (scene) {
+    const ratio = scene.w / scene.h;
     return (
       <div
         className={`fixed inset-0 z-[200] overflow-hidden ${phase === "leaving" ? "splash-leave" : ""}`}
-        style={{ backgroundColor: "#e9f0f8" }}
+        style={{ backgroundColor: scene.bg }}
         aria-hidden="true"
         data-testid="clinic-splash"
       >
-        <img
-          src={splashImage}
-          alt=""
-          className="h-full w-full object-cover select-none"
-          draggable={false}
-        />
+        {/* 画像と同じ縦横比のキャンバスを基本cover・上限付き（中央コンテンツが
+            切れない範囲まで拡大）で配置し、全レイヤーを%座標で正確に重ねる。
+            横長画面では上限に当たり左右レターボックスになる */}
+        <div
+          className="absolute left-1/2 top-1/2"
+          style={{
+            width: `min(max(100vw, calc(100dvh * ${ratio})), calc(200dvh * ${ratio}))`,
+            aspectRatio: `${scene.w} / ${scene.h}`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          {/* 下地：全体を強くぼかしたプレート（波や光がにじんだ状態から始まる） */}
+          <img
+            src={`${scene.dir}/plate.webp`}
+            alt="" draggable={false}
+            className="csplash-fade absolute inset-0 h-full w-full select-none"
+          />
+          {/* 帯レイヤー：背景→ロゴ→医院名→英字→案内文の順にふわっと */}
+          {scene.bands.map(b => (
+            <img
+              key={b.file}
+              src={`${scene.dir}/${b.file}.webp`}
+              alt="" draggable={false}
+              className={`absolute left-0 w-full select-none ${b.motion === "rise" ? "csplash-piece" : "csplash-fade"}`}
+              style={{
+                top: `${(b.y0 / scene.h) * 100}%`,
+                height: `${((b.y1 - b.y0) / scene.h) * 100}%`,
+                animationDelay: `${b.delay}s`,
+              }}
+            />
+          ))}
+          {/* 本物のローディングリング（画像内の静止ドットの位置で回転） */}
+          <svg
+            viewBox="0 0 100 100"
+            className="csplash-fade absolute"
+            style={{
+              left: `${scene.loader.cx}%`,
+              top: `${scene.loader.cy}%`,
+              width: `${scene.loader.size}%`,
+              transform: "translate(-50%, -50%)",
+              animationDelay: `${scene.loader.delay}s`,
+            }}
+          >
+            {Array.from({ length: 8 }).map((_, i) => {
+              const a = (Math.PI * 2 * i) / 8;
+              return (
+                <circle
+                  key={i}
+                  cx={50 + 40 * Math.sin(a)}
+                  cy={50 - 40 * Math.cos(a)}
+                  r={7.5}
+                  fill={i === 2 ? scene.loader.gold : scene.loader.color}
+                  className="csplash-dot"
+                  style={{ animationDelay: `${scene.loader.delay + i * 0.15}s` }}
+                />
+              );
+            })}
+          </svg>
+          {/* スパークルの瞬き（位置決めはラッパー、パルスは中身に分離） */}
+          {scene.sparkles.map((sp, i) => (
+            <div
+              key={i}
+              className="absolute"
+              style={{
+                left: `${sp.x}%`,
+                top: `${sp.y}%`,
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <Sparkle
+                size={sp.size}
+                className="csplash-sparkle block"
+                style={{ animationDelay: `${sp.delay}s` }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
