@@ -31,5 +31,11 @@ export function buildPoolConfig(): PoolConfig {
 }
 
 export function createPool(): Pool {
-  return new Pool(buildPoolConfig());
+  const pool = new Pool(buildPoolConfig());
+  // Neon等のスケールtoゼロ型DBはアイドル時にサーバー側から接続を切る。
+  // リスナーがないと未処理の 'error' イベントでプロセスごと落ちる。
+  pool.on("error", (err) => {
+    console.error("[DB] アイドル接続エラー（自動で再接続します）:", err.message);
+  });
+  return pool;
 }
