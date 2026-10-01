@@ -5,7 +5,7 @@
 # 使い方:
 #   1. render.com に GitHub でサインイン
 #   2. New → Blueprint → このリポジトリを選択
-#   3. DATABASE_URL に PostgreSQL（Neon）の接続文字列を入力
+#   3. DATABASE_URL に Supabase の Session pooler 接続文字列を入力
 #      （SESSION_SECRET は自動生成される）
 #   4. Apply でデプロイ → https://<name>.onrender.com が払い出される
 services:
@@ -24,6 +24,6 @@ services:
       # セッション署名鍵は Render が安全な値を自動生成する
       - key: SESSION_SECRET
         generateValue: true
-      # PostgreSQL（Neon）の接続文字列を Render の画面で入力する
+      # Supabase の Session pooler 接続文字列を Render の画面で入力する
       - key: DATABASE_URL
         sync: false
