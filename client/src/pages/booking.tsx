@@ -1466,9 +1466,27 @@ export default function BookingPage({ slug }: { slug?: string }) {
     if (sessionLoading || infoLoading) return;
     const el = document.getElementById("clinic-splash");
     if (!el) return;
-    el.classList.add("is-leaving");
-    const t = setTimeout(() => el.remove(), 550);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    // 差し込み時に非ブロッキング化したスタイルシート（server/clinic-splash.ts）が届いてから外す（素の画面を見せない）
+    // 読み込み失敗（広告ブロック等）でも必ず抜けるよう、上限時間を設ける
+    const pending = Array.from(document.querySelectorAll<HTMLLinkElement>("link[data-splash-css]")).filter(l => !l.sheet);
+    const styles = Promise.all(pending.map(l => new Promise<void>(res => {
+      l.addEventListener("load", () => res(), { once: true });
+      l.addEventListener("error", () => res(), { once: true });
+    })));
+    Promise.race([styles, new Promise(res => setTimeout(res, 3000))]).then(() => {
+      if (cancelled) return;
+      el.classList.add("is-leaving");
+      document.getElementById("clinic-splash-bg")?.remove();
+      t = setTimeout(() => {
+        el.remove();
+        document.getElementById("clinic-splash-style")?.remove();
+        const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"][data-orig]');
+        if (meta) meta.content = meta.dataset.orig || meta.content;
+      }, 550);
+    });
+    return () => { cancelled = true; if (t) clearTimeout(t); };
   }, [sessionLoading, infoLoading]);
 
   if (sessionLoading || infoLoading) {
