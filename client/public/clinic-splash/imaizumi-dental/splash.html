@@ -1,0 +1,173 @@
+<!-- 医院専用の読み込み画面。医院サイトの booking.html（予約ページ準備画面）の最終状態と同じ見た目で、
+     予約ページの準備ができるまで覆う。server/clinic-splash.ts が /book/<slug> のHTMLに差し込み、
+     クライアント側（booking.tsx）が準備完了時にフェードアウトして取り除く。
+     医院サイト側の見た目を変えたら、ここも合わせること。 -->
+<style>
+@font-face{font-family:'IZ Shippori';font-weight:600;font-display:block;src:url(/clinic-splash/imaizumi-dental/shippori-600.woff2) format('woff2')}
+@font-face{font-family:'IZ Shippori';font-weight:500;font-display:block;src:url(/clinic-splash/imaizumi-dental/shippori-500.woff2) format('woff2')}
+@font-face{font-family:'IZ Cormorant';font-weight:600;font-display:block;src:url(/clinic-splash/imaizumi-dental/cormorant-600.woff2) format('woff2')}
+#clinic-splash{position:fixed;inset:0;z-index:2147483000;overflow:hidden;min-height:560px;transition:opacity .5s ease;
+  font-family:'IZ Shippori','Shippori Mincho','Hiragino Mincho ProN',serif;
+  background:radial-gradient(120% 55% at 50% 42%,rgba(255,255,255,.95) 0%,rgba(255,255,255,0) 60%),linear-gradient(180deg,#e7eef7 0%,#f3f7fb 30%,#f6f9fc 55%,#e3ecf6 82%,#d8e4f1 100%)}
+#clinic-splash.is-leaving{opacity:0;pointer-events:none}
+@keyframes twinkle{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes bkGlow{0%,100%{filter:drop-shadow(0 2px 5px rgba(93,140,183,.10))}50%{filter:drop-shadow(0 9px 18px rgba(93,140,183,.22))}}
+@keyframes bkSheen{0%{transform:translateX(-90px)}100%{transform:translateX(300px)}}
+@keyframes bkBloom{0%,100%{opacity:.45;transform:scale(1)}50%{opacity:.8;transform:scale(1.09)}}
+@keyframes bkBreath{0%,100%{opacity:.3;transform:scale(.78)}50%{opacity:1;transform:scale(1)}}
+@keyframes bkDriftA{0%,100%{transform:translateX(0)}50%{transform:translateX(-7px)}}
+@keyframes bkDriftB{0%,100%{transform:translateX(0)}50%{transform:translateX(7px)}}
+/* 遅延は医院サイト側と同じにしておく（下のスクリプトで経過時間を合わせると、続きから動く） */
+#clinic-splash .bkWaveA{animation:bkDriftA 14s ease-in-out 1s infinite}
+#clinic-splash .bkWaveB{animation:bkDriftB 16s ease-in-out 1s infinite}
+#clinic-splash .bkLogo{animation:bkGlow 6s ease-in-out 1.7s infinite}
+#clinic-splash .bkSheen{animation:bkSheen 2.6s ease-in-out 2s infinite}
+#clinic-splash .bkStar{animation:twinkle 4.5s ease-in-out 2.3s infinite}
+#clinic-splash .bkBloom{position:absolute;top:38.5%;left:50%;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.9) 0%,rgba(198,220,238,.32) 42%,rgba(255,255,255,0) 70%);animation:bkBloom 6.5s ease-in-out 1.6s infinite}
+#clinic-splash .bkDot{display:block;width:7px;height:7px;border-radius:50%;animation:bkBreath 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){#clinic-splash *{animation:none!important}}
+</style>
+<div id="clinic-splash" aria-hidden="true"><!-- ======== 上部ウェーブ ======== -->
+  <svg class="bkWaveA" viewBox="0 0 430 280" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:30.5%;display:block;pointer-events:none;" aria-hidden="true">
+    <defs>
+      <linearGradient id="tw-gold" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#d9bc7f" stop-opacity="0"></stop>
+        <stop offset="0.4" stop-color="#c9a55e" stop-opacity="0.75"></stop>
+        <stop offset="1" stop-color="#e5cf9b" stop-opacity="0"></stop>
+      </linearGradient>
+      <filter id="tw-soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"></feGaussianBlur></filter>
+      <filter id="tw-soft2" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="12"></feGaussianBlur></filter>
+      <filter id="tw-crisp" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.6"></feGaussianBlur></filter>
+    </defs>
+    <path d="M-20,-30 L-20,85 C60,120 150,142 250,105 C330,76 390,55 450,60 L450,-30 Z" fill="#ccdbec" opacity="0.9" filter="url(#tw-soft2)"></path>
+    <path d="M-20,-30 L-20,60 C60,95 150,120 250,85 C330,58 390,40 450,45 L450,-30 Z" fill="#dce7f3" opacity="0.95" filter="url(#tw-soft)"></path>
+    <path d="M-20,-40 L-20,45 C70,80 160,100 255,68 C335,42 395,28 450,32 L450,-40 Z" fill="#ffffff" opacity="0.95" filter="url(#tw-soft)"></path>
+    <path d="M-20,55 C70,92 165,112 260,80 C340,53 400,38 450,42" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.95" filter="url(#tw-crisp)"></path>
+    <path d="M-20,82 C65,116 160,138 255,103 C335,75 395,56 450,60" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.7" filter="url(#tw-crisp)"></path>
+    <path d="M-20,120 C40,165 110,185 195,168 C160,205 90,225 -20,205 Z" fill="#ffffff" opacity="0.5" filter="url(#tw-soft)"></path>
+    <path d="M-20,125 C45,168 115,186 200,167" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.55" filter="url(#tw-crisp)"></path>
+    <path d="M450,95 C400,150 370,220 355,300 L450,300 Z" fill="#ffffff" opacity="0.4" filter="url(#tw-soft2)"></path>
+    <path d="M52,-6 C80,28 108,46 168,52" fill="none" stroke="url(#tw-gold)" stroke-width="1.1" opacity="0.8" filter="url(#tw-crisp)"></path>
+    <path d="M60,-8 C88,26 118,42 175,47" fill="none" stroke="#8fb6d9" stroke-width="0.8" opacity="0.5" filter="url(#tw-crisp)"></path>
+  </svg>
+
+  <!-- ======== 下部ウェーブ ======== -->
+  <svg class="bkWaveB" viewBox="0 0 430 300" preserveAspectRatio="none" style="position:absolute;bottom:0;left:0;width:100%;height:32.5%;display:block;pointer-events:none;" aria-hidden="true">
+    <defs>
+      <linearGradient id="bw-gold" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#caa55c" stop-opacity="0.55"></stop>
+        <stop offset="0.35" stop-color="#c39a4e" stop-opacity="0.95"></stop>
+        <stop offset="0.75" stop-color="#dcbf85" stop-opacity="0.95"></stop>
+        <stop offset="1" stop-color="#caa55c" stop-opacity="0.8"></stop>
+      </linearGradient>
+      <filter id="bw-soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8"></feGaussianBlur></filter>
+      <filter id="bw-soft2" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14"></feGaussianBlur></filter>
+      <filter id="bw-crisp" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="0.6"></feGaussianBlur></filter>
+    </defs>
+    <path d="M-20,150 C70,165 140,250 225,246 C300,242 335,170 390,180 C412,184 424,240 435,290 L435,310 L-20,310 Z" fill="#d3e1f0" opacity="0.85" filter="url(#bw-soft2)"></path>
+    <path d="M-20,175 C60,190 135,265 230,258 C310,252 350,195 435,215 L435,310 L-20,310 Z" fill="#c9daec" opacity="0.8" filter="url(#bw-soft)"></path>
+    <path d="M-20,110 C80,120 150,205 240,204 C320,203 350,135 435,140 L435,175 C350,168 315,235 228,240 C140,244 65,158 -20,148 Z" fill="#ffffff" opacity="0.75" filter="url(#bw-soft)"></path>
+    <path d="M-20,108 C80,118 152,202 242,201 C322,200 355,132 435,138" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.9" filter="url(#bw-crisp)"></path>
+    <path d="M-20,255 C90,268 190,290 300,272 C355,263 400,258 435,262" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.6" filter="url(#bw-crisp)"></path>
+    <path d="M-20,146 C70,160 140,246 225,242 C300,238 330,168 385,178 C408,182 420,235 432,285" fill="none" stroke="url(#bw-gold)" stroke-width="1.6" filter="url(#bw-crisp)"></path>
+  </svg>
+
+  <!-- ======== きらめき ======== -->
+  <div  style="position:absolute;inset:0;pointer-events:none;">
+    <div style="position:absolute;left:82.9%;top:4.1%;width:14px;height:14px;border-radius:50%;background:#ffffff;box-shadow:0 0 14px 5px rgba(255,255,255,0.85);filter:blur(0.5px);animation:twinkle 4.5s ease-in-out infinite;"></div>
+    <div style="position:absolute;left:70.3%;top:3.4%;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.7);box-shadow:0 0 6px 2px rgba(255,255,255,0.5);filter:blur(0.5px);"></div>
+    <div style="position:absolute;left:76.4%;top:5.7%;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.6);box-shadow:0 0 5px 2px rgba(255,255,255,0.4);filter:blur(0.5px);"></div>
+    <div style="position:absolute;left:65.2%;top:6.6%;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.55);box-shadow:0 0 4px 1px rgba(255,255,255,0.4);filter:blur(0.5px);"></div>
+    <div style="position:absolute;left:17.6%;top:2.2%;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.5);filter:blur(1px);"></div>
+    <div style="position:absolute;left:21.1%;top:9.7%;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.65);box-shadow:0 0 6px 2px rgba(255,255,255,0.45);filter:blur(0.5px);animation:twinkle 5.5s ease-in-out 1s infinite;"></div>
+    <div style="position:absolute;left:68%;top:9.9%;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.4);filter:blur(1px);"></div>
+    <div style="position:absolute;left:4.3%;top:8.1%;width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.45);filter:blur(0.5px);"></div>
+    <div style="position:absolute;left:14.4%;top:26.3%;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.35);filter:blur(1px);"></div>
+    <div style="position:absolute;left:7.7%;top:48%;width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.4);filter:blur(0.5px);"></div>
+    <div style="position:absolute;left:10.3%;top:64.8%;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.75);box-shadow:0 0 7px 2px rgba(255,255,255,0.5);filter:blur(0.5px);animation:twinkle 6s ease-in-out 2s infinite;"></div>
+    <div style="position:absolute;left:14.1%;top:60.7%;width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.35);filter:blur(1px);"></div>
+    <div style="position:absolute;left:88.9%;top:56.9%;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.35);filter:blur(1px);"></div>
+    <div style="position:absolute;left:93.8%;top:65.6%;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.55);filter:blur(0.5px);"></div>
+    <div style="position:absolute;left:63.9%;top:82.5%;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.85);box-shadow:0 0 8px 3px rgba(255,255,255,0.6);filter:blur(0.5px);animation:twinkle 5s ease-in-out 0.5s infinite;"></div>
+    <div style="position:absolute;left:55.7%;top:86.2%;width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.35);filter:blur(2px);"></div>
+    <div style="position:absolute;left:95.2%;top:86%;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.55);filter:blur(1px);"></div>
+    <div style="position:absolute;left:7%;top:91.1%;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.4);filter:blur(2px);"></div>
+    <div style="position:absolute;left:16.1%;top:96.5%;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.7);box-shadow:0 0 6px 2px rgba(255,255,255,0.5);filter:blur(0.5px);animation:twinkle 4s ease-in-out 1.5s infinite;"></div>
+    <div style="position:absolute;left:81.4%;top:97.6%;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.4);filter:blur(1px);"></div>
+  </div>
+
+  <!-- ======== ロゴ ======== -->
+  <div class="bkBloom" aria-hidden="true"></div>
+
+  <svg class="bkLogo" viewBox="0 0 290 249" role="img" aria-label="今泉歯科医院 ロゴ" style="position:absolute;top:29.9%;left:50%;width:145px;height:124.5px;transform:translateX(-50%);display:block;">
+    <defs>
+      <linearGradient id="lg-gold" gradientUnits="userSpaceOnUse" x1="135.2" y1="247.5" x2="61.2" y2="112.0"><stop offset="0" stop-color="#c4a467"></stop><stop offset="1" stop-color="#c5a468"></stop></linearGradient>
+      <linearGradient id="lg-blue" gradientUnits="userSpaceOnUse" x1="2.1" y1="17.3" x2="30.0" y2="245.4"><stop offset="0" stop-color="#5d8cb7"></stop><stop offset="1" stop-color="#5f8eb8"></stop></linearGradient>
+      <linearGradient id="lg-sheen" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0"></stop>
+        <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.75"></stop>
+        <stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop>
+      </linearGradient>
+      <clipPath id="lg-clip" clipPathUnits="userSpaceOnUse">
+        <path d="M184.1 3.0L188.0 2.5L198.0 2.6L208.0 4.7L214.0 7.5L219.0 10.5L224.2 15.0L229.2 21.0L232.4 26.0L235.3 33.0L238.4 44.0L239.5 53.0L239.6 61.0L239.2 69.0L238.0 79.4L237.0 79.9L231.0 78.2L230.2 77.0L230.3 54.0L229.4 48.0L227.2 39.0L225.4 34.0L222.1 28.0L218.0 22.6L213.0 18.0L206.0 14.0L200.9 12.0L191.0 10.2L186.0 10.2L179.0 10.9L168.0 13.9L156.4 19.0L150.0 22.8L148.7 23.0L148.1 22.0L151.0 19.2L158.0 13.8L163.0 10.6L173.0 5.8L180.0 3.6ZM61.3 4.0L68.0 3.3L76.0 3.5L86.0 5.7L97.0 10.5L121.0 24.3L132.0 28.4L137.0 29.5L147.0 30.1L155.0 29.2L161.0 27.5L162.0 27.5L162.4 28.0L161.8 29.0L160.0 30.2L155.0 32.5L151.0 33.6L142.0 34.6L131.0 33.6L124.0 31.4L117.0 28.5L94.9 16.0L86.0 12.0L76.7 10.0L72.0 9.9L64.0 10.9L61.0 11.8L56.0 13.9L51.0 16.9L43.7 24.0L38.5 32.0L35.9 38.0L33.7 45.0L31.7 58.0L31.7 71.0L33.8 88.0L35.6 97.0L41.8 121.0L50.7 151.0L64.3 192.0L68.4 206.0L68.0 207.8L67.0 206.9L65.6 204.0L58.1 183.0L43.7 146.0L33.5 117.0L26.5 93.0L23.5 77.0L22.5 68.0L22.5 57.0L23.5 48.0L25.4 39.0L27.5 33.0L30.5 27.0L36.7 18.0L45.0 10.7L55.0 5.7ZM199.6 175.0L200.0 174.4L201.0 174.5L202.5 176.0L202.4 177.0L200.5 181.0L189.4 198.0L188.0 199.6L187.0 200.1L186.0 199.7L185.4 199.0L185.6 198.0L193.0 186.6ZM126.1 187.0L131.0 186.3L137.0 186.5L144.0 187.4L155.0 190.3L169.0 196.6L188.0 207.2L195.0 210.6L197.0 212.4L198.0 212.4L201.0 214.4L203.0 214.7L208.0 217.1L215.0 219.1L220.0 220.0L227.0 220.0L227.6 221.0L226.0 222.4L223.0 223.4L217.0 224.4L210.0 224.4L200.0 222.4L189.0 218.0L161.0 202.6L151.0 197.7L141.0 194.6L132.0 193.8L124.0 194.4L115.0 197.4L108.0 200.8L82.0 216.1L70.0 221.2L63.0 223.3L57.0 224.3L46.0 224.4L41.0 223.4L38.6 222.0L39.0 220.9L46.0 220.8L53.0 220.2L65.0 216.1L80.7 208.0L96.0 198.4L107.0 192.7L118.0 188.5ZM170.2 216.0L171.0 215.3L172.0 215.1L174.0 216.4L174.4 217.0L174.0 217.8L164.0 226.4L152.0 234.2L144.0 238.3L136.0 241.4L121.0 245.3L113.0 245.8L99.0 245.3L94.0 244.3L91.5 243.0L92.0 242.0L93.0 241.9L102.0 243.1L111.0 242.9L123.6 241.0L134.0 238.0L145.0 233.2L154.3 228.0L160.3 224.0Z" clip-rule="evenodd"></path>
+        <path d="M270.6 30.0L271.0 29.2L272.0 30.0L273.0 36.6L274.0 39.3L275.9 42.0L278.0 43.3L281.0 44.3L285.7 45.0L286.3 46.0L285.0 46.7L279.0 47.9L275.5 50.0L274.0 52.1L272.8 55.0L272.1 61.0L271.0 62.2L269.6 54.0L267.3 50.0L264.0 47.9L256.9 46.0L258.0 44.9L262.0 44.4L265.0 43.2L267.6 41.0L269.4 38.0ZM110.3 68.0L111.0 67.4L112.0 67.3L141.0 67.1L148.0 67.3L148.9 68.0L149.1 69.0L148.0 70.1L141.3 71.0L138.0 72.4L136.3 75.0L135.4 80.0L135.6 160.0L136.4 163.0L137.9 165.0L143.0 167.0L148.0 167.3L149.2 169.0L148.0 170.3L112.0 170.4L110.6 170.0L110.1 169.0L111.0 167.4L115.0 167.1L119.0 166.0L122.0 163.7L123.3 159.0L123.5 150.0L123.3 77.0L122.2 74.0L120.2 72.0L116.0 70.7L111.0 70.2L110.1 69.0ZM217.4 84.0L226.0 84.0L231.0 84.9L237.0 87.0L242.0 89.7L246.0 92.8L249.3 96.0L252.4 100.0L257.7 109.0L261.4 121.0L262.4 126.0L262.8 132.0L262.2 145.0L259.6 157.0L255.5 168.0L248.5 180.0L241.2 189.0L237.4 193.0L229.0 200.4L222.0 205.3L211.0 211.3L203.0 214.5L201.0 214.5L198.0 212.6L197.0 212.5L195.4 211.0L195.2 210.0L207.0 204.3L216.8 198.0L222.0 194.2L228.6 188.0L236.1 180.0L241.1 173.0L246.3 164.0L249.1 157.0L251.3 150.0L253.3 141.0L253.5 126.0L252.3 119.0L250.4 112.0L248.2 107.0L243.2 99.0L238.0 94.7L236.0 93.6L235.4 94.0L229.2 116.0L221.4 138.0L215.4 152.0L203.0 175.7L202.0 175.5L200.5 174.0L200.7 173.0L212.3 147.0L219.4 127.0L225.5 106.0L228.2 91.0L227.0 90.1L219.0 89.7L210.0 90.9L199.0 94.8L190.7 99.0L180.2 106.0L172.0 112.7L161.3 123.0L147.0 138.6L143.0 143.5L141.8 143.0L147.6 134.0L155.8 124.0L166.0 113.1L180.0 100.7L190.0 93.8L198.0 89.7L208.0 86.0ZM15.8 180.0L19.0 179.4L24.0 179.3L28.0 179.5L32.0 180.3L43.0 184.3L49.0 187.5L50.2 189.0L49.0 189.7L42.0 186.8L37.0 185.4L26.0 184.1L22.0 184.6L18.0 185.9L15.0 187.6L12.9 190.0L11.5 194.0L11.5 198.0L12.5 202.0L14.0 204.9L17.0 209.0L23.0 214.0L28.2 217.0L34.0 219.1L34.6 220.0L34.4 221.0L34.0 221.8L33.0 222.4L26.0 220.3L17.0 216.1L12.0 212.3L8.6 209.0L6.4 206.0L4.4 202.0L3.3 198.0L3.3 193.0L5.4 187.0L6.8 185.0L10.0 182.2Z" clip-rule="evenodd"></path>
+      </clipPath>
+    </defs>
+    <!-- ① 線が描かれる（輪郭） -->
+    <!-- ② 色が入る（塗り） -->
+    <g>
+      <path d="M184.1 3.0L188.0 2.5L198.0 2.6L208.0 4.7L214.0 7.5L219.0 10.5L224.2 15.0L229.2 21.0L232.4 26.0L235.3 33.0L238.4 44.0L239.5 53.0L239.6 61.0L239.2 69.0L238.0 79.4L237.0 79.9L231.0 78.2L230.2 77.0L230.3 54.0L229.4 48.0L227.2 39.0L225.4 34.0L222.1 28.0L218.0 22.6L213.0 18.0L206.0 14.0L200.9 12.0L191.0 10.2L186.0 10.2L179.0 10.9L168.0 13.9L156.4 19.0L150.0 22.8L148.7 23.0L148.1 22.0L151.0 19.2L158.0 13.8L163.0 10.6L173.0 5.8L180.0 3.6ZM61.3 4.0L68.0 3.3L76.0 3.5L86.0 5.7L97.0 10.5L121.0 24.3L132.0 28.4L137.0 29.5L147.0 30.1L155.0 29.2L161.0 27.5L162.0 27.5L162.4 28.0L161.8 29.0L160.0 30.2L155.0 32.5L151.0 33.6L142.0 34.6L131.0 33.6L124.0 31.4L117.0 28.5L94.9 16.0L86.0 12.0L76.7 10.0L72.0 9.9L64.0 10.9L61.0 11.8L56.0 13.9L51.0 16.9L43.7 24.0L38.5 32.0L35.9 38.0L33.7 45.0L31.7 58.0L31.7 71.0L33.8 88.0L35.6 97.0L41.8 121.0L50.7 151.0L64.3 192.0L68.4 206.0L68.0 207.8L67.0 206.9L65.6 204.0L58.1 183.0L43.7 146.0L33.5 117.0L26.5 93.0L23.5 77.0L22.5 68.0L22.5 57.0L23.5 48.0L25.4 39.0L27.5 33.0L30.5 27.0L36.7 18.0L45.0 10.7L55.0 5.7ZM199.6 175.0L200.0 174.4L201.0 174.5L202.5 176.0L202.4 177.0L200.5 181.0L189.4 198.0L188.0 199.6L187.0 200.1L186.0 199.7L185.4 199.0L185.6 198.0L193.0 186.6ZM126.1 187.0L131.0 186.3L137.0 186.5L144.0 187.4L155.0 190.3L169.0 196.6L188.0 207.2L195.0 210.6L197.0 212.4L198.0 212.4L201.0 214.4L203.0 214.7L208.0 217.1L215.0 219.1L220.0 220.0L227.0 220.0L227.6 221.0L226.0 222.4L223.0 223.4L217.0 224.4L210.0 224.4L200.0 222.4L189.0 218.0L161.0 202.6L151.0 197.7L141.0 194.6L132.0 193.8L124.0 194.4L115.0 197.4L108.0 200.8L82.0 216.1L70.0 221.2L63.0 223.3L57.0 224.3L46.0 224.4L41.0 223.4L38.6 222.0L39.0 220.9L46.0 220.8L53.0 220.2L65.0 216.1L80.7 208.0L96.0 198.4L107.0 192.7L118.0 188.5ZM170.2 216.0L171.0 215.3L172.0 215.1L174.0 216.4L174.4 217.0L174.0 217.8L164.0 226.4L152.0 234.2L144.0 238.3L136.0 241.4L121.0 245.3L113.0 245.8L99.0 245.3L94.0 244.3L91.5 243.0L92.0 242.0L93.0 241.9L102.0 243.1L111.0 242.9L123.6 241.0L134.0 238.0L145.0 233.2L154.3 228.0L160.3 224.0Z" fill="url(#lg-blue)" fill-rule="evenodd"></path>
+      <path d="M270.6 30.0L271.0 29.2L272.0 30.0L273.0 36.6L274.0 39.3L275.9 42.0L278.0 43.3L281.0 44.3L285.7 45.0L286.3 46.0L285.0 46.7L279.0 47.9L275.5 50.0L274.0 52.1L272.8 55.0L272.1 61.0L271.0 62.2L269.6 54.0L267.3 50.0L264.0 47.9L256.9 46.0L258.0 44.9L262.0 44.4L265.0 43.2L267.6 41.0L269.4 38.0ZM110.3 68.0L111.0 67.4L112.0 67.3L141.0 67.1L148.0 67.3L148.9 68.0L149.1 69.0L148.0 70.1L141.3 71.0L138.0 72.4L136.3 75.0L135.4 80.0L135.6 160.0L136.4 163.0L137.9 165.0L143.0 167.0L148.0 167.3L149.2 169.0L148.0 170.3L112.0 170.4L110.6 170.0L110.1 169.0L111.0 167.4L115.0 167.1L119.0 166.0L122.0 163.7L123.3 159.0L123.5 150.0L123.3 77.0L122.2 74.0L120.2 72.0L116.0 70.7L111.0 70.2L110.1 69.0ZM217.4 84.0L226.0 84.0L231.0 84.9L237.0 87.0L242.0 89.7L246.0 92.8L249.3 96.0L252.4 100.0L257.7 109.0L261.4 121.0L262.4 126.0L262.8 132.0L262.2 145.0L259.6 157.0L255.5 168.0L248.5 180.0L241.2 189.0L237.4 193.0L229.0 200.4L222.0 205.3L211.0 211.3L203.0 214.5L201.0 214.5L198.0 212.6L197.0 212.5L195.4 211.0L195.2 210.0L207.0 204.3L216.8 198.0L222.0 194.2L228.6 188.0L236.1 180.0L241.1 173.0L246.3 164.0L249.1 157.0L251.3 150.0L253.3 141.0L253.5 126.0L252.3 119.0L250.4 112.0L248.2 107.0L243.2 99.0L238.0 94.7L236.0 93.6L235.4 94.0L229.2 116.0L221.4 138.0L215.4 152.0L203.0 175.7L202.0 175.5L200.5 174.0L200.7 173.0L212.3 147.0L219.4 127.0L225.5 106.0L228.2 91.0L227.0 90.1L219.0 89.7L210.0 90.9L199.0 94.8L190.7 99.0L180.2 106.0L172.0 112.7L161.3 123.0L147.0 138.6L143.0 143.5L141.8 143.0L147.6 134.0L155.8 124.0L166.0 113.1L180.0 100.7L190.0 93.8L198.0 89.7L208.0 86.0ZM15.8 180.0L19.0 179.4L24.0 179.3L28.0 179.5L32.0 180.3L43.0 184.3L49.0 187.5L50.2 189.0L49.0 189.7L42.0 186.8L37.0 185.4L26.0 184.1L22.0 184.6L18.0 185.9L15.0 187.6L12.9 190.0L11.5 194.0L11.5 198.0L12.5 202.0L14.0 204.9L17.0 209.0L23.0 214.0L28.2 217.0L34.0 219.1L34.6 220.0L34.4 221.0L34.0 221.8L33.0 222.4L26.0 220.3L17.0 216.1L12.0 212.3L8.6 209.0L6.4 206.0L4.4 202.0L3.3 198.0L3.3 193.0L5.4 187.0L6.8 185.0L10.0 182.2Z" fill="url(#lg-gold)" fill-rule="evenodd"></path>
+    </g>
+    <!-- ③ 金の光沢が走る（ロゴ形にクリップした光の帯） -->
+    <g clip-path="url(#lg-clip)">
+      <rect class="bkSheen" x="0" y="0" width="72" height="249" fill="url(#lg-sheen)"></rect>
+    </g>
+  </svg>
+
+  <div  style="position:absolute;top:44.9%;left:0;right:0;text-align:center;font-size:33px;font-weight:600;letter-spacing:0.42em;text-indent:0.42em;color:#4b7cad;line-height:1.2;">今泉歯科医院</div>
+
+  <div  style="position:absolute;top:49.9%;left:0;right:0;text-align:center;font-family:'IZ Cormorant','IZ Shippori',serif;font-size:13.5px;font-weight:600;letter-spacing:0.34em;text-indent:0.34em;word-spacing:0.5em;color:#bf9d5f;line-height:1;">IMAIZUMI DENTAL OFFICE</div>
+
+  <!-- 仕切り線 -->
+  <div  style="position:absolute;top:52.9%;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:10px;">
+    <div style="width:88px;height:1px;background:linear-gradient(90deg, rgba(196,167,110,0) 0%, rgba(196,167,110,0.75) 100%);"></div>
+    <svg class="bkStar" width="15" height="15" viewBox="0 0 16 16" style="display:block;" aria-hidden="true">
+      <path d="M8 0 C8.9 5.4 10.6 7.1 16 8 C10.6 8.9 8.9 10.6 8 16 C7.1 10.6 5.4 8.9 0 8 C5.4 7.1 7.1 5.4 8 0 Z" fill="#c8a45f"></path>
+    </svg>
+    <div style="width:88px;height:1px;background:linear-gradient(90deg, rgba(196,167,110,0.75) 0%, rgba(196,167,110,0) 100%);"></div>
+  </div>
+
+  <!-- ======== ローディング（点がゆっくり呼吸する） ======== -->
+  <div style="position:absolute;top:62.6%;left:50%;width:62px;height:62px;margin:-31px 0 0 -31px;">
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(0deg) translateY(-27.5px);"><span class="bkDot" style="background:#5c8abf;animation-delay:0.0s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(36deg) translateY(-27.5px);"><span class="bkDot" style="background:#a9c2de;animation-delay:0.1s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(72deg) translateY(-27.5px);"><span class="bkDot" style="background:#c79f5a;animation-delay:0.2s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(108deg) translateY(-27.5px);"><span class="bkDot" style="background:#b7cce4;animation-delay:0.3s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(144deg) translateY(-27.5px);"><span class="bkDot" style="background:#8fb2d5;animation-delay:0.4s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(180deg) translateY(-27.5px);"><span class="bkDot" style="background:#7fa7ce;animation-delay:0.5s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(216deg) translateY(-27.5px);"><span class="bkDot" style="background:#cfdcec;animation-delay:0.6s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(252deg) translateY(-27.5px);"><span class="bkDot" style="background:#e2eaf4;animation-delay:0.7s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(288deg) translateY(-27.5px);"><span class="bkDot" style="background:#d7e2ef;animation-delay:0.8s;"></span></div>
+    <div style="position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px;transform:rotate(324deg) translateY(-27.5px);"><span class="bkDot" style="background:#bccee3;animation-delay:0.9s;"></span></div>
+  </div>
+
+  <!-- ======== ステータス ======== -->
+  <div  style="position:absolute;top:67.4%;left:0;right:0;text-align:center;font-size:14px;font-weight:600;letter-spacing:0.1em;text-indent:0.1em;color:#4a7cae;">予約ページを準備しています</div>
+  <div  style="position:absolute;top:70.2%;left:0;right:0;text-align:center;font-size:11.5px;font-weight:500;letter-spacing:0.16em;text-indent:0.16em;color:#8b95a4;">しばらくお待ちください</div>
+</div>
+<script>
+(function () {
+  // 医院サイトから渡された経過時間（#izt=ミリ秒）で、アニメーションを続きの位置に合わせる
+  var m = /[#&]izt=(\d+)/.exec(location.hash);
+  if (!m) return;
+  try { history.replaceState(history.state, "", location.pathname + location.search); } catch (e) {}
+  var t = Number(m[1]);
+  // 医院サイトの画面は、こちらの応答が届くまで動き続けてから止まる。その分を足す
+  try { var nav = performance.getEntriesByType("navigation")[0]; if (nav && nav.responseStart > 0) t += nav.responseStart; } catch (e) {}
+  var root = document.getElementById("clinic-splash");
+  try {
+    root.getAnimations({ subtree: true }).forEach(function (a) { a.currentTime = t; });
+  } catch (e) {}
+})();
+</script>

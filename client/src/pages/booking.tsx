@@ -1461,6 +1461,16 @@ export default function BookingPage({ slug }: { slug?: string }) {
 
   const colors = computeClinicColors(info?.primaryColor);
 
+  // サーバーがHTMLに差し込んだ医院専用の読み込み画面（server/clinic-splash.ts）を、準備完了でフェードアウトする
+  useEffect(() => {
+    if (sessionLoading || infoLoading) return;
+    const el = document.getElementById("clinic-splash");
+    if (!el) return;
+    el.classList.add("is-leaving");
+    const t = setTimeout(() => el.remove(), 550);
+    return () => clearTimeout(t);
+  }, [sessionLoading, infoLoading]);
+
   if (sessionLoading || infoLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
