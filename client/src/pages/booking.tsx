@@ -1475,7 +1475,13 @@ export default function BookingPage({ slug }: { slug?: string }) {
       l.addEventListener("load", () => res(), { once: true });
       l.addEventListener("error", () => res(), { once: true });
     })));
-    Promise.race([styles, new Promise(res => setTimeout(res, 3000))]).then(() => {
+    // 登場アニメーションを最後まで見せる（data-min-ms は表示開始からの最低表示時間）
+    const shownAt = Number(el.dataset.shownAt) || 0;
+    const minWait = Math.max(0, (Number(el.dataset.minMs) || 0) - (performance.now() - shownAt));
+    Promise.all([
+      Promise.race([styles, new Promise(res => setTimeout(res, 3000))]),
+      new Promise(res => setTimeout(res, minWait)),
+    ]).then(() => {
       if (cancelled) return;
       el.classList.add("is-leaving");
       document.getElementById("clinic-splash-bg")?.remove();
