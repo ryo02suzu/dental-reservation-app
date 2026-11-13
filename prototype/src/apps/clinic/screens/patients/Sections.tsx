@@ -66,7 +66,8 @@ function TodayAction({ a, p, status }: { a: Appointment; p: Patient; status: Sta
   const { setStatus } = useStore();
   const toast = useToast();
   if (a.date !== TODAY_KEY) return null;
-  if (status === "late" || status === "confirmed") {
+  // 受付は、予約の30分前から（今日の画面と同じ）
+  if (status === "late" || (status === "confirmed" && a.start - minutesOfDay(now()) <= 30)) {
     return (
       <Button size="sm" icon={UserCheck} onClick={() => { setStatus(a.id, "arrived"); toast("受付しました", { icon: UserCheck, detail: `${p.name}さん・${hm(minutesOfDay(now()))} 来院` }); }}>
         受付する
@@ -122,7 +123,7 @@ function HeroRow({ a, p, now: nowD, onOpen, onCopyPhone }: { a: Appointment; p: 
           {late && <p className="mt-2 text-footnote font-medium text-red tnum">予約時刻（{hm(a.start)}）から{minutesOfDay(now) - a.start}分たっています</p>}
         </div>
       </motion.button>
-      {today && (status === "late" || status === "confirmed" || status === "arrived") && (
+      {today && (status === "late" || status === "arrived" || (status === "confirmed" && a.start - minutesOfDay(now) <= 30)) && (
         <div className="-mt-1.5 flex flex-wrap items-center gap-2 pb-3.5 pl-[78px] pr-4">
           <TodayAction a={a} p={p} status={status} />
           {late && <Button variant="tinted" size="sm" icon={Copy} onClick={onCopyPhone} aria-label={`電話番号をコピー（${p.phone}）`} className="tnum">{p.phone}</Button>}

@@ -97,9 +97,9 @@ function useNextStep(a: Appointment | undefined, nowD: Date): NextStep | null {
       const note = justDone ? `${p.name}さんを会計へご案内ください。` : undefined;
       if (nx) {
         return {
-          label: `次回 ${nx.date === TODAY_KEY ? "今日" : md(fromKey(nx.date))} ${hm(nx.start)} を確認`,
+          label: "次回の予約を確認",
           run: () => ui.openAppointment(nx.id),
-          note: `${note ?? ""}次回の予約はすでに入っています（${serviceById(nx.serviceId).short}）。`,
+          note: `${note ?? ""}次回の予約（${nx.date === TODAY_KEY ? "今日" : mdw(fromKey(nx.date))} ${hm(nx.start)}・${serviceById(nx.serviceId).short}）はすでに入っています。`,
           secondary: { label: "さらに予約を取る", run: book },
         };
       }

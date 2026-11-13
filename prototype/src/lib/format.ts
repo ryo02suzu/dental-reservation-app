@@ -85,7 +85,11 @@ export function matchesPatient(p: { name: string; kana: string; number: string; 
 
 /** 歯の記号 "LR6" → "右下6番"（患者さんから見た左右） */
 const QUAD_LABEL: Record<string, string> = { UR: "右上", UL: "左上", LR: "右下", LL: "左下" };
-export const toothLabel = (k: string) => `${QUAD_LABEL[k.slice(0, 2)] ?? ""}${k.slice(2)}番`;
+export const toothLabel = (k: string) => {
+  const n = k.slice(2);
+  // 乳歯（A〜E）は「右上E（乳歯）」、永久歯は「右上6番」
+  return /^[A-E]$/.test(n) ? `${QUAD_LABEL[k.slice(0, 2)] ?? ""}${n}（乳歯）` : `${QUAD_LABEL[k.slice(0, 2)] ?? ""}${n}番`;
+};
 
 /** 歯式の記号の読み方 */
 export const TOOTH_STATE_LABEL: Record<string, string> = {

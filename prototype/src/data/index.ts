@@ -623,7 +623,7 @@ export const initialMemos: Memo[] = (() => {
     });
   });
   // 古いメモから順に、歯式に反映する
-  for (const [p, teeth, st] of toothUpdates.reverse()) for (const t of teeth) p.teeth[t] = st;
+  for (const [p, teeth, st] of toothUpdates.reverse()) for (const t of teeth) (p.teeth as Record<string, ToothState>)[t] = st;
   // 気をつけたい患者には固定メモ
   out.push({ id: "m-pin-1", patientId: ANTICOAG_PATIENT.id, date: key(subDays(TODAY, 40)), at: 640, staffId: "s1", body: "ワーファリン服用中。観血処置の前に PT-INR を確認する（かかりつけ内科：桜新町内科）", pinned: true });
   out.push({ id: "m-pin-2", patientId: ALLERGY_PATIENT.id, date: key(subDays(TODAY, 120)), at: 600, staffId: "s3", body: "ラテックスアレルギー。ニトリルグローブ・ラバーダムはノンラテックスを使用", pinned: true });
