@@ -91,13 +91,13 @@ export const services: Service[] = [
   { id: "sv04", name: "根管治療", short: "根管", minutes: 45, insurance: true, category: "一般", by: "Dr", description: "神経の治療（数回の通院が必要です）" },
   { id: "sv05", name: "歯周病治療（SRP）", short: "SRP", minutes: 45, insurance: true, category: "歯周", by: "DH", description: "歯ぐきの奥の歯石を除去" },
   { id: "sv06", name: "抜歯", short: "抜歯", minutes: 30, insurance: true, category: "外科", by: "Dr", description: "親知らずの相談も承ります" },
-  { id: "sv07", name: "入れ歯の作製・調整", short: "義歯", minutes: 30, insurance: true, category: "補綴", by: "Dr", description: "痛い・合わない入れ歯の調整" },
-  { id: "sv08", name: "被せ物・詰め物", short: "補綴", minutes: 45, insurance: true, category: "補綴", by: "Dr", description: "型取り・セット" },
+  { id: "sv07", name: "入れ歯の作製・調整", short: "入れ歯", minutes: 30, insurance: true, category: "補綴", by: "Dr", description: "痛い・合わない入れ歯の調整" },
+  { id: "sv08", name: "被せ物・詰め物", short: "被せ物", minutes: 45, insurance: true, category: "補綴", by: "Dr", description: "型取り・セット" },
   { id: "sv09", name: "小児歯科", short: "小児", minutes: 30, insurance: true, category: "小児", by: "Dr", description: "フッ素塗布・シーラント" },
   { id: "sv10", name: "初診・カウンセリング", short: "初診", minutes: 60, insurance: true, category: "相談", by: "Dr", description: "お口全体の検査と治療方針のご説明" },
-  { id: "sv11", name: "ホワイトニング", short: "ホワイト", minutes: 60, insurance: false, price: 22000, category: "審美", by: "DH", description: "オフィスホワイトニング（1回）" },
-  { id: "sv12", name: "インプラント相談", short: "インプラ", minutes: 30, insurance: false, price: 0, category: "相談", by: "Dr", description: "無料相談・CT撮影のご案内" },
-  { id: "sv13", name: "矯正相談", short: "矯正", minutes: 30, insurance: false, price: 0, category: "相談", by: "Dr", description: "マウスピース矯正の無料相談" },
+  { id: "sv11", name: "ホワイトニング", short: "ホワイトニング", minutes: 60, insurance: false, price: 22000, category: "審美", by: "DH", description: "オフィスホワイトニング（1回）" },
+  { id: "sv12", name: "インプラント相談", short: "インプラント", minutes: 30, insurance: false, price: 0, category: "相談", by: "Dr", description: "無料相談・CT撮影のご案内" },
+  { id: "sv13", name: "矯正相談", short: "矯正相談", minutes: 30, insurance: false, price: 0, category: "相談", by: "Dr", description: "マウスピース矯正の無料相談" },
 ];
 
 // ─── 患者 ───────────────────────────────────────────────────────────────────
@@ -110,7 +110,43 @@ const FAMILY: [string, string][] = [
   ["村上", "ムラカミ"], ["近藤", "コンドウ"], ["坂本", "サカモト"], ["遠藤", "エンドウ"], ["青木", "アオキ"], ["藤井", "フジイ"],
   ["西村", "ニシムラ"], ["福田", "フクダ"], ["太田", "オオタ"], ["三浦", "ミウラ"], ["岡本", "オカモト"], ["松田", "マツダ"],
   ["中島", "ナカジマ"], ["原田", "ハラダ"], ["小川", "オガワ"], ["竹内", "タケウチ"], ["金子", "カネコ"], ["和田", "ワダ"],
+  ["中山", "ナカヤマ"], ["石井", "イシイ"], ["上田", "ウエダ"], ["森田", "モリタ"], ["原", "ハラ"], ["柴田", "シバタ"],
+  ["酒井", "サカイ"], ["工藤", "クドウ"], ["横山", "ヨコヤマ"], ["宮崎", "ミヤザキ"], ["宮本", "ミヤモト"], ["内田", "ウチダ"],
+  ["高木", "タカギ"], ["安藤", "アンドウ"], ["谷口", "タニグチ"], ["大野", "オオノ"], ["丸山", "マルヤマ"], ["今井", "イマイ"],
+  ["河野", "コウノ"], ["藤原", "フジワラ"], ["小島", "コジマ"], ["村田", "ムラタ"], ["武田", "タケダ"], ["上野", "ウエノ"],
+  ["杉山", "スギヤマ"], ["増田", "マスダ"], ["平野", "ヒラノ"], ["大塚", "オオツカ"], ["千葉", "チバ"], ["久保", "クボ"],
+  ["松井", "マツイ"], ["小野", "オノ"], ["岩崎", "イワサキ"], ["桜井", "サクライ"], ["野口", "ノグチ"], ["松尾", "マツオ"],
+  ["野村", "ノムラ"], ["木下", "キノシタ"], ["菊地", "キクチ"], ["佐野", "サノ"], ["大西", "オオニシ"], ["杉本", "スギモト"],
+  ["新井", "アライ"], ["浜田", "ハマダ"], ["菅原", "スガワラ"], ["市川", "イチカワ"], ["水野", "ミズノ"], ["小松", "コマツ"],
+  ["島田", "シマダ"], ["古川", "フルカワ"], ["小山", "コヤマ"], ["高野", "タカノ"], ["西田", "ニシダ"], ["菊池", "キクチ"],
+  ["山内", "ヤマウチ"], ["西川", "ニシカワ"], ["五十嵐", "イガラシ"], ["北村", "キタムラ"], ["安田", "ヤスダ"], ["中田", "ナカタ"],
 ];
+/** カタカナ → ローマ字（メールアドレスを名前から作るため） */
+const KANA_ROMAJI: Record<string, string> = {
+  ア: "a", イ: "i", ウ: "u", エ: "e", オ: "o", カ: "ka", キ: "ki", ク: "ku", ケ: "ke", コ: "ko", サ: "sa", シ: "shi", ス: "su", セ: "se", ソ: "so",
+  タ: "ta", チ: "chi", ツ: "tsu", テ: "te", ト: "to", ナ: "na", ニ: "ni", ヌ: "nu", ネ: "ne", ノ: "no", ハ: "ha", ヒ: "hi", フ: "fu", ヘ: "he", ホ: "ho",
+  マ: "ma", ミ: "mi", ム: "mu", メ: "me", モ: "mo", ヤ: "ya", ユ: "yu", ヨ: "yo", ラ: "ra", リ: "ri", ル: "ru", レ: "re", ロ: "ro", ワ: "wa", ヲ: "o", ン: "n",
+  ガ: "ga", ギ: "gi", グ: "gu", ゲ: "ge", ゴ: "go", ザ: "za", ジ: "ji", ズ: "zu", ゼ: "ze", ゾ: "zo", ダ: "da", ヂ: "ji", ヅ: "zu", デ: "de", ド: "do",
+  バ: "ba", ビ: "bi", ブ: "bu", ベ: "be", ボ: "bo", パ: "pa", ピ: "pi", プ: "pu", ペ: "pe", ポ: "po",
+};
+function romaji(kana: string): string {
+  let out = "";
+  for (let i = 0; i < kana.length; i++) {
+    const c = kana[i];
+    const next = kana[i + 1];
+    if (c === "ッ") { const r = KANA_ROMAJI[next] ?? ""; out += r.charAt(0); continue; }
+    if (c === "ー") continue;
+    if (next && "ャュョ".includes(next)) {
+      const base = KANA_ROMAJI[c] ?? "";
+      const y = { ャ: "a", ュ: "u", ョ: "o" }[next as "ャ" | "ュ" | "ョ"];
+      out += base.startsWith("sh") || base.startsWith("ch") || base.startsWith("j") ? base.slice(0, -1) + y : base.slice(0, -1) + "y" + y;
+      i++;
+      continue;
+    }
+    out += KANA_ROMAJI[c] ?? "";
+  }
+  return out.replace(/ou/g, "o").replace(/uu/g, "u");
+}
 /** 名前は年代に合わせる（若い人に昭和の名前が付かないように） */
 type Bracket = "young" | "mid" | "old";
 const NAMES: Record<"女性" | "男性", Record<Bracket, [string, string][]>> = {
@@ -157,6 +193,12 @@ function makeTeeth(ageYears: number): Patient["teeth"] {
     const num = int(1, 8) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
     let st = pick(pool);
     if (ageYears > 65 && chance(0.3)) st = "M";
+    if (st === "Br") {
+      // ブリッジは「支台・抜けた歯・支台」の3本続き
+      const mid = Math.min(7, Math.max(2, num));
+      for (const n of [mid - 1, mid, mid + 1]) t[`${q}${n as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`] = "Br";
+      continue;
+    }
     t[`${q}${num}`] = st;
   }
   return t;
@@ -197,7 +239,7 @@ export const patients: Patient[] = Array.from({ length: 800 }, (_, i) => {
     sex,
     birth,
     phone: `090-0${int(100, 999)}-${int(1000, 9999)}`,
-    email: chance(0.6) ? `user${i + 11}@example.jp` : undefined,
+    email: chance(0.6) ? `${romaji(kana.split(" ")[1])}.${romaji(kana.split(" ")[0])}${pick(["", "", String(int(1, 99)).padStart(2, "0")])}@${pick(["example.jp", "example.ne.jp", "example.com"])}` : undefined,
     insurance: insuranceFor(ageYears),
     firstVisit,
     lastVisit,
@@ -221,6 +263,7 @@ export const ME: Patient = (() => {
   Object.assign(p, {
     name: "田中 美咲",
     kana: "タナカ ミサキ",
+    email: "misaki.tanaka@example.jp",
     sex: "女性",
     birth: subMonths(TODAY, 34 * 12 + 4),
     insurance: "社保本人",
@@ -317,6 +360,7 @@ function buildAppointments(): Appointment[] {
   let past = 0;
   let future = 0;
   const perPatient = new Map<string, number>();
+  const lastCheckup = new Map<string, number>();
   const nowMin = minutesOfDay(now());
   for (let off = FIRST_OFF; off <= 35; off++) {
     const day = addDays(TODAY, off);
@@ -342,8 +386,9 @@ function buildAppointments(): Appointment[] {
           let p: Patient;
           if (sv === FIRST) p = off > 0 ? NEW_FUTURE[future++] : NEW_PAST[past++];
           else {
-            // 予約が少ない人を優先して選ぶ（同じ人が毎週来るような偏りを防ぐ）
-            const cands = BOOKABLE.filter(q => !booked.has(q.id) && suits(q, sv));
+            // 予約が少ない人を優先して選ぶ（同じ人が毎週来るような偏りを防ぐ）。定期検診は前回から60日以上あける
+            const checkup = sv.id === "sv01" || sv.id === "sv02";
+            const cands = BOOKABLE.filter(q => !booked.has(q.id) && suits(q, sv) && (!checkup || Math.abs(off - (lastCheckup.get(q.id) ?? -999)) >= 60));
             const pool2 = cands.length ? cands : BOOKABLE;
             p = pool2[Math.floor(R() * pool2.length)];
             for (let k = 0; k < 2; k++) {
@@ -352,6 +397,7 @@ function buildAppointments(): Appointment[] {
             }
           }
           perPatient.set(p.id, (perPatient.get(p.id) ?? 0) + 1);
+          if (sv.id === "sv01" || sv.id === "sv02") lastCheckup.set(p.id, off);
           booked.add(p.id);
           const source: ApptSource = sv === FIRST ? pick(["web", "web", "phone"] as const) : off > 0 ? pick(SOURCE.filter(s => s !== "walkin")) : pick(SOURCE);
           let status: Appointment["status"] = "confirmed";
@@ -414,11 +460,23 @@ function buildAppointments(): Appointment[] {
   const t0 = today();
   const upcoming = t0.filter(a => a.start > nowMin);
   // 予約時刻を過ぎても来ていない患者さん（ユニット2）
-  const late = t0.find(a => a.unitId === "u2" && a.start < nowMin && a.start >= nowMin - 25 && a.status !== "completed")
-    ?? t0.find(a => a.unitId === "u2" && a.start >= nowMin - 40 && a.start < nowMin);
+  const UNIT_ORDER = ["u2", "u1", "u4", "u3"];
+  let late = t0
+    .filter(a => a.start <= nowMin - 8 && a.start >= nowMin - 45 && a.status !== "completed" && !a.firstVisit)
+    .sort((x, y) => UNIT_ORDER.indexOf(x.unitId) - UNIT_ORDER.indexOf(y.unitId) || y.start - x.start)[0];
+  if (!late) {
+    // 該当する枠がない日は、ユニット2の次の予約を「12分前に始まる予定だった」ことにする
+    const next = t0.find(a => a.unitId === "u2" && a.start > nowMin && !a.firstVisit);
+    const prevEnd = Math.max(0, ...t0.filter(a => a.unitId === "u2" && a.start < nowMin).map(a => a.end));
+    if (next && prevEnd <= nowMin - 12) {
+      const len = next.end - next.start;
+      Object.assign(next, { start: nowMin - 12 - ((nowMin - 12) % 5), end: nowMin - 12 - ((nowMin - 12) % 5) + len });
+      late = next;
+    }
+  }
   if (late) {
     assign(late, LATE_PATIENT);
-    Object.assign(late, { status: "confirmed", arrivedAt: undefined, startedAt: undefined, note: undefined });
+    Object.assign(late, { status: "confirmed", arrivedAt: undefined, startedAt: undefined, note: undefined, source: late.source === "walkin" ? "phone" : late.source });
   }
   // 早めに来て待合にいる患者さん
   const early = upcoming.find(a => a.unitId === "u4") ?? upcoming[0];
@@ -451,6 +509,8 @@ function buildAppointments(): Appointment[] {
   const lx = upcoming.find(a => a.unitId === "u3" && a.status === "confirmed" && !a.firstVisit);
   if (lx) assign(lx, ALLERGY_PATIENT);
 
+  // 飛び込み（予約なしの来院）は、来院済み・診療中・完了のものだけにする
+  for (const a of today()) if (a.source === "walkin" && (a.status === "confirmed" || a.status === "pending" || a.status === "no_show" || a.status === "cancelled")) a.source = "phone";
   // 入れ替えた患者さんの年齢にメニューが合わなければ、同じ職種の一般的なメニューにする
   for (const a of [late, fv, ex, lx]) {
     if (!a) continue;
@@ -490,6 +550,9 @@ function buildAppointments(): Appointment[] {
       p.lastVisit = subDays(WINDOW_START, int(1, 160));
     }
     if (p.lastVisit && p.firstVisit > p.lastVisit) p.firstVisit = subDays(p.lastVisit, int(40, 900));
+    // 来院回数は、初診からの月数に見合う数まで（月に1回強が上限）
+    const months = Math.max(1, differenceInCalendarDays(TODAY, p.firstVisit) / 30);
+    p.visits = Math.max(done.length + 1, Math.min(p.visits, Math.round(months * 1.2)));
     p.nextRecall = p.lastVisit ? addMonths(p.lastVisit, p.recallMonths) : undefined;
     p.cancellations = Math.max(p.cancellations, mine.filter(a => a.status === "cancelled").length);
     p.noShows = Math.max(p.noShows, mine.filter(a => a.status === "no_show").length);
@@ -527,8 +590,10 @@ export function visitsOf(p: Patient): VisitRecord[] {
     const [note, serviceId] = pool[Math.floor(r() * pool.length)];
     const by = services.find(s => s.id === serviceId)!.by;
     const staffId = by === "Dr" ? (r() < 0.6 ? "s1" : "s2") : r() < 0.5 ? "s3" : "s4";
-    out.push({ date: d, serviceId, staffId, note });
-    d = subDays(d, 30 + Math.floor(r() * 70));
+    const day = new Date(d);
+    while (!hoursFor(day)) day.setDate(day.getDate() - 1); // 休診日なら前の診療日に
+    out.push({ date: day, serviceId, staffId, note });
+    d = subDays(day, 30 + Math.floor(r() * 70));
   }
   return out;
 }
@@ -539,12 +604,15 @@ type MemoLine = { body: string; teeth?: ToothKey[]; next?: string; state?: Tooth
 const MEMO_LINES: Record<string, MemoLine[]> = {
   sv01: [
     { body: "歯石除去・TBI。PCR 28%。右下の歯間部に磨き残し", next: "3か月後に定期検診" },
+    { body: "定期検診。歯ぐきの出血は前回より減少。PCR 28%", next: "3か月後に定期検診" },
+    { body: "歯石除去。歯間ブラシの使い方を再指導（サイズ S）", next: "3か月後に定期検診" },
     { body: "定期検診。新しいむし歯なし。歯ぐきの状態も良好", next: "3か月後に定期検診" },
     { body: "歯石除去。左上6番の歯ぐきに軽い腫れ。経過観察", teeth: ["UL6"], next: "1か月後に歯ぐきの再チェック", state: "観察" },
   ],
   sv02: [
     { body: "PMTC・フッ素塗布。コーヒーの着色が多め", next: "2か月後にPMTC" },
     { body: "PMTC。前回より着色は減少。歯間ブラシ SSS を案内" },
+    { body: "PMTC・フッ素塗布。知覚過敏用の歯みがき粉を案内" },
   ],
   sv03: [
     { body: "右下6番 CR充填。しみる症状は消失", teeth: ["LR6"], next: "左下5番 CR・30分", state: "CR" },
@@ -584,6 +652,19 @@ const MEMO_LINES: Record<string, MemoLine[]> = {
   sv13: [{ body: "マウスピース矯正の相談。口腔内スキャンと費用を説明" }],
 };
 
+/** メモの数字や部位を少しずつ変える（PCR・ポケットの深さ・部位・間隔） */
+function vary(text: string, r: () => number): string {
+  const pickR = <T,>(a: readonly T[]) => a[Math.floor(r() * a.length)];
+  return text
+    .replace(/PCR \d+%/, () => `PCR ${12 + Math.floor(r() * 34)}%`)
+    .replace(/4〜5mm/, () => pickR(["4〜5mm", "4mm", "5〜6mm", "3〜4mm"]))
+    .replace(/右下の歯間部/, () => pickR(["右下の歯間部", "左下の歯間部", "上の前歯の裏側", "奥歯の歯ぐき側"]))
+    .replace(/コーヒーの着色/, () => pickR(["コーヒーの着色", "お茶の着色", "たばこのヤニ", "赤ワインの着色"]))
+    .replace(/2か所/, () => pickR(["2か所", "1か所", "3か所"]))
+    .replace(/3か月後/, () => pickR(["3か月後", "3か月後", "4か月後"]))
+    .replace(/2週間後/, () => pickR(["2週間後", "10日後", "3週間後"]));
+}
+
 /** 15歳未満の患者さんのメモ（永久歯の6番・7番だけを扱う） */
 const MEMO_LINES_CHILD: Record<string, MemoLine[]> = {
   sv01: [{ body: "定期検診。フッ素塗布。仕上げ磨きのコツを保護者に説明", next: "3か月後に定期検診" }],
@@ -608,8 +689,11 @@ export const initialMemos: Memo[] = (() => {
     const p = patientById(a.patientId);
     const child = ageOf(p) < 15;
     const pool = (child ? MEMO_LINES_CHILD[a.serviceId] ?? MEMO_LINES_CHILD.sv01 : MEMO_LINES[a.serviceId]) ?? MEMO_LINES.sv01;
-    const line = pool[Math.floor(r() * pool.length)];
+    const base = pool[Math.floor(r() * pool.length)];
+    const line = { ...base, body: vary(base.body, r), next: base.next && vary(base.next, r) };
     if (line.state && line.teeth) toothUpdates.push([p, line.teeth, line.state]);
+    // 欠損（M）の歯に処置のメモが付かないよう、メモに出てくる歯の欠損は消しておく
+    if (!line.state && line.teeth) for (const t of line.teeth) if ((p.teeth as Record<string, ToothState>)[t] === "M") delete (p.teeth as Record<string, ToothState>)[t];
     out.push({
       id: `m${String(i + 1).padStart(4, "0")}`,
       patientId: a.patientId,
@@ -803,9 +887,13 @@ export const notices: Notice[] = (() => {
     const prev = fromKey(changed.date);
     do prev.setDate(prev.getDate() - 1); while (!hoursFor(prev));
     const prevStart = changed.start >= 960 ? changed.start - 90 : changed.start + 60;
-    list.push({ id: "n4", at: at(95), kind: "change", title: "予約が変更されました", body: `${nameOf(changed)}さん・${mdw(prev)} ${hm(prevStart)} → ${when(changed)}`, read: true, apptId: changed.id });
+    list.push({ id: "n4", at: at(95), kind: "change", title: "予約が変更されました", body: `${nameOf(changed)}さん・${dayLabel(key(prev))} ${hm(prevStart)} → ${when(changed)}`, read: true, apptId: changed.id });
   }
-  list.push({ id: "n5", at: at(162), kind: "remind", title: "本日のリマインドを送りました", body: `${todays.length}件（LINE ${ch.LINE}件・メール ${ch["メール"]}件・SMS ${ch.SMS}件）`, read: true });
+  {
+    // 前日の18:00に、今日の予約のリマインドを送った
+    const sent = new Date(TODAY.getTime() - 6 * 3_600_000);
+    list.push({ id: "n5", at: sent, kind: "remind", title: "本日の予約のリマインドを送りました", body: `${todays.length}件（LINE ${ch.LINE}件・メール ${ch["メール"]}件・SMS ${ch.SMS}件）`, read: true });
+  }
   list.push({ id: "n6", at: at(330), kind: "review", title: "新しい口コミが届きました", body: "★★★★★「説明が丁寧で、安心して治療を受けられました」", read: true });
   if (newWeb) list.push({ id: "n7", at: at(1500), kind: "web", title: "Web予約が入りました", body: `${nameOf(newWeb)}さん・${when(newWeb)} ${svc(newWeb)}`, read: true, apptId: newWeb.id });
   if (firstNext) list.push({ id: "n8", at: at(1720), kind: "web", title: "初診のWeb予約が入りました", body: `${nameOf(firstNext)}さん・${when(firstNext)} 初診・カウンセリング（問診票 回答済み）`, read: true, apptId: firstNext.id });
@@ -836,7 +924,7 @@ export const attendanceToday: AttendanceRow[] = [
   { staffId: "s3", clockIn: 524, state: "勤務中" },
   { staffId: "s4", clockIn: 532, state: "勤務中" },
   { staffId: "s5", state: "未出勤" },
-  { staffId: "s6", clockIn: 515, breakStart: 630, state: "休憩中" },
+  { staffId: "s6", clockIn: 515, state: "勤務中" },
 ];
 
 // ─── 運営コンソール ─────────────────────────────────────────────────────────
@@ -849,8 +937,8 @@ export const PLANS: Record<ConsoleClinic["plan"], { label: string; price: number
 };
 export const addons: Addon[] = [
   { key: "line_reminder", name: "LINEリマインダー", price: 1980, description: "予約の前日にLINEでお知らせ", active: true },
-  { key: "sms_pack", name: "SMS通知パック", price: 1980, description: "月100通までSMSでリマインド", active: true },
-  { key: "recall", name: "患者リコール機能", price: 1980, description: "定期検診のご案内を自動送信", active: true },
+  { key: "sms_pack", name: "SMS通知パック", price: 1980, description: "月100通まで定額で、SMSでリマインドを送信", active: true },
+  { key: "recall", name: "患者リコール機能", price: 1980, description: "定期検診のご案内を、LINE・SMSでまとめて送信", active: true },
   { key: "waitlist", name: "キャンセル待ち機能", price: 980, description: "空きが出たら順番にお知らせ", active: true },
   { key: "questionnaire", name: "問診票機能", price: 1980, description: "初診の問診をWebで事前に回答", active: true },
 ];
