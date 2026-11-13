@@ -56,7 +56,7 @@ export function ShiftGrid({ offset, edits, onEdit }: { offset: number; edits: Ed
     <div className="overflow-x-auto rounded-card bg-surface">
       <div className="min-w-[940px]">
         <div className="hairline-b grid" style={{ gridTemplateColumns: cols }}>
-          <div className="flex items-end px-4 pb-2.5 text-[12px] font-medium text-label2">スタッフ</div>
+          <div className="sticky left-0 z-10 flex items-end bg-surface px-4 pb-2.5 text-[12px] font-medium text-label2">スタッフ</div>
           {days.map(d => {
             const k = key(d);
             const today = k === TODAY_KEY;
@@ -72,7 +72,7 @@ export function ShiftGrid({ offset, edits, onEdit }: { offset: number; edits: Ed
         </div>
         {staff.map((s, si) => (
           <div key={s.id} className="hairline-b grid" style={{ gridTemplateColumns: cols }}>
-            <div className="flex min-w-0 items-center gap-2.5 px-4 py-2.5">
+            <div className="hairline-b sticky left-0 z-10 flex min-w-0 items-center gap-2.5 bg-surface px-4 py-2.5">
               <Avatar name={s.name} tone={s.tone} size={32} />
               <div className="min-w-0">
                 <div className="truncate text-[14px] font-semibold leading-5">{s.name}</div>
@@ -109,7 +109,7 @@ export function ShiftGrid({ offset, edits, onEdit }: { offset: number; edits: Ed
           </div>
         ))}
         <div className="grid" style={{ gridTemplateColumns: cols }}>
-          <div className="px-4 py-3 text-[12px] font-medium text-label2">出勤する人数</div>
+          <div className="sticky left-0 z-10 bg-surface px-4 py-3 text-[12px] font-medium text-label2">出勤する人数</div>
           {counts.map((n, di) => (
             <div key={di} className={cn("flex items-center justify-center text-[13px] tnum", grid[0][di].closed ? "hatch text-label3" : "text-label2", days[di] && key(days[di]) === TODAY_KEY && "bg-sand/12")}>
               {grid[0][di].closed ? "" : `${n}人`}
@@ -202,18 +202,21 @@ export function Requests({ items, onDecide }: { items: LeaveRequest[]; onDecide:
           const s = staffById(r.staffId);
           return (
             <motion.div key={r.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} className="group/req relative overflow-hidden">
-              <ListRow
-                leading={<Avatar name={s.name} tone={s.tone} size={36} />}
-                inset={64}
-                title={<span className="tnum">{s.name}<span className="ml-1.5 text-label2">{mdw(new Date(`${r.date}T00:00:00`))}</span></span>}
-                subtitle={`${r.reason} · ${r.sent}に申請`}
-                trailing={
-                  <div className="flex shrink-0 gap-1.5">
+              <div className="flex items-start gap-3 px-4 py-3 md:items-center">
+                <Avatar name={s.name} tone={s.tone} size={36} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[16px] leading-[21px] md:text-[15px] md:leading-5 tnum">{s.name}<span className="ml-1.5 font-semibold">{mdw(new Date(`${r.date}T00:00:00`))}</span></div>
+                  <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2">{r.reason} · {r.sent}に申請</div>
+                  <div className="mt-2.5 flex gap-2 md:hidden">
                     <Button size="sm" variant="gray" onClick={() => onDecide(r, false)}>見送る</Button>
-                    <Button size="sm" variant="tinted" onClick={() => onDecide(r, true)}>承認</Button>
+                    <Button size="sm" variant="tinted" onClick={() => onDecide(r, true)}>承認する</Button>
                   </div>
-                }
-              />
+                </div>
+                <div className="hidden shrink-0 gap-1.5 md:flex">
+                  <Button size="sm" variant="gray" onClick={() => onDecide(r, false)}>見送る</Button>
+                  <Button size="sm" variant="tinted" onClick={() => onDecide(r, true)}>承認する</Button>
+                </div>
+              </div>
               <span aria-hidden className="pointer-events-none absolute bottom-0 left-16 right-0 h-px origin-bottom scale-y-50 bg-sep/30 group-last/req:hidden" />
             </motion.div>
           );

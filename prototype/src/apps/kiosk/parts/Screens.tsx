@@ -66,7 +66,7 @@ export function Scan({ onResult, onUseNumber }: { onResult: (a: Appointment | un
       <div className="lg:flex-1">
         <KTitle
           title={read ? "読み取りました" : "QRコードを枠に合わせてください"}
-          lead="診察券の裏のQRコードを、カメラに向けてかざしてください。"
+          lead={<>診察券の裏のQRコードを、<br />カメラに向けてかざしてください。</>}
         />
         <div className="mt-8 hidden lg:block">
           <KButton variant="secondary" size="md" icon={CreditCard} onClick={onUseNumber}>診察券番号で受付する</KButton>
@@ -220,9 +220,9 @@ export function Confirm({ appt, onConfirm, onWrong }: { appt: Appointment; onCon
       <div className="w-full lg:w-[480px] lg:shrink-0">
         <div className="rounded-[24px] bg-surface px-6 md:px-7">
           {rows.map(([k, val], i) => (
-            <div key={k} className={cn("flex min-h-[76px] items-center justify-between gap-6 py-4", i > 0 && "hairline-t")}>
-              <span className="shrink-0 text-[17px] text-label2 md:text-[18px]">{k}</span>
-              <span className={cn("min-w-0 text-right font-semibold palt", i === 0 ? "text-[26px] tnum md:text-[30px]" : "text-[19px] md:text-[21px]")}>{val}</span>
+            <div key={k} className={cn("flex min-h-[76px] flex-col justify-center gap-0.5 py-4 md:flex-row md:items-center md:justify-between md:gap-6", i > 0 && "hairline-t")}>
+              <span className="shrink-0 text-[15px] text-label2 md:text-[18px]">{k}</span>
+              <span className={cn("min-w-0 font-semibold palt md:text-right", i === 0 ? "text-[26px] tnum md:text-[30px]" : "text-[19px] md:text-[21px]")}>{val}</span>
             </div>
           ))}
         </div>
@@ -294,7 +294,7 @@ export function Done({ appt, receipt, insurance, onHome }: { appt: Appointment; 
             <IdCard className="mt-0.5 h-8 w-8 shrink-0 text-accent" strokeWidth={1.8} />
             <div>
               <div className="text-[19px] font-semibold leading-[1.5] palt md:text-[21px]">保険証（マイナ保険証）を<br />受付にお出しください</div>
-              <div className="mt-1.5 text-[15px] leading-[1.6] text-label2 md:text-[17px]">{appt.firstVisit ? "はじめてのご来院のため、確認いたします。" : "今月はじめてのご来院のため、確認いたします。"}</div>
+              <div className="mt-1.5 text-[15px] leading-[1.6] text-label2 md:text-[17px]">{appt.firstVisit ? "はじめてのご来院のため、" : "今月はじめてのご来院のため、"}<br className="md:hidden" />確認いたします。</div>
             </div>
           </div>
         )}

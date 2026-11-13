@@ -80,7 +80,7 @@ export function Attract({ onStart, onExit, onHelp }: { onStart: () => void; onEx
           </span>
           <span>
             <span className="block text-[44px] font-bold leading-none tracking-[-0.01em] palt md:text-[56px]">受付する</span>
-            <span className="mt-3 block text-[17px] leading-[1.6] opacity-70 md:mt-4 md:text-[20px]">ご予約のある方は、こちらを押してください</span>
+            <span className="mt-3 block text-[17px] leading-[1.6] opacity-70 md:mt-4 md:text-[20px]"><span className="md:hidden">ご予約のある方はこちら</span><span className="hidden md:inline">ご予約のある方は、こちらを押してください</span></span>
           </span>
         </motion.button>
       </div>

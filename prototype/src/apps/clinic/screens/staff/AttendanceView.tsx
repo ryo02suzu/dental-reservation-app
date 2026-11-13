@@ -1,10 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Coffee, LogIn, LogOut, Play, RotateCcw } from "lucide-react";
 import { staff, staffById, type AttendanceRow } from "@/data";
 import { TODAY, minutesOfDay, useNow } from "@/lib/clock";
 import { hm, mdw } from "@/lib/format";
-import { useIsPhone } from "@/lib/media";
 import { Avatar, Button, ListRow, ListSection, cn, useToast } from "@/ui";
 import { baseCell, hours, monthSummary } from "./model";
 
@@ -147,9 +146,23 @@ export function PunchCard({ me, onPunch, onUndo, canUndo }: { me: Punch; onPunch
   );
 }
 
+/** 表を出せる幅（1024px以上）か。狭いときはiOSのリストにする */
+function useNarrow() {
+  const q = "(max-width: 1023px)";
+  const [m, setM] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(q);
+    const on = () => setM(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return m;
+}
+
 // ─── 今日の出勤状況 ─────────────────────────────────────────────────────────
 export function TodayList({ rows }: { rows: Punch[] }) {
-  const phone = useIsPhone();
+  const phone = useNarrow();
   const now = useNow(20_000);
   const nowMin = minutesOfDay(now);
   const working = rows.filter(r => r.state === "勤務中" || r.state === "休憩中").length;
@@ -218,7 +231,7 @@ export function TodayList({ rows }: { rows: Punch[] }) {
 
 // ─── 今月のまとめ ───────────────────────────────────────────────────────────
 export function MonthTable() {
-  const phone = useIsPhone();
+  const phone = useNarrow();
   const { label, rows } = useMemo(monthSummary, []);
   const header = <span className="tnum">今月の勤怠 · {label}</span>;
   const footer = "所定労働時間（1日8時間）を超えた分を残業として数えています。";
