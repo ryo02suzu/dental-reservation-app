@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useSyncExternalStore } from "react";
 
 // 画面の場所はURLの # に「アプリ--画面--パラメータ--シート」の形で持つ。
 //   例: #clinic--patients--p012 / #clinic--schedule----appt-a0012（パラメータなしでシートだけ）
@@ -70,19 +70,33 @@ export function navigate(r: Route, opts: { replace?: boolean } = {}) {
   window.dispatchEvent(new Event(EVT));
 }
 
+/**
+ * アプリを切り替えるアニメーションの間、画面から消えていくアプリには「消える前の場所」を見せ続ける。
+ * （新しい # を読んで別の画面を描いたり、勝手に移動したりしないように）
+ */
+const FrozenCtx = createContext<Route | null>(null);
+export const FrozenRoute = FrozenCtx.Provider;
+
 /** 現在の場所と、移動用の関数。go は同じアプリ内の移動、goApp は別アプリへの移動 */
 export function useRoute() {
+  const frozen = useContext(FrozenCtx);
   const hash = useSyncExternalStore(subscribe, getHash, getHash);
-  const route = parseHash(hash);
+  const route = frozen ?? parseHash(hash);
   const go = useCallback(
-    (screen: string, param?: string, opts?: { replace?: boolean; sheet?: string }) =>
-      navigate({ app: parseHash(window.location.hash).app, screen, param, sheet: opts?.sheet }, opts),
-    [],
+    (screen: string, param?: string, opts?: { replace?: boolean; sheet?: string }) => {
+      if (frozen) return;
+      navigate({ app: parseHash(window.location.hash).app, screen, param, sheet: opts?.sheet }, opts);
+    },
+    [frozen],
   );
   const setSheet = useCallback((sheet?: string) => {
+    if (frozen) return;
     const cur = parseHash(window.location.hash);
     navigate({ ...cur, sheet }, { replace: true });
-  }, []);
-  const goApp = useCallback((app: AppId, screen?: string, param?: string) => navigate({ app, screen: screen ?? DEFAULT_SCREEN[app], param }), []);
+  }, [frozen]);
+  const goApp = useCallback((app: AppId, screen?: string, param?: string) => {
+    if (frozen) return;
+    navigate({ app, screen: screen ?? DEFAULT_SCREEN[app], param });
+  }, [frozen]);
   return { route, go, goApp, setSheet };
 }

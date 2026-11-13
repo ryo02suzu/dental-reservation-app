@@ -17,7 +17,7 @@ import { ClinicMark, SectionHeading } from "./parts/ui";
 /** 医院のWeb予約のトップ。予約する・次回のご予約・診療時間・アクセス・診療メニュー */
 export default function PatientHome({ param }: { param?: string }) {
   void param;
-  const { go } = useRoute();
+  const { go, goApp } = useRoute();
   const at = useNow();
   const phone = useIsPhone();
   const wide = useMinWidth(1024); // 右の列が出る幅（PatientPage と同じ）
@@ -61,6 +61,11 @@ export default function PatientHome({ param }: { param?: string }) {
 
       {!wide && info}
       <MenuOverview />
+      <div className="mt-10 flex justify-center pb-2">
+        <button onClick={() => goApp("launcher")} className="rounded-full px-3 py-1.5 text-[13px] text-label3 transition-colors hover:bg-fill/8 hover:text-label2">
+          プロトタイプのトップへ
+        </button>
+      </div>
     </PatientPage>
   );
 }
