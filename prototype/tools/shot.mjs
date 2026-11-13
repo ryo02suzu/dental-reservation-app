@@ -33,6 +33,8 @@ const jobs = get("batch") ? JSON.parse(readFileSync(get("batch"), "utf8")) : [{
   dark: has("dark"), full: has("full"), wait: +get("wait", 900), steps: cliSteps, scroll: get("scroll") ? +get("scroll") : 0,
 }];
 
+// 自分で確認するだけなら 1 倍で十分（画像が軽い）。人に見せる画像は --scale 2
+const defaultScale = +get("scale", 1);
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml" };
 const server = http.createServer((req, res) => {
   const p = decodeURIComponent((req.url || "/").split("?")[0].split("#")[0]);
@@ -48,7 +50,7 @@ let failed = 0;
 for (const j of jobs) {
   const w = j.w ?? 390, h = j.h ?? 844;
   const ctx = await browser.newContext({
-    viewport: { width: w, height: h }, deviceScaleFactor: 2, colorScheme: j.dark ? "dark" : "light",
+    viewport: { width: w, height: h }, deviceScaleFactor: j.scale ?? defaultScale, colorScheme: j.dark ? "dark" : "light",
     timezoneId: "Asia/Tokyo", locale: "ja-JP", hasTouch: w < 768, isMobile: w < 768,
   });
   const page = await ctx.newPage();

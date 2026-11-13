@@ -196,7 +196,7 @@ node prototype/tools/shot.mjs --dist <自分専用のフォルダ> --batch <jobs
 node prototype/tools/today.mjs                                      # 今日の予約IDと患者ID
 ```
 
-- `shot.mjs` のオプション：`--w` `--h`（既定 390×844）、`--dark`、`--full`（スクロール全体）、`--wait <ms>`（最初の待ち）、`--scroll <px>`。
+- `shot.mjs` のオプション：`--w` `--h`（既定 390×844）、`--dark`、`--full`（スクロール全体）、`--wait <ms>`（最初の待ち）、`--scroll <px>`、`--scale`（既定 1。自分の確認は 1 倍で十分。人に見せる最終の画像だけ 2）。
   操作は書いた順に実行：`--click "<セレクタ>"`、`--fill "<セレクタ>=><文字>"`、`--press <キー>`（例 `Enter` `Escape` `ArrowDown`）、`--hover "<セレクタ>"`、`--pause <ms>`。
   セレクタは Playwright の形（`text=受付する`、`[aria-label="閉じる"]`、`input[placeholder="検索"]` など）。横のはみ出しとコンソールのエラー・失敗した操作を報告する（あると終了コード 2）。
 - `--batch` には `[{"hash":"#clinic","out":"…/a.png","w":1440,"h":900,"dark":true,"steps":[{"click":"text=…"},{"fill":["input","たなか"]},{"press":"Enter"},{"wait":300}]}]` の形のJSONファイルを渡す。
