@@ -1,15 +1,17 @@
-import { useMemo, useRef, useState } from "react";
-import { CalendarPlus, Copy, Ellipsis, IdCard, Pencil, Pin, SquarePen, TriangleAlert } from "lucide-react";
+import { useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { CalendarPlus, Check, Copy, Ellipsis, IdCard, Pencil, Send, SquarePen } from "lucide-react";
 import { isSameDay } from "date-fns";
 import { useStore } from "@/lib/store";
 import { TODAY, TODAY_KEY, useNow } from "@/lib/clock";
-import { age, fromKey } from "@/lib/format";
-import { serviceById, staffById, visitsOf, type Memo, type Patient } from "@/data";
-import { Button, IconButton, ListSection, Menu, MenuItem, MenuSeparator, Page, Tag, cn } from "@/ui";
-import { alertsOf } from "@/apps/clinic/helpers";
+import { fromKey, hm } from "@/lib/format";
+import { serviceById, visitsOf, type Appointment, type Patient } from "@/data";
+import { Button, IconButton, ListSection, Menu, MenuItem, MenuSeparator, Page, cn, springBouncy, useToast } from "@/ui";
 import { useClinicUI } from "@/apps/clinic/context";
+import { ageOf } from "@/apps/clinic/sheets/logic";
 import { useCopy, useWidth } from "./hooks";
-import { isUpcoming, memoWhen, metaOf, riskOfMeta, ymd, type PatientMeta, type ToothKey } from "./util";
+import { cancelSummary, isUpcoming, metaOf, ymd, type PatientMeta, type ToothKey } from "./util";
+import { Cautions } from "./Cautions";
 import { ChartCard } from "./DentalChart";
 import { MemoSection, type ComposeRequest } from "./MemoSection";
 import { ContactSection, HistorySection, StatsSection, UpcomingSection, type HistItem } from "./Sections";
@@ -72,8 +74,12 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
     requestAnimationFrame(() => chartHead.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
-  const child = age(p.birth, TODAY) < 15;
+  const years = ageOf(p);
   const isNew = m.visits === 0;
+  // 12歳未満で歯式の記録がないときは、乳歯・混合歯列なので永久歯の図は出さない
+  const young = years !== null && years < 12;
+  const showChart = !young || Object.keys(p.teeth).length > 0;
+  const firstAppt = isNew ? upcoming.find(a => a.firstVisit) : undefined;
 
   const more = (
     <Menu trigger={<IconButton icon={Ellipsis} size="sm" label="その他の操作" />}>
@@ -97,10 +103,15 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
   const upcomingEl = (
     <UpcomingSection p={p} m={m} upcoming={upcoming} now={now} onOpen={ui.openAppointment} onBook={book} onCopyPhone={() => copy(p.phone, "電話番号")} stacked={content < 520} />
   );
-  const chartEl = (
+  const treated = Object.values(p.teeth).filter(x => x && x !== "観察").length;
+  const chartEl = !showChart ? (
+    <ListSection header={<span ref={chartHead} className="scroll-mt-[76px]">歯式</span>}>
+      <p className="px-4 py-3.5 text-[15px] leading-[1.6] text-label2 md:text-[14px]">{years}歳のため乳歯・混合歯列です。乳歯（A〜E）の記録はカルテで確認してください。</p>
+    </ListSection>
+  ) : (
     <ListSection
-      header={<span ref={chartHead} className="scroll-mt-[76px]">{child ? "歯式（永久歯）" : "歯式"}</span>}
-      aside={Object.keys(p.teeth).length > 0 ? <span className="text-footnote text-label2 tnum">記録 {Object.keys(p.teeth).length}本</span> : undefined}
+      header={<span ref={chartHead} className="scroll-mt-[76px]">{young ? "歯式（永久歯）" : "歯式"}</span>}
+      aside={treated > 0 ? <span className="text-footnote text-label2 tnum">処置歴あり {treated}本</span> : undefined}
     >
       <ChartCard
         p={p}
@@ -111,7 +122,8 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
         onSelect={setTooth}
         onWriteMemo={k => openCompose([k])}
         onOpenAppt={ui.openAppointment}
-        child={child}
+        young={young}
+        firstExam={isNew}
       />
     </ListSection>
   );
@@ -127,17 +139,13 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
       {width > 0 && (
         <Page
           title={p.name}
-          subtitle={
-            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>{p.kana}</span>
-              {isNew && upcoming[0]?.firstVisit && <Tag tone="accent">初診</Tag>}
-            </span>
-          }
+          subtitle={p.kana}
           back={back}
           actions={actions}
         >
-          <AttentionCard p={p} m={m} pinned={pinned} />
-          <Facts p={p} m={m} cols={factCols} />
+          <Cautions p={p} pinned={pinned} variant="page" />
+          {firstAppt && <FirstVisitPrep p={p} a={firstAppt} className={cn((p.memo || pinned.length || p.allergies.length || p.conditions.length) && "mt-3")} />}
+          <Facts p={p} m={m} cols={factCols} first={!!firstAppt} />
           {!barActions && (
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               <Button icon={CalendarPlus} onClick={book}>予約を取る</Button>
@@ -176,83 +184,105 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
   );
 }
 
-// ─── 注意事項（いちばん上・赤） ───────────────────────────────────────────
-function AttentionCard({ p, m, pinned }: { p: Patient; m: PatientMeta; pinned: Memo[] }) {
-  const items = alertsOf(p).map(a => ({ label: a.label, red: a.tone === "red" }));
-  const risk = riskOfMeta(m);
-  if (risk >= 2) {
-    const parts = [m.cancellations && `キャンセル ${m.cancellations}回`, m.noShows && `無断キャンセル ${m.noShows}回`].filter(Boolean);
-    items.push({ label: parts.join("・"), red: risk >= 3 });
-  }
-  if (!items.length && !pinned.length && !p.memo) return null;
-  const red = items.some(i => i.red);
+// ─── 初診の準備（問診票・保険証） ─────────────────────────────────────────
+// 問診票の回答状況は予約IDから決める（今日の画面と同じ決め方）。確認したことはこの画面を離れても覚えておく。
+const prep = { sent: new Set<string>(), checked: new Set<string>() };
+const prepSubs = new Set<() => void>();
+let prepVersion = 0;
+const bump = () => { prepVersion++; prepSubs.forEach(f => f()); };
+const usePrep = () => useSyncExternalStore(cb => { prepSubs.add(cb); return () => { prepSubs.delete(cb); }; }, () => prepVersion);
+function formAnswered(apptId: string) {
+  let n = 0;
+  for (const c of apptId) n += c.charCodeAt(0);
+  return n % 2 === 0;
+}
+
+function FirstVisitPrep({ p, a, className }: { p: Patient; a: Appointment; className?: string }) {
+  usePrep();
+  const toast = useToast();
+  const answered = formAnswered(a.id);
+  const sent = prep.sent.has(a.id);
+  const checked = prep.checked.has(a.id) || a.status === "in_progress" || a.status === "completed";
+  const when = a.date === TODAY_KEY ? `今日 ${hm(a.start)}` : `${ymd(fromKey(a.date))} ${hm(a.start)}`;
   return (
-    <div
-      role={items.length ? "alert" : undefined}
-      className={cn("rounded-card px-4 py-3.5", red ? "bg-red/8 shadow-[inset_0_0_0_1px_rgb(var(--red)/0.16)]" : "bg-surface")}
-    >
-      {items.length > 0 && (
-        <>
-          <div className={cn("flex items-center gap-1.5 text-footnote font-semibold", red ? "text-red" : "text-label2")}>
-            <TriangleAlert className="h-4 w-4" strokeWidth={2.3} />
-            注意事項
-          </div>
-          <ul className="mt-2 flex flex-wrap gap-x-6 gap-y-1.5">
-            {items.map(i => (
-              <li key={i.label} className="flex items-center gap-2">
-                <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full", i.red ? "bg-red" : "bg-label3")} />
-                <span className={cn("text-[17px] leading-6 md:text-[16px]", i.red ? "font-semibold text-red" : "font-medium text-label")}>{i.label}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {pinned.map((x, i) => {
-        const s = staffById(x.staffId);
-        return (
-          <div key={x.id} className={cn("flex gap-2.5", (items.length > 0 || i > 0) && "hairline-t mt-3 pt-3")}>
-            <Pin className="mt-[3px] h-3.5 w-3.5 shrink-0 text-label2" strokeWidth={2.3} aria-label="固定メモ" />
-            <div className="min-w-0">
-              <p className="text-[15px] leading-[1.6] text-label">{x.body}</p>
-              <p className="mt-0.5 text-caption text-label2">
-                {s.name}（{s.role}）<span className="px-1 text-label4">·</span>
-                {memoWhen(x)}
-              </p>
-            </div>
-          </div>
-        );
-      })}
-      {p.memo && (
-        <div className={cn("flex gap-2.5 text-[15px] leading-[1.6]", (items.length > 0 || pinned.length > 0) && "hairline-t mt-3 pt-3")}>
-          <span className="shrink-0 font-medium text-label2">申し送り</span>
-          <span className="min-w-0 text-label">{p.memo}</span>
-        </div>
-      )}
+    <div className={cn("rounded-card bg-surface", className)}>
+      <div className="px-4 pb-1 pt-3.5">
+        <div className="text-footnote font-semibold text-label2">初診の準備</div>
+        <p className="mt-0.5 text-caption text-label2 tnum">{when}の初診・カウンセリングまでに確認します。</p>
+      </div>
+      <PrepRow
+        done={answered}
+        label="問診票"
+        value={answered ? "Webで回答済み" : sent ? "送信済み・回答待ち" : "未回答"}
+        action={!answered && !sent ? (
+          <Button size="sm" variant="tinted" icon={Send} onClick={() => { prep.sent.add(a.id); bump(); toast("問診票を送信しました", { icon: Send, detail: `${p.name}さん・${p.line ? "LINE" : "SMS"}` }); }}>
+            問診票を送る
+          </Button>
+        ) : undefined}
+      />
+      <PrepRow
+        done={checked}
+        label="保険証・マイナ保険証"
+        value={checked ? `確認済み（${p.insurance}）` : "来院時に確認"}
+        action={!checked ? (
+          <Button size="sm" variant="tinted" icon={IdCard} onClick={() => { prep.checked.add(a.id); bump(); toast("保険証を確認しました", { icon: IdCard, detail: `${p.name}さん・${p.insurance}` }); }}>
+            確認した
+          </Button>
+        ) : undefined}
+      />
+    </div>
+  );
+}
+
+function PrepRow({ done, label, value, action }: { done: boolean; label: string; value: string; action?: ReactNode }) {
+  return (
+    <div className="group relative flex min-h-[52px] items-center gap-3 px-4 py-2">
+      <span className={cn("flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full", done ? "bg-accent text-surface" : "ring-[1.5px] ring-inset ring-label3")}>
+        <AnimatePresence initial={false}>
+          {done && (
+            <motion.span initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={springBouncy}>
+              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[15px] leading-5">{label}</div>
+        <div className={cn("truncate text-footnote", done ? "text-label2" : "font-medium text-label")}>{value}</div>
+      </div>
+      {action}
+      <span aria-hidden className="pointer-events-none absolute left-[50px] right-0 top-0 h-px origin-top scale-y-50 bg-sep/30" />
     </div>
   );
 }
 
 // ─── 基本情報（年齢・生年月日・診察券番号・保険・初診日・来院回数） ─────────
-function Facts({ p, m, cols }: { p: Patient; m: PatientMeta; cols: number }) {
+function Facts({ p, m, cols, first }: { p: Patient; m: PatientMeta; cols: number; first: boolean }) {
+  const years = ageOf(p);
   const facts: [string, string][] = [
-    ["年齢・性別", `${age(p.birth, TODAY)}歳・${p.sex}`],
-    ["生年月日", ymd(p.birth)],
+    ["年齢・性別", `${years === null ? "年齢未登録" : `${years}歳`}・${p.sex}`],
+    ["生年月日", years === null ? "未登録" : ymd(p.birth)],
     ["診察券番号", p.number],
     ["保険", p.insurance],
-    ["初診日", isSameDay(p.firstVisit, TODAY) ? "今日" : ymd(p.firstVisit)],
-    ["来院回数", `${m.visits}回`],
+    // まだ来院していない初診の人は「予定」
+    ["初診日", isSameDay(p.firstVisit, TODAY) ? (first && m.visits === 0 ? "今日（予定）" : "今日") : ymd(p.firstVisit)],
+    ["来院回数", m.visits === 0 ? "まだありません" : `${m.visits}回`],
   ];
+  const cancels = cancelSummary(m);
   return (
-    <dl
-      className={cn("mt-3 rounded-card bg-surface px-4 py-3.5", cols === 6 ? "flex justify-between gap-x-5" : "grid gap-x-4 gap-y-3")}
-      style={cols === 6 ? undefined : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-    >
-      {facts.map(([k, v]) => (
-        <div key={k} className={cn("min-w-0", cols === 6 && "shrink")}>
-          <dt className="truncate text-caption text-label2">{k}</dt>
-          <dd className="mt-0.5 truncate text-[15px] font-medium leading-5 tnum">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="mt-3 rounded-card bg-surface px-4 py-3.5">
+      <dl
+        className={cn(cols === 6 ? "flex justify-between gap-x-5" : "grid gap-x-4 gap-y-3")}
+        style={cols === 6 ? undefined : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      >
+        {facts.map(([k, v]) => (
+          <div key={k} className={cn("min-w-0", cols === 6 && "shrink")}>
+            <dt className="truncate text-caption text-label2">{k}</dt>
+            <dd className="mt-0.5 truncate text-[15px] font-medium leading-5 tnum">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {cancels && <p className="hairline-t mt-3 pt-2.5 text-footnote text-label2 tnum">{cancels}</p>}
+    </div>
   );
 }

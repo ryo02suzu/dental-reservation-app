@@ -11,7 +11,7 @@ import { AddonSheet } from "./parts/AddonSheet";
 import { addonMeta } from "./parts/addonMeta";
 import { addonMRR, addonStats } from "./parts/model";
 import { setOffered, useConsole, type ConsoleState } from "./parts/store";
-import { RowRule } from "./parts/ui";
+import { ClinicMark, ConfirmSheet, PlanTag, RowRule, SheetGroup } from "./parts/ui";
 
 /** オプション（提供しているオプションの一覧・料金・導入状況） */
 export default function ConsoleAddons({ param }: { param?: string }) {
@@ -21,15 +21,22 @@ export default function ConsoleAddons({ param }: { param?: string }) {
   const { go } = useRoute();
   const toast = useToast();
   const [editing, setEditing] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<Addon | null>(null);
   const offered = s.addons.filter(a => a.active).length;
   const users = s.clinics.filter(c => c.addons.length > 0).length;
 
+  // 再開はその場で。停止は導入中の医院に関わるので、確認のシートを出してから
   const toggleOffer = (a: Addon, on: boolean) => {
-    const st = addonStats(s, a.key);
-    setOffered(a.key, on);
-    toast(on ? `${a.name}の提供を再開しました` : `${a.name}の提供を停止しました`, {
-      detail: on ? "新しい医院も申し込めます" : st.count ? `導入中の${st.count}医院は、そのまま使えます` : "新しい申し込みを受け付けません",
-    });
+    if (!on) return setStopping(a);
+    setOffered(a.key, true);
+    toast(`${a.name}の提供を再開しました`, { detail: "新しい医院も申し込めます" });
+  };
+  const stopStats = stopping ? addonStats(s, stopping.key) : undefined;
+  const confirmStop = () => {
+    if (!stopping || !stopStats) return;
+    setOffered(stopping.key, false);
+    toast(`${stopping.name}の提供を停止しました`, { detail: stopStats.count ? `導入中の${stopStats.count}医院は、そのまま使えます` : "新しい申し込みを受け付けません" });
+    setStopping(null);
   };
 
   return (
@@ -43,11 +50,34 @@ export default function ConsoleAddons({ param }: { param?: string }) {
       ) : (
         <>
           <Catalog s={s} onOpen={setEditing} onOffer={toggleOffer} />
-          <SectionTitle className="!mt-10" aside={<span className="text-footnote text-label2">チェックを押すと追加・解約できます</span>}>医院ごとの導入状況</SectionTitle>
+          <SectionTitle className="!mt-10">医院ごとの導入状況</SectionTitle>
           <AddonMatrix onOpenClinic={id => go("clinics", id)} />
         </>
       )}
       <AddonSheet addonKey={editing} onClose={() => setEditing(null)} />
+      <ConfirmSheet open={!!stopping} onClose={() => setStopping(null)} title="提供を停止" confirmLabel="提供を停止" destructive onConfirm={confirmStop}>
+        {stopping && stopStats && (
+          <>
+            <p className="px-1 pb-1 text-[15px] leading-[1.7] [text-wrap:pretty] [word-break:auto-phrase]">
+              <span className="font-semibold">{stopping.name}</span>の新しい申し込みを止めます。
+              {stopStats.count ? `導入中の${stopStats.count}医院は、そのまま使えます。` : "いま導入している医院はありません。"}
+            </p>
+            {stopStats.count > 0 && (
+              <SheetGroup header={`導入中の医院（${stopStats.count}）`} footer={`売上 ${yen(stopStats.revenue)} / 月は変わりません。`}>
+                {stopStats.users.map(c => (
+                  <div key={c.id} className="group relative flex min-h-[48px] items-center gap-3 px-4 py-2">
+                    <ClinicMark name={c.name} size={28} />
+                    <span className="min-w-0 flex-1 truncate text-[15px] md:text-[14px]">{c.name}</span>
+                    {!c.active && <span className="shrink-0 text-[12px] text-label3">停止中</span>}
+                    <PlanTag plan={c.plan} className="shrink-0" />
+                    <RowRule inset={56} />
+                  </div>
+                ))}
+              </SheetGroup>
+            )}
+          </>
+        )}
+      </ConfirmSheet>
     </Page>
   );
 }
@@ -56,7 +86,7 @@ export default function ConsoleAddons({ param }: { param?: string }) {
 function Adoption({ count, total, className }: { count: number; total: number; className?: string }) {
   return (
     <span className={cn("block h-1 overflow-hidden rounded-full bg-fill/16", className)} aria-hidden>
-      <motion.span className="block h-full rounded-full bg-accent" initial={false} animate={{ width: `${(count / Math.max(1, total)) * 100}%` }} transition={springSoft} />
+      <motion.span className="block h-full rounded-full bg-label3/45" initial={false} animate={{ width: `${(count / Math.max(1, total)) * 100}%` }} transition={springSoft} />
     </span>
   );
 }

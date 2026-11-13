@@ -1,6 +1,25 @@
 import type { ReactNode } from "react";
-import { CircleAlert, Copy } from "lucide-react";
-import { cn, useToast } from "@/ui";
+import { motion } from "framer-motion";
+import { Check, CircleAlert, Copy } from "lucide-react";
+import { cn, springBouncy, useToast } from "@/ui";
+
+/**
+ * 完了の印（Arche 共通：アクセントの円に白いチェック）。受付端末の完了と同じ見た目で、大きさだけ変える。
+ * 出てくるときに一度だけ小さく跳ねる。
+ */
+export function DoneMark({ size = 56, delay = 0.18, className }: { size?: number; delay?: number; className?: string }) {
+  return (
+    <motion.span
+      initial={{ scale: 0.4, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ ...springBouncy, delay }}
+      className={cn("flex items-center justify-center rounded-full bg-accent text-onink", className)}
+      style={{ width: size, height: size }}
+    >
+      <Check style={{ width: size / 2, height: size / 2 }} strokeWidth={3} />
+    </motion.span>
+  );
+}
 
 /** 画面の中の見出し（カードやリストのまとまりの上） */
 export function SectionHeading({ children, aside, className, id }: { children: ReactNode; aside?: ReactNode; className?: string; id?: string }) {

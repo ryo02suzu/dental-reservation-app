@@ -246,7 +246,7 @@ export function MenuOverview() {
           <MenuRow key={id} sv={serviceById(id)} compact />
         ))}
       </ListSection>
-      <ListSection header="自費診療" footer="自費診療の料金は税込です。保険診療の窓口負担は、保険証の種類により1〜3割です。">
+      <ListSection header="自費診療" footer="自費診療の料金は税込です。保険診療の窓口負担は、年齢や所得により1〜3割です。">
         {SELF_PAY.map(s => (
           <MenuRow key={s.id} sv={s} />
         ))}

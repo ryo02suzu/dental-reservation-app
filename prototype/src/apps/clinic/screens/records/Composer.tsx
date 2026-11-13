@@ -2,23 +2,24 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, X } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { TODAY_KEY } from "@/lib/clock";
-import { hm, matchesPatient, toothLabel } from "@/lib/format";
+import { TODAY, TODAY_KEY } from "@/lib/clock";
+import { age, hm, matchesPatient } from "@/lib/format";
 import { useIsPhone } from "@/lib/media";
 import { serviceById, staff, staffById, type Memo } from "@/data";
 import { Avatar, Menu, MenuItem, STATUS, SearchField, cn, springSoft } from "@/ui";
 import { ToothGrid } from "./ToothGrid";
-import { PHRASES, appendPhrase, sortTeeth, type ToothKey } from "./util";
-
-const DEFAULT_AUTHOR = "s3"; // 森 彩花（歯科衛生士）
+import { PHRASES, appendPhrase, sortTeeth, toothName, type Dentition, type PermanentKey, type ToothKey } from "./util";
 
 export type ComposerState = ReturnType<typeof useComposer>;
 
 /** 書きかけのメモ。PCの右ペインとスマホのシートで同じものを使う */
 export function useComposer() {
+  // 書く人は、ログインしている本人から始める（受付の人なら、患者を選んだときに担当者へ切り替える）
+  const { currentStaffId } = useStore();
   const [patientId, setPatientId] = useState<string | undefined>();
   const [apptId, setApptId] = useState<string | undefined>();
-  const [staffId, setStaffId] = useState(DEFAULT_AUTHOR);
+  const [staffId, setStaffId] = useState(currentStaffId);
+  const [dentition, setDentition] = useState<Dentition>("permanent");
   const [teeth, setTeeth] = useState<ToothKey[]>([]);
   const [body, setBody] = useState("");
   const [next, setNext] = useState("");
@@ -28,6 +29,7 @@ export function useComposer() {
     setPatientId(undefined);
     setApptId(undefined);
     setTeeth([]);
+    setDentition("permanent");
     setBody("");
     setNext("");
   };
@@ -36,10 +38,11 @@ export function useComposer() {
     apptId,
     staffId,
     body: body.trim(),
-    teeth: teeth.length ? sortTeeth(teeth) : undefined,
+    // 乳歯（A〜E）は共有の型にないが、表示は toothName で読めるのでそのまま渡す
+    teeth: teeth.length ? (sortTeeth(teeth) as PermanentKey[]) : undefined,
     next: next.trim() || undefined,
   });
-  return { patientId, setPatientId, apptId, setApptId, staffId, setStaffId, teeth, toggleTooth, body, setBody, next, setNext, ready, reset, toMemo };
+  return { patientId, setPatientId, apptId, setApptId, staffId, setStaffId, dentition, setDentition, teeth, toggleTooth, body, setBody, next, setNext, ready, reset, toMemo };
 }
 
 function Label({ children, aside }: { children: React.ReactNode; aside?: React.ReactNode }) {
@@ -62,9 +65,9 @@ export function ComposerFields({ c }: { c: ComposerState }) {
         <AuthorPicker c={c} />
       </div>
       <div>
-        <Label aside={c.teeth.length > 0 ? <span className="truncate text-footnote text-label2">{sortTeeth(c.teeth).map(toothLabel).join("・")}</span> : undefined}>歯</Label>
+        <Label aside={c.teeth.length > 0 ? <span className="truncate text-footnote text-label2">{sortTeeth(c.teeth).map(toothName).join("・")}</span> : undefined}>歯</Label>
         <div className="rounded-cell bg-fill/8 px-2 py-2">
-          <ToothGrid value={c.teeth} onToggle={c.toggleTooth} />
+          <ToothGrid value={c.teeth} onToggle={c.toggleTooth} dentition={c.dentition} onDentition={c.setDentition} />
         </div>
       </div>
       <div>
@@ -123,6 +126,13 @@ function PatientPicker({ c }: { c: ComposerState }) {
     c.setPatientId(patientId);
     c.setApptId(apptId);
     setQ("");
+    // 受付・歯科助手がメモを開いたときは、その予約の担当（歯科医師・歯科衛生士）を書く人にする
+    const appt = apptId ? appointments.find(a => a.id === apptId) : undefined;
+    const role = staffById(c.staffId).role;
+    if (appt && (role === "受付" || role === "歯科助手")) c.setStaffId(appt.staffId);
+    // 6歳未満は乳歯の歯式から始める
+    const p = patients.find(x => x.id === patientId);
+    c.setDentition(p && age(p.birth, TODAY) < 6 ? "primary" : "permanent");
   };
 
   return (

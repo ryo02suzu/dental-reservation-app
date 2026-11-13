@@ -15,18 +15,21 @@ await build({
   entryPoints: [resolve(proto, "src/data/index.ts")], bundle: true, format: "esm", platform: "node",
   outfile: out, tsconfig: resolve(proto, "tsconfig.json"), logLevel: "error",
 });
+// --date YYYY-MM-DD でデモの「今日」を固定する
+const di = process.argv.indexOf("--date");
+if (di >= 0) globalThis.__ARCHE_NOW__ = process.argv[di + 1];
 const d = await import(pathToFileURL(out).href);
 const clock = await import(pathToFileURL(out).href);
 rmSync(dir, { recursive: true, force: true });
 
 const hm = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
-const day = process.argv[2];
+const day = process.argv.slice(2).find(a => /^\d{4}-\d{2}-\d{2}$/.test(a) && process.argv[process.argv.indexOf(a) - 1] !== "--date");
 const todayKey = d.initialAppointments.find(a => a.id === "a-me-next") ? null : null;
 const keyOf = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 const now = new Date();
 // clock.ts の TODAY と同じ日付（データ側の予約はその日付で作られている）
 const dates = [...new Set(d.initialAppointments.map(a => a.date))].sort();
-const target = day ?? dates.find(k => k >= keyOf(now)) ?? dates.at(-1);
+const target = day ?? dates.find(k => k >= (globalThis.__ARCHE_NOW__ ?? keyOf(now))) ?? dates.at(-1);
 const list = d.initialAppointments.filter(a => a.date === target).sort((a, b) => a.start - b.start || a.unitId.localeCompare(b.unitId));
 console.log(`日付 ${target}（デモの現在時刻は 10:42 から進みます）  予約 ${list.length}件\n`);
 console.log("予約ID     時刻          ユニット 担当   状態         経路    患者");

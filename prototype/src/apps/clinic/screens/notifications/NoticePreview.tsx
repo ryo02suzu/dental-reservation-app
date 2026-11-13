@@ -122,7 +122,7 @@ export function Detail({ n, now }: { n: Notice; now: Date }) {
           <Button variant="gray" icon={BellRing} onClick={() => ui.go("recall")}>リコールを開く</Button>
         )}
         {(n.kind === "system" || n.kind === "remind") && (
-          <Button variant="gray" icon={Settings2} onClick={() => ui.go("settings")}>{n.kind === "remind" ? "リマインドの設定" : "設定を開く"}</Button>
+          <Button variant="gray" icon={Settings2} onClick={() => ui.go("settings", n.kind === "remind" ? "reminders" : undefined)}>{n.kind === "remind" ? "リマインドの設定" : "設定を開く"}</Button>
         )}
       </div>
     </div>

@@ -1,24 +1,34 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarClock, CalendarX2, Check, ChevronRight, CircleSlash, Copy, Info, TriangleAlert, UserRoundCog } from "lucide-react";
+import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronRight, CircleSlash, Copy, TriangleAlert, Undo2, UserRoundCog } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useIsPhone } from "@/lib/media";
 import { TODAY, TODAY_KEY, minutesOfDay, useNow } from "@/lib/clock";
 import { ago, duration, fromKey, hm, md, mdw, relDay, toothLabel } from "@/lib/format";
 import { patientById, serviceById, staff, staffById, unitById, units, visitsOf, type Appointment, type Memo, type Patient } from "@/data";
-import { Avatar, Button, EmptyState, Sheet, StatusPill, Tag, cn, spring, springBouncy, tapSoft, useToast, type StatusKey } from "@/ui";
+import { Avatar, Button, EmptyState, Menu, MenuItem, Sheet, StatusPill, Tag, cn, spring, springBouncy, tapSoft, useToast, type StatusKey } from "@/ui";
 import { useClinicUI } from "../context";
-import { alertsOf, riskOf, statusOf } from "../helpers";
+import { LATE_GRACE, riskOf, statusOf } from "../helpers";
 import {
-  ageOf, eligibleStaff, markCompleted, openStarts, pickUnit, priceLabel, pushRecentPatient, sourceLabel, staffConflict, unitBusy, upcomingDays,
-  recordedTimes,
+  ageOf, eligibleStaff, markCompleted, openStarts, pickUnit, priceLabel, pushRecentPatient, sourceLabel, staffConflict, unitBusy, unitFits, unitRoleLabel,
+  upcomingDays, recordedTimes,
 } from "./logic";
+import { Cautions } from "../screens/patients/Cautions";
 import { AutoText, Chip, DayStrip, Head, Inset, KV, Reveal, RowSep, SlotGrid } from "./parts";
 import type { LucideIcon } from "lucide-react";
 
-/** いまログインしているスタッフ（メモの書き手）。シェルのサイドバーと同じ人 */
-const ME = staff.find(s => s.role === "受付")!;
 const live = (a: Appointment) => a.status !== "cancelled" && a.status !== "no_show";
+/** 医院側の理由で外した予約（患者のキャンセル回数には数えない） */
+const CLINIC_SIDE = /^(お断り|医院都合)/;
+const isClinicSide = (a: Appointment) => a.status === "cancelled" && CLINIC_SIDE.test(a.cancelReason ?? "");
+const byTime = (x: Appointment, y: Appointment) => (x.date === y.date ? x.start - y.start : x.date < y.date ? -1 : 1);
+
+/** この患者の、これからの予約（この予約を除く） */
+function upcomingOf(appts: Appointment[], patientId: string, exclude: string, nowMin: number) {
+  return appts
+    .filter(x => x.patientId === patientId && x.id !== exclude && live(x) && x.status !== "completed" && (x.date > TODAY_KEY || (x.date === TODAY_KEY && x.end > nowMin)))
+    .sort(byTime);
+}
 
 /** 予約の詳細。スマホは下からのシート、PC・iPadは右のインスペクタ */
 export function AppointmentSheet({ id, onClose }: { id: string | null; onClose: () => void }) {
@@ -48,7 +58,7 @@ export function AppointmentSheet({ id, onClose }: { id: string | null; onClose: 
 }
 
 // ─── 次の一手（下に固定する大きなボタン） ───────────────────────────────────
-interface NextStep { label: string; run: () => void; disabled?: boolean; note?: string }
+interface NextStep { label: string; run: () => void; disabled?: boolean; note?: string; secondary?: { label: string; run: () => void } }
 
 function useNextStep(a: Appointment | undefined, nowD: Date): NextStep | null {
   const store = useStore();
@@ -57,9 +67,7 @@ function useNextStep(a: Appointment | undefined, nowD: Date): NextStep | null {
   if (!a) return null;
   const p = store.patients.find(x => x.id === a.patientId) ?? patientById(a.patientId);
   const st = statusOf(a, nowD);
-  const when = `${mdw(fromKey(a.date))} ${hm(a.start)}`;
   const isToday = a.date === TODAY_KEY;
-  const notPast = a.date >= TODAY_KEY;
   switch (st) {
     case "pending": {
       const via = p.line ? "LINE" : p.email ? "メール" : "SMS";
@@ -80,25 +88,43 @@ function useNextStep(a: Appointment | undefined, nowD: Date): NextStep | null {
         label: "完了にする",
         run: () => { markCompleted(a.id); store.setStatus(a.id, "completed"); toast("完了にしました", { detail: `${p.name}さんを会計へご案内ください` }); },
       };
-    case "completed":
-      return { label: "次回の予約を取る", run: () => ui.openNew({ patientId: a.patientId, serviceId: a.serviceId }) };
-    case "cancelled":
-    case "no_show": {
-      if (!notPast) return { label: "予約を取り直す", run: () => ui.openNew({ patientId: a.patientId, serviceId: a.serviceId }) };
-      const taken = unitBusy(store.appointments, a.unitId, a.date, a.start, a.end, a.id);
-      return {
-        label: "予約に戻す",
-        disabled: taken,
-        note: taken ? `この時間の${unitById(a.unitId).name}には、すでに別の予約が入っています。「日時を変更」から空いている時間を選んでください。` : undefined,
-        run: () => {
-          store.updateAppointment(a.id, { status: "confirmed", cancelReason: undefined, arrivedAt: undefined, startedAt: undefined });
-          if (a.status === "cancelled") store.updatePatient(p.id, { cancellations: Math.max(0, p.cancellations - 1) });
-          else store.updatePatient(p.id, { noShows: Math.max(0, p.noShows - 1) });
-          toast("予約に戻しました", { detail: `${p.name}さん・${when}` });
-        },
-      };
+    case "completed": {
+      const book = () => ui.openNew({ patientId: a.patientId, serviceId: a.serviceId });
+      const nowMin = minutesOfDay(nowD);
+      const done = recordedTimes(a).done;
+      const justDone = isToday && done != null && nowMin - done <= 30;
+      const nx = upcomingOf(store.appointments, a.patientId, a.id, nowMin)[0];
+      const note = justDone ? `${p.name}さんを会計へご案内ください。` : undefined;
+      if (nx) {
+        return {
+          label: `次回 ${nx.date === TODAY_KEY ? "今日" : md(fromKey(nx.date))} ${hm(nx.start)} を確認`,
+          run: () => ui.openAppointment(nx.id),
+          note: `${note ?? ""}次回の予約はすでに入っています（${serviceById(nx.serviceId).short}）。`,
+          secondary: { label: "さらに予約を取る", run: book },
+        };
+      }
+      return { label: "次回の予約を取る", run: book, note };
     }
+    case "cancelled":
+    case "no_show":
+      return { label: "予約を取り直す", run: () => ui.openNew({ patientId: a.patientId, serviceId: a.serviceId }) };
   }
+}
+
+/** 取り消した予約を、元の時間のまま戻せるか（まだ先の時刻で、ユニットが空いているときだけ） */
+function useRestore(a: Appointment, nowD: Date) {
+  const store = useStore();
+  const toast = useToast();
+  if (a.status !== "cancelled" && a.status !== "no_show") return null;
+  const future = a.date > TODAY_KEY || (a.date === TODAY_KEY && a.start > minutesOfDay(nowD) + LATE_GRACE);
+  if (!future || unitBusy(store.appointments, a.unitId, a.date, a.start, a.end, a.id)) return null;
+  const p = store.patients.find(x => x.id === a.patientId) ?? patientById(a.patientId);
+  return () => {
+    store.updateAppointment(a.id, { status: "confirmed", cancelReason: undefined, arrivedAt: undefined, startedAt: undefined });
+    if (a.status === "cancelled" && !isClinicSide(a)) store.updatePatient(p.id, { cancellations: Math.max(0, p.cancellations - 1) });
+    if (a.status === "no_show") store.updatePatient(p.id, { noShows: Math.max(0, p.noShows - 1) });
+    toast("元の時間に戻しました", { detail: `${p.name}さん・${mdw(fromKey(a.date))} ${hm(a.start)}` });
+  };
 }
 
 function Footer({ next }: { next: NextStep }) {
@@ -113,8 +139,10 @@ function Footer({ next }: { next: NextStep }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.12 } }}
             transition={spring}
+            className="flex gap-2"
           >
-            <Button size="lg" full onClick={next.run} disabled={next.disabled}>{next.label}</Button>
+            {next.secondary && <Button size="lg" variant="gray" onClick={next.secondary.run} className="shrink-0 px-5">{next.secondary.label}</Button>}
+            <Button size="lg" full onClick={next.run} disabled={next.disabled} className="min-w-0 flex-1">{next.label}</Button>
           </motion.div>
         </AnimatePresence>
       </div>
@@ -123,7 +151,7 @@ function Footer({ next }: { next: NextStep }) {
 }
 
 // ─── 本文 ────────────────────────────────────────────────────────────────────
-type Panel = "time" | "assign" | "cancel" | null;
+type Panel = "time" | "assign" | "cancel" | "decline" | null;
 
 function Detail({ a, nowD, onClose }: { a: Appointment; nowD: Date; onClose: () => void }) {
   const phone = useIsPhone();
@@ -135,6 +163,7 @@ function Detail({ a, nowD, onClose }: { a: Appointment; nowD: Date; onClose: () 
   const un = unitById(a.unitId);
   const status = statusOf(a, nowD);
   const date = fromKey(a.date);
+  const pinned = useMemo(() => store.memos.filter(m => m.patientId === p.id && m.pinned), [store.memos, p.id]);
   const [panel, setPanel] = useState<Panel>(null);
   const toggle = (k: Exclude<Panel, null>) => setPanel(v => (v === k ? null : k));
 
@@ -144,21 +173,30 @@ function Detail({ a, nowD, onClose }: { a: Appointment; nowD: Date; onClose: () 
     if (!phone) root.current?.focus({ preventScroll: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 状態が変わったら開いているパネルは閉じる
-  useEffect(() => setPanel(null), [a.status]);
+  // 状態が変わったら開いているパネルは閉じ、いちばん上（患者名と状態）を見せる
+  const first = useRef(true);
+  useEffect(() => {
+    setPanel(null);
+    if (first.current) { first.current = false; return; }
+    let n = root.current?.parentElement ?? null;
+    while (n && !/(auto|scroll)/.test(getComputedStyle(n).overflowY)) n = n.parentElement;
+    n?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [a.status]);
 
   const notPast = a.date >= TODAY_KEY;
-  const canChange = notPast && (status === "pending" || status === "confirmed" || status === "late" || status === "arrived");
-  const restorable = notPast && (a.status === "cancelled" || a.status === "no_show");
-  const actions: { key: Exclude<Panel, null>; label: string; icon: LucideIcon; red?: boolean }[] = [];
-  if (canChange || restorable) actions.push({ key: "time", label: restorable ? "別の日時で予約に戻す" : "日時を変更", icon: CalendarClock });
-  if (canChange) actions.push({ key: "assign", label: "担当・ユニット", icon: UserRoundCog });
-  if (canChange) actions.push({ key: "cancel", label: "キャンセル", icon: CircleSlash, red: true });
+  // 予約の前（仮予約・予約・未来院）は日時・担当の変更とキャンセル。来院済みは担当・ユニットだけ
+  const before = notPast && (status === "pending" || status === "confirmed" || status === "late");
+  const restore = useRestore(a, nowD);
+  const actions: { key: Exclude<Panel, null> | "restore"; label: string; icon: LucideIcon; red?: boolean }[] = [];
+  if (before) actions.push({ key: "time", label: "日時を変更", icon: CalendarClock });
+  if (before || (notPast && status === "arrived")) actions.push({ key: "assign", label: "担当・ユニット", icon: UserRoundCog });
+  if (before) actions.push(status === "pending" ? { key: "decline", label: "お断りする", icon: CircleSlash, red: true } : { key: "cancel", label: "キャンセル", icon: CircleSlash, red: true });
+  if (restore) actions.push({ key: "restore", label: "元の時間に戻す", icon: Undo2 });
 
   return (
     <div ref={root} tabIndex={-1} className="pt-1 outline-none">
       <PatientHeader p={p} onOpen={() => { onClose(); ui.go("patients", p.id); }} />
-      <Cautions p={p} />
+      <Cautions p={p} pinned={pinned} variant="sheet" className="mt-3" />
 
       {/* 予約の中身 */}
       <div className="mt-6 flex items-start justify-between gap-3">
@@ -216,17 +254,28 @@ function Detail({ a, nowD, onClose }: { a: Appointment; nowD: Date; onClose: () 
         <div className="mt-4">
           <div className="flex gap-2">
             {actions.map(x => (
-              <ActionTile key={x.key} icon={x.icon} label={x.label} red={x.red} wide={actions.length === 1} active={panel === x.key} onClick={() => toggle(x.key)} />
+              <ActionTile
+                key={x.key}
+                icon={x.icon}
+                label={x.label}
+                red={x.red}
+                wide={actions.length === 1}
+                active={panel === x.key}
+                onClick={() => (x.key === "restore" ? restore?.() : toggle(x.key))}
+              />
             ))}
           </div>
           <Reveal show={panel === "time"}>
-            <ReschedulePanel a={a} restore={restorable} onDone={() => setPanel(null)} />
+            <ReschedulePanel a={a} onDone={() => setPanel(null)} />
           </Reveal>
           <Reveal show={panel === "assign"}>
             <AssignPanel a={a} />
           </Reveal>
           <Reveal show={panel === "cancel"}>
             <CancelPanel a={a} p={p} onDone={() => setPanel(null)} />
+          </Reveal>
+          <Reveal show={panel === "decline"}>
+            <DeclinePanel a={a} p={p} onDone={() => setPanel(null)} />
           </Reveal>
         </div>
       )}
@@ -241,7 +290,7 @@ function Detail({ a, nowD, onClose }: { a: Appointment; nowD: Date; onClose: () 
 function PatientHeader({ p, onOpen }: { p: Patient; onOpen: () => void }) {
   const phone = useIsPhone();
   const age = ageOf(p);
-  const risk = riskOf(p);
+  const history = [p.cancellations > 0 && `キャンセル${p.cancellations}回`, p.noShows > 0 && `無断${p.noShows}回`].filter(Boolean).join("・");
   return (
     <motion.button
       whileTap={tapSoft}
@@ -254,7 +303,7 @@ function PatientHeader({ p, onOpen }: { p: Patient; onOpen: () => void }) {
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[20px] font-semibold leading-[25px] palt">{p.name}</span>
-          {risk >= 3 && <Tag tone="red" className="shrink-0">キャンセル歴 {risk}回</Tag>}
+          {riskOf(p) >= 2 && <Tag className="shrink-0 tnum">{history}</Tag>}
         </div>
         <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2">{p.kana}</div>
         <div className="mt-px truncate text-[13px] leading-[18px] text-label2 tnum">
@@ -263,34 +312,6 @@ function PatientHeader({ p, onOpen }: { p: Patient; onOpen: () => void }) {
       </div>
       <ChevronRight className="h-5 w-5 shrink-0 text-label4 transition-transform group-hover:translate-x-0.5" strokeWidth={2.4} />
     </motion.button>
-  );
-}
-
-/** 治療前に必ず目に入れたいこと（アレルギー・服薬・固定メモ・患者メモ） */
-function Cautions({ p }: { p: Patient }) {
-  const { memos } = useStore();
-  const alerts = alertsOf(p);
-  const pinned = memos.filter(m => m.patientId === p.id && m.pinned);
-  if (!alerts.length && !pinned.length && !p.memo) return null;
-  const red = alerts.some(x => x.tone === "red");
-  const Icon = red ? TriangleAlert : Info;
-  return (
-    <div className={cn("mt-3 flex gap-3 rounded-cell px-4 py-3", red ? "bg-red/8" : "bg-fill/8")}>
-      <Icon className={cn("mt-[3px] h-[17px] w-[17px] shrink-0", red ? "text-red" : "text-label2")} strokeWidth={2.2} />
-      <div className="min-w-0 flex-1">
-        {alerts.length > 0 && (
-          <ul className="space-y-0.5">
-            {alerts.map(x => (
-              <li key={x.label} className={cn("text-[15px] font-semibold leading-[22px] md:text-[14px] md:leading-5", x.tone === "red" ? "text-red" : "text-label")}>{x.label}</li>
-            ))}
-          </ul>
-        )}
-        {pinned.map(m => (
-          <p key={m.id} className={cn("text-[13px] leading-[1.6] text-label [word-break:auto-phrase]", alerts.length > 0 && "mt-1.5")}>{m.body}</p>
-        ))}
-        {p.memo && <p className={cn("text-[13px] leading-[1.6] text-label2", (alerts.length > 0 || pinned.length > 0) && "mt-1")}>{p.memo}</p>}
-      </div>
-    </div>
   );
 }
 
@@ -356,15 +377,16 @@ function Timeline({ a, status, nowMin }: { a: Appointment; status: StatusKey; no
 
 function CancelledNote({ a, p }: { a: Appointment; p: Patient }) {
   const noShow = a.status === "no_show";
+  const declined = /^お断り/.test(a.cancelReason ?? "");
   return (
     <div className="flex gap-3 rounded-cell bg-red/8 px-4 py-3">
       <CircleSlash className="mt-[3px] h-[17px] w-[17px] shrink-0 text-red" strokeWidth={2.2} />
       <div className="min-w-0">
-        <p className="text-[15px] font-semibold leading-[22px] text-red md:text-[14px] md:leading-5">{noShow ? "無断キャンセル" : "キャンセル済み"}</p>
+        <p className="text-[15px] font-semibold leading-[22px] text-red md:text-[14px] md:leading-5">{noShow ? "無断キャンセル" : declined ? "医院からお断りした予約" : "キャンセル済み"}</p>
         <p className="mt-0.5 text-[13px] leading-[1.6] text-label2 [word-break:auto-phrase]">
           {noShow
             ? `連絡なく来院されませんでした。${p.name}さんの無断キャンセルは${Math.max(1, p.noShows)}回目です。`
-            : `理由：${a.cancelReason ?? "入力なし"}`}
+            : `理由：${(a.cancelReason ?? "入力なし").replace(/^お断り：/, "")}${isClinicSide(a) ? "（患者のキャンセル回数には数えません）" : ""}`}
         </p>
       </div>
     </div>
@@ -441,7 +463,7 @@ function ActionTile({ icon: Icon, label, red, active, wide, onClick }: { icon: L
   );
 }
 
-function ReschedulePanel({ a, restore, onDone }: { a: Appointment; restore: boolean; onDone: () => void }) {
+function ReschedulePanel({ a, onDone }: { a: Appointment; onDone: () => void }) {
   const store = useStore();
   const toast = useToast();
   const phone = useIsPhone();
@@ -450,23 +472,19 @@ function ReschedulePanel({ a, restore, onDone }: { a: Appointment; restore: bool
   const minutes = a.end - a.start;
   const days = useMemo(() => upcomingDays(14), []);
   const others = useMemo(() => store.appointments.filter(x => x.id !== a.id), [store.appointments, a.id]);
-  const counts = useMemo(() => Object.fromEntries(days.filter(d => d.open).map(d => [d.key, openStarts(d.date, minutes, others).size])), [days, minutes, others]);
+  const counts = useMemo(() => Object.fromEntries(days.filter(d => d.open).map(d => [d.key, openStarts(d.date, minutes, others, sv.by).size])), [days, minutes, others, sv.by]);
   const [day, setDay] = useState(() => days.find(d => d.key === a.date && d.open)?.key ?? days.find(d => d.open && counts[d.key] > 0)?.key ?? days[0].key);
   const [start, setStart] = useState<number | undefined>();
   const dayOpt = days.find(d => d.key === day) ?? days[0];
-  const avail = useMemo(() => openStarts(dayOpt.date, minutes, others), [dayOpt, minutes, others]);
-  const same = day === a.date && start === a.start && !restore;
+  const avail = useMemo(() => openStarts(dayOpt.date, minutes, others, sv.by), [dayOpt, minutes, others, sv.by]);
+  const same = day === a.date && start === a.start;
   const unitId = start !== undefined ? pickUnit(others, sv, day, start, start + minutes, a.unitId) : undefined;
   const clash = start !== undefined ? staffConflict(others, a.staffId, day, start, start + minutes) : undefined;
 
   const apply = () => {
     if (start === undefined || !unitId) return;
-    const patch: Partial<Appointment> = { date: day, start, end: start + minutes, unitId };
-    if (restore) Object.assign(patch, { status: "confirmed", cancelReason: undefined, arrivedAt: undefined, startedAt: undefined });
-    store.updateAppointment(a.id, patch);
-    if (restore && a.status === "cancelled") store.updatePatient(p.id, { cancellations: Math.max(0, p.cancellations - 1) });
-    if (restore && a.status === "no_show") store.updatePatient(p.id, { noShows: Math.max(0, p.noShows - 1) });
-    toast(restore ? "予約に戻しました" : "日時を変更しました", { detail: `${mdw(fromKey(day))} ${hm(start)}–${hm(start + minutes)}・${unitById(unitId).name}` });
+    store.updateAppointment(a.id, { date: day, start, end: start + minutes, unitId });
+    toast("日時を変更しました", { detail: `${mdw(fromKey(day))} ${hm(start)}–${hm(start + minutes)}・${unitById(unitId).name}` });
     onDone();
   };
 
@@ -479,14 +497,14 @@ function ReschedulePanel({ a, restore, onDone }: { a: Appointment; restore: bool
           minutes={minutes}
           available={avail}
           value={start}
-          current={day === a.date && !restore ? a.start : undefined}
+          current={day === a.date ? a.start : undefined}
           onChange={setStart}
           cols={phone ? "grid-cols-4" : "grid-cols-5"}
         />
       </div>
       <div className="mt-4">
         <Button full size="md" disabled={start === undefined || same} onClick={apply} className="h-11">
-          {start === undefined ? "時刻を選んでください" : same ? "現在と同じ日時です" : `${mdw(fromKey(day))} ${hm(start)} ${restore ? "で予約に戻す" : "に変更"}`}
+          {start === undefined ? "時刻を選んでください" : same ? "現在と同じ日時です" : `${mdw(fromKey(day))} ${hm(start)} に変更`}
         </Button>
         {start !== undefined && !same && (unitId !== a.unitId || clash) && (
           <p className="mt-2 text-center text-[12px] leading-[1.6] text-label2 [word-break:auto-phrase]">
@@ -532,14 +550,15 @@ function AssignPanel({ a }: { a: Appointment }) {
       <div className="mt-4 px-1 text-[13px] font-semibold">ユニット</div>
       <div className="mt-2 grid grid-cols-4 gap-2">
         {units.map(u => {
+          const fits = unitFits(sv, u.id);
           const busy = unitBusy(others, u.id, a.date, a.start, a.end);
           const on = a.unitId === u.id;
           return (
             <motion.button
               key={u.id}
               type="button"
-              disabled={busy && !on}
-              whileTap={busy ? undefined : { scale: 0.96 }}
+              disabled={(busy || !fits) && !on}
+              whileTap={busy || !fits ? undefined : { scale: 0.96 }}
               onClick={() => {
                 if (on) return;
                 store.updateAppointment(a.id, { unitId: u.id });
@@ -547,11 +566,11 @@ function AssignPanel({ a }: { a: Appointment }) {
               }}
               className={cn(
                 "flex h-[52px] flex-col items-center justify-center rounded-[10px] transition-colors md:h-12",
-                on ? "bg-ink text-onink" : busy ? "text-label3" : "bg-fill/8 text-label hover:bg-fill/14",
+                on ? "bg-ink text-onink" : busy || !fits ? "text-label3" : "bg-fill/8 text-label hover:bg-fill/14",
               )}
             >
               <span className={cn("text-[14px] leading-tight", on ? "font-semibold" : "font-medium")}>{u.name}</span>
-              <span className={cn("mt-0.5 text-[11px] leading-tight", on ? "text-onink/70" : "text-label3")}>{on ? "現在" : busy ? "使用中" : "空き"}</span>
+              <span className={cn("mt-0.5 text-[11px] leading-tight", on ? "text-onink/70" : "text-label3")}>{on ? "現在" : !fits ? unitRoleLabel(u.id) : busy ? "使用中" : "空き"}</span>
             </motion.button>
           );
         })}
@@ -564,6 +583,7 @@ const REASONS = [
   { label: "体調不良", value: "体調不良のため" },
   { label: "仕事の都合", value: "仕事の都合" },
   { label: "日程の変更", value: "日程の変更希望" },
+  { label: "医院都合", value: "医院都合" },
   { label: "その他", value: "その他" },
 ];
 
@@ -576,14 +596,17 @@ function CancelPanel({ a, p, onDone }: { a: Appointment; p: Patient; onDone: () 
     if (!reason) return;
     const cancelReason = reason === "その他" ? other.trim() || "その他" : reason;
     store.updateAppointment(a.id, { status: "cancelled", cancelReason });
-    store.updatePatient(p.id, { cancellations: p.cancellations + 1 });
+    // 医院の都合で外したものは、患者のキャンセル回数に数えない
+    if (reason !== "医院都合") store.updatePatient(p.id, { cancellations: p.cancellations + 1 });
     toast("予約をキャンセルしました", { detail: `${p.name}さん・${mdw(fromKey(a.date))} ${hm(a.start)}` });
     onDone();
   };
   return (
     <div className="mt-3 rounded-cell bg-red/8 px-4 pb-4 pt-3.5">
       <p className="text-[15px] font-semibold leading-[22px] md:text-[14px] md:leading-5">この予約をキャンセルします</p>
-      <p className="mt-0.5 text-[13px] leading-[1.6] text-label2">理由を選んでください。台帳から予約が外れ、枠が空きます。</p>
+      <p className="mt-0.5 text-[13px] leading-[1.6] text-label2 [word-break:auto-phrase]">
+        {reason === "医院都合" ? "医院の都合のため、患者のキャンセル回数には数えません。台帳から予約が外れ、枠が空きます。" : "理由を選んでください。台帳から予約が外れ、枠が空きます。"}
+      </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {REASONS.map(r => (
           <Chip key={r.value} selected={reason === r.value} onClick={() => setReason(r.value)} className={cn(reason !== r.value && "bg-surface/80 hover:bg-surface")}>
@@ -607,18 +630,55 @@ function CancelPanel({ a, p, onDone }: { a: Appointment; p: Patient; onDone: () 
   );
 }
 
+const DECLINE = ["枠が埋まった", "メニュー対象外", "その他"];
+
+/** 仮予約（Web予約のリクエスト）を医院からお断りする。患者のキャンセル回数には数えない */
+function DeclinePanel({ a, p, onDone }: { a: Appointment; p: Patient; onDone: () => void }) {
+  const store = useStore();
+  const toast = useToast();
+  const [reason, setReason] = useState<string | null>(null);
+  const via = p.line ? "LINE" : "SMS";
+  const confirm = () => {
+    if (!reason) return;
+    store.updateAppointment(a.id, { status: "cancelled", cancelReason: `お断り：${reason}` });
+    toast("仮予約をお断りしました", { detail: `${p.name}さんに${via}でお知らせしました` });
+    onDone();
+  };
+  return (
+    <div className="mt-3 rounded-cell bg-red/8 px-4 pb-4 pt-3.5">
+      <p className="text-[15px] font-semibold leading-[22px] md:text-[14px] md:leading-5">このWeb予約をお断りします</p>
+      <p className="mt-0.5 text-[13px] leading-[1.6] text-label2 [word-break:auto-phrase]">{p.name}さんに{via}でお知らせが届きます。患者のキャンセル回数には数えません。</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {DECLINE.map(r => (
+          <Chip key={r} selected={reason === r} onClick={() => setReason(r)} className={cn(reason !== r && "bg-surface/80 hover:bg-surface")}>
+            {r}
+          </Chip>
+        ))}
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Button variant="gray" onClick={onDone} className="bg-surface/80">やめる</Button>
+        <Button variant="destructive" className="flex-1" disabled={!reason} onClick={confirm}>お断りする</Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── 診療メモ ────────────────────────────────────────────────────────────────
 function Memos({ a, p }: { a: Appointment; p: Patient }) {
   const store = useStore();
   const toast = useToast();
   const [draft, setDraft] = useState("");
+  // 書く人：ログイン中のスタッフ。受付なら、この予約の担当を初期値にする（診療中に衛生士が書くことが多い）
+  const me = staffById(store.currentStaffId);
+  const [writer, setWriter] = useState(me.role === "受付" ? a.staffId : me.id);
+  const who = staffById(writer);
   const list = store.memos
     .filter(m => m.apptId === a.id)
     .sort((x, y) => (x.date === y.date ? y.at - x.at : x.date < y.date ? 1 : -1));
   const add = () => {
     const body = draft.trim();
     if (!body) return;
-    store.addMemo({ patientId: p.id, apptId: a.id, staffId: ME.id, body });
+    store.addMemo({ patientId: p.id, apptId: a.id, staffId: writer, body });
     setDraft("");
     toast("メモを追加しました", { detail: `${p.name}さん・${sv(a)}` });
   };
@@ -633,11 +693,32 @@ function Memos({ a, p }: { a: Appointment; p: Patient }) {
             </motion.div>
           ))}
         </AnimatePresence>
-        <div className={cn("flex items-end gap-2 px-4 py-2", list.length > 0 && "hairline-t")}>
-          <AutoText value={draft} onChange={setDraft} onSubmit={add} minRows={1} placeholder="この予約のメモを追加" className="py-[7px]" />
-          <Button size="sm" variant={draft.trim() ? "filled" : "gray"} disabled={!draft.trim()} onClick={add} className="mb-[3px] shrink-0">
-            追加
-          </Button>
+        <div className={cn("px-4 pb-2 pt-2.5", list.length > 0 && "hairline-t")}>
+          <div className="flex items-center gap-1.5 text-[12px] text-label2">
+            記入
+            <Menu
+              align="start"
+              trigger={
+                <button type="button" className="-my-1 flex h-7 items-center gap-1 rounded-full py-0.5 pl-0.5 pr-1.5 font-medium text-label transition-colors hover:bg-fill/10 data-[state=open]:bg-fill/12">
+                  <Avatar name={who.name} tone={who.tone} size={18} />
+                  {who.name}
+                  <ChevronDown className="h-3 w-3 text-label3" strokeWidth={2.6} />
+                </button>
+              }
+            >
+              {staff.map(x => (
+                <MenuItem key={x.id} icon={x.id === writer ? Check : undefined} onSelect={() => setWriter(x.id)}>
+                  {x.name}　<span className="text-label2">{x.role}</span>
+                </MenuItem>
+              ))}
+            </Menu>
+          </div>
+          <div className="flex items-end gap-2">
+            <AutoText value={draft} onChange={setDraft} onSubmit={add} minRows={1} placeholder="この予約のメモを追加" className="py-[7px]" />
+            <Button size="sm" variant={draft.trim() ? "filled" : "gray"} disabled={!draft.trim()} onClick={add} className="mb-[3px] shrink-0">
+              追加
+            </Button>
+          </div>
         </div>
       </Inset>
     </section>
@@ -671,10 +752,7 @@ function MemoItem({ m }: { m: Memo }) {
 function History({ a, p, nowMin, onAll }: { a: Appointment; p: Patient; nowMin: number; onAll: () => void }) {
   const store = useStore();
   const ui = useClinicUI();
-  const upcoming = store.appointments
-    .filter(x => x.patientId === p.id && x.id !== a.id && live(x) && x.status !== "completed" && (x.date > TODAY_KEY || (x.date === TODAY_KEY && x.end > nowMin)))
-    .sort((x, y) => (x.date === y.date ? x.start - y.start : x.date < y.date ? -1 : 1))
-    .slice(0, 2);
+  const upcoming = upcomingOf(store.appointments, p.id, a.id, nowMin).slice(0, 2);
   const past = useMemo(() => {
     const fromStore = store.appointments
       .filter(x => x.patientId === p.id && x.id !== a.id && x.status === "completed")

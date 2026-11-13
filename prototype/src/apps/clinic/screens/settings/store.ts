@@ -51,7 +51,7 @@ let state: SettingsState = {
   ) as Record<number, DayHours>,
   holidays: { national: true, newYear: true, extra: [{ id: "x1", date: training, note: "院内研修のため" }] },
   menu: services.map(s => ({ ...s, web: s.id !== "sv04" && s.id !== "sv06" })),
-  web: { enabled: true, daysAhead: 60, sameDay: true, cutoffHours: 2, firstVisit: true, confirm: "manual", cancelHours: 24 },
+  web: { enabled: true, daysAhead: 30, sameDay: true, cutoffHours: 2, firstVisit: true, confirm: "manual", cancelHours: 24 },
   reminders: { dayBefore: true, sameDay: true, line: true, sms: true, mail: true },
   units: units.map(u => ({ ...u })),
   staff: staff.map(s => ({ id: s.id, perm: s.role === "院長" || s.role === "受付" ? "管理者" : "スタッフ", bookable: s.role !== "受付" && s.role !== "歯科助手", email: `${EMAIL[s.id]}@hidamari-dental.jp` })),

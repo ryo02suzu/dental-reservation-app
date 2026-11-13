@@ -1,7 +1,7 @@
 // 受付端末の部品。ご高齢の方でも押しやすいよう、押せる面はすべて64px以上にしている。
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { Delete } from "lucide-react";
+import { Check, Delete } from "lucide-react";
 import { cn, spring, springBouncy, tap } from "@/ui";
 import type { LucideIcon } from "lucide-react";
 
@@ -111,8 +111,23 @@ export function KeyPad({ onDigit, onDelete, canDelete }: { onDigit: (d: string) 
 export function KTitle({ title, lead, className }: { title: ReactNode; lead?: ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <h1 className="text-[26px] font-bold leading-[1.35] tracking-[-0.01em] palt md:text-[36px] lg:text-[40px]">{title}</h1>
+      <h1 className="text-balance text-[26px] font-bold leading-[1.35] tracking-[-0.01em] palt md:text-[36px]">{title}</h1>
       {lead && <p className="mt-3 max-w-[30em] text-[17px] leading-[1.7] text-label2 md:mt-4 md:text-[20px]">{lead}</p>}
     </div>
+  );
+}
+
+/** 完了の印（Arche 共通：アクセントの円に白いチェック。Web予約の完了と同じ見た目で、大きさだけ変える） */
+export function DoneMark({ size = 80, delay = 0.08, className }: { size?: number; delay?: number; className?: string }) {
+  return (
+    <motion.span
+      initial={{ scale: 0.4, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ ...springBouncy, delay }}
+      className={cn("flex shrink-0 items-center justify-center rounded-full bg-accent text-onink", className)}
+      style={{ width: size, height: size }}
+    >
+      <Check style={{ width: size / 2, height: size / 2 }} strokeWidth={3} />
+    </motion.span>
   );
 }

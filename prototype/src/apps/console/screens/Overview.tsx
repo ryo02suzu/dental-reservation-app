@@ -1,94 +1,126 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { ArrowRightLeft, Building2, Check, ChevronRight, CircleMinus, CirclePause, Mail, Puzzle, Send, Tag as TagIcon } from "lucide-react";
+import { ArrowRightLeft, ArrowUpRight, Building2, Check, ChevronRight, CircleMinus, CirclePause, CirclePlay, Mail, Puzzle, Send, Tag as TagIcon } from "lucide-react";
 import type { ConsoleClinic, PlanKey } from "@/data";
 import { TODAY, useNow } from "@/lib/clock";
-import { longDate, md, mdw, yen } from "@/lib/format";
+import { mdw, yen } from "@/lib/format";
 import { useIsPhone } from "@/lib/media";
 import { useRoute } from "@/lib/nav";
-import { Button, ListSection, Page, Ring, SectionTitle, Stat, Surface, cn } from "@/ui";
+import { Button, ListRow, ListSection, Page, Ring, SectionTitle, Surface, cn } from "@/ui";
 import type { LucideIcon } from "lucide-react";
 import { MrrChart, SegmentBar } from "./parts/charts";
 import {
-  PLAN_ORDER, PLAN_STYLE, SETUP_ITEMS, addonMRR, attentionOf, clinicMRR, daysSince, mrrHistory, overviewStats, pct, planLabel, planMRR,
-  setupDone, setupMissing, weeksOf, when,
+  DORMANT_DAYS, PLAN_ORDER, PLAN_STYLE, SETUP_ITEMS, addonMRR, attentionOf, clinicMRR, daysSince, mrrHistory, overviewStats, pct, planLabel, planMRR,
+  setupDone, setupMissing, sinceSignup, weeksOf, when,
 } from "./parts/model";
 import { ProposalSheet } from "./parts/ProposalSheet";
 import { useConsole, type ConsoleEvent, type ConsoleState } from "./parts/store";
-import { ClinicMark, RowRule, Swatch } from "./parts/ui";
+import { ClinicMark, Delta, RowRule, Swatch } from "./parts/ui";
 
 /** 運営コンソールの概要 */
 export default function ConsoleOverview({ param }: { param?: string }) {
   void param;
   const s = useConsole();
   const phone = useIsPhone();
+  const { goApp } = useRoute();
   const st = overviewStats(s);
   const history = useMemo(() => mrrHistory(s), [s]);
 
   return (
-    <Page title="概要" subtitle={longDate(TODAY)}>
-      <div className="grid gap-x-6 gap-y-4 min-[1180px]:grid-cols-[minmax(0,1fr)_344px]">
-        {/* MRR */}
-        <Surface className="min-w-0">
-          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-            <Stat
-              label="MRR"
-              value={<span className="text-[34px] tracking-[-0.025em] md:text-[38px]">{yen(st.mrr)}</span>}
-              delta={st.mrrDelta}
-            />
-            <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 pt-0.5 text-[13px] md:text-right">
-              <dt className="text-label2">プラン</dt>
-              <dd className="font-medium tnum">{yen(planMRR(s))}</dd>
-              <dt className="text-label2">オプション</dt>
-              <dd className="font-medium tnum">{yen(addonMRR(s))}</dd>
-            </dl>
-          </div>
-          <MrrChart data={history} height={phone ? 176 : 212} className="mt-5" />
-        </Surface>
+    <Page title="概要" subtitle={mdw(TODAY)}>
+      <div className="grid gap-x-6 min-[1180px]:grid-cols-[minmax(0,1fr)_344px]">
+        <div className="min-w-0">
+          {/* MRR */}
+          <Surface className="min-w-0">
+            <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+              <div>
+                <div className="text-[13px] font-medium text-label2">MRR</div>
+                <div className="mt-1 text-[34px] font-semibold leading-none tracking-[-0.025em] tnum md:text-[38px]">{yen(st.mrr)}</div>
+                <Delta value={st.mrrDelta} label={signedPct(st.mrrDelta)} compare="前月比" quiet={0.05} className="mt-2" />
+              </div>
+              <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 pt-0.5 text-[13px] md:text-right">
+                <dt className="text-label2">プラン</dt>
+                <dd className="font-medium tnum">{yen(planMRR(s))}</dd>
+                <dt className="text-label2">オプション</dt>
+                <dd className="font-medium tnum">{yen(addonMRR(s))}</dd>
+              </dl>
+            </div>
+            <MrrChart data={history} height={phone ? 176 : 212} className="mt-5" />
+          </Surface>
 
-        {/* 指標 */}
-        <div className="relative grid grid-cols-2 overflow-hidden rounded-card bg-surface md:grid-cols-4 min-[1180px]:grid-cols-2">
-          <StatCell i={0}>
-            <Stat label="契約医院" value={<>{st.active}<span className="text-[17px] font-medium text-label3"> / {st.total}</span></>} delta={st.activeDelta / Math.max(1, st.active - st.activeDelta)} deltaLabel={`${st.activeDelta >= 0 ? "+" : "−"}${Math.abs(st.activeDelta)}`} />
-            <Foot>稼働中 / 契約数</Foot>
-          </StatCell>
-          <StatCell i={1}>
-            <Stat label="30日の予約数" value={st.appts.toLocaleString("ja-JP")} unit="件" delta={st.apptsDelta} />
-            <Foot>全医院の合計</Foot>
-          </StatCell>
-          <StatCell i={2}>
-            <Stat label="Web予約の割合" value={(st.web * 100).toFixed(1)} unit="%" delta={st.webDelta} deltaLabel={`${(Math.abs(st.webDelta) * 100).toFixed(1)}pt`} />
-            <Foot>予約数で重み付け</Foot>
-          </StatCell>
-          <StatCell i={3}>
-            <Stat label="休眠" value={st.dormant} unit="医院" delta={st.dormantDelta} deltaLabel={`${st.dormantDelta >= 0 ? "+" : "−"}${Math.abs(st.dormantDelta)}`} good={false} />
-            <Foot>7日以上 利用なし</Foot>
-          </StatCell>
+          {/* 指標（1行の帯。iPhoneは2×2） */}
+          <Metrics st={st} phone={phone} />
+
+          <Attention s={s} />
         </div>
-
-        <Attention s={s} />
 
         <div className="min-w-0 md:grid md:grid-cols-2 md:gap-x-6 min-[1180px]:block">
           <PlanMix s={s} />
           <Activity s={s} />
         </div>
       </div>
+
+      {phone && (
+        <ListSection className="!mt-8" footer="医院・患者・予約はすべて架空のサンプルです。">
+          <ListRow icon={ArrowUpRight} tone="sand" title="プロトタイプのトップへ" onClick={() => goApp("launcher")} />
+        </ListSection>
+      )}
     </Page>
   );
 }
 
-// ─── 指標のマス（区切り線は並び方に合わせて出す） ────────────────────────────
-const RIGHT = ["", "hidden md:block min-[1180px]:hidden", "", "hidden"];
-const BOTTOM = ["md:hidden min-[1180px]:block", "md:hidden min-[1180px]:block", "hidden", "hidden"];
-function StatCell({ i, children }: { i: number; children: ReactNode }) {
+// ─── 指標の帯 ───────────────────────────────────────────────────────────────
+const signedPct = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v * 100).toFixed(1)}%`;
+const signedPt = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v * 100).toFixed(1)}pt`;
+const signedN = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : "±"}${Math.abs(v)}`;
+
+function Metrics({ st, phone }: { st: ReturnType<typeof overviewStats>; phone: boolean }) {
+  const items: { label: string; value: ReactNode; unit?: string; delta: ReactNode; hint: string }[] = [
+    {
+      label: "稼働中の医院",
+      value: st.active,
+      unit: `/ ${st.total}医院`,
+      delta: <Delta value={st.activeDelta} label={signedN(st.activeDelta)} compare="30日前から" quiet={1} />,
+      hint: `契約 ${st.total}医院のうち、停止中 ${st.stopped}医院`,
+    },
+    {
+      label: "直近4週の予約",
+      value: st.appts.toLocaleString("ja-JP"),
+      unit: "件",
+      delta: <Delta value={st.apptsDelta} label={signedPct(st.apptsDelta)} compare="前の4週比" quiet={0.05} />,
+      hint: "全医院の合計（先週まで）",
+    },
+    {
+      label: "Web予約率",
+      value: (st.web * 100).toFixed(1),
+      unit: "%",
+      delta: <Delta value={st.webDelta} label={signedPt(st.webDelta)} compare="前の4週比" quiet={0.01} />,
+      hint: "予約数で重み付けした、全医院の平均",
+    },
+    {
+      label: "休眠",
+      value: st.dormant,
+      unit: "医院",
+      delta: <Delta value={st.dormantDelta} label={signedN(st.dormantDelta)} compare="30日前から" quiet={1} good={false} alert />,
+      hint: `稼働中で、最終利用から${DORMANT_DAYS}日以上たっている医院`,
+    },
+  ];
   return (
-    <div className="relative flex min-w-0 flex-col justify-between gap-3 p-4 md:p-5">
-      {children}
-      <span aria-hidden className={cn("pointer-events-none absolute bottom-4 right-0 top-4 w-px origin-right scale-x-50 bg-sep/30", RIGHT[i])} />
-      <span aria-hidden className={cn("pointer-events-none absolute bottom-0 left-4 right-4 h-px origin-bottom scale-y-50 bg-sep/30", BOTTOM[i])} />
+    <div className={cn("mt-3 grid overflow-hidden rounded-card bg-surface", phone ? "grid-cols-2" : "grid-cols-4")}>
+      {items.map((it, i) => (
+        <div key={it.label} title={it.hint} className="relative min-w-0 px-4 py-3 md:px-5 md:py-3.5">
+          <div className="truncate whitespace-nowrap text-[12px] font-medium text-label2">{it.label}</div>
+          <div className="mt-1 flex items-baseline gap-1 whitespace-nowrap">
+            <span className="text-[24px] font-semibold leading-7 tracking-[-0.01em] tnum">{it.value}</span>
+            {it.unit && <span className="truncate text-[13px] font-medium text-label2 tnum">{it.unit}</span>}
+          </div>
+          <div className="mt-1">{it.delta}</div>
+          {(phone ? i % 2 === 1 : i > 0) && <span aria-hidden className="pointer-events-none absolute bottom-3 left-0 top-3 w-px origin-left scale-x-50 bg-sep/30" />}
+          {phone && i >= 2 && <span aria-hidden className="pointer-events-none absolute left-4 right-4 top-0 h-px origin-top scale-y-50 bg-sep/30" />}
+        </div>
+      ))}
     </div>
   );
 }
-const Foot = ({ children }: { children: ReactNode }) => <div className="text-[12px] text-label3">{children}</div>;
 
 // ─── 対応が必要 ─────────────────────────────────────────────────────────────
 function Attention({ s }: { s: ConsoleState }) {
@@ -100,7 +132,10 @@ function Attention({ s }: { s: ConsoleState }) {
   const open = (c: ConsoleClinic) => go("clinics", c.id);
   return (
     <section className="min-w-0">
-      <SectionTitle className="!mt-4" aside={<span className="text-footnote text-label2 tnum">{a.count}医院</span>}>対応が必要</SectionTitle>
+      <SectionTitle className="!mt-8">
+        対応が必要
+        {a.count > 0 && <span className="ml-2 font-normal text-label3 tnum">{a.count}</span>}
+      </SectionTitle>
       {a.count === 0 && <p className="rounded-cell bg-surface px-4 py-6 text-center text-[14px] text-label2">いま対応が必要な医院はありません。</p>}
 
       {a.setup.length > 0 && (
@@ -110,7 +145,7 @@ function Attention({ s }: { s: ConsoleState }) {
               key={c.id}
               clinic={c}
               onOpen={() => open(c)}
-              subtitle={setupMissing(c).map(m => m.short).join("・")}
+              subtitle={s.guides[c.id] ? `案内を送信済み · ${when(s.guides[c.id], t)}` : setupMissing(c).map(m => m.short).join("・")}
               aside={
                 <span className="flex items-center gap-2 text-[13px] text-label2 tnum">
                   <Ring value={setupDone(c) / SETUP_ITEMS.length} size={20} stroke={3} />
@@ -123,20 +158,28 @@ function Attention({ s }: { s: ConsoleState }) {
       )}
 
       {a.dormant.length > 0 && (
-        <ListSection header="最終利用から7日以上">
-          {a.dormant.map(c => (
-            <AttentionRow
-              key={c.id}
-              clinic={c}
-              onOpen={() => open(c)}
-              subtitle={`最終利用 ${mdw(c.lastActiveAt)}`}
-              aside={
-                <span className={cn("text-[14px] font-semibold tnum", c.active ? "text-red" : "text-label3")}>
-                  {daysSince(c.lastActiveAt)}日{!c.active && <span className="font-medium"> · 停止中</span>}
-                </span>
-              }
-            />
-          ))}
+        <ListSection header={`最終利用から${DORMANT_DAYS}日以上`}>
+          {a.dormant.map(c => {
+            const sent = s.checkins[c.id];
+            return (
+              <AttentionRow
+                key={c.id}
+                clinic={c}
+                onOpen={() => open(c)}
+                subtitle={sent ? `確認メールを送信済み · ${when(sent, t)}` : `最終利用 ${mdw(c.lastActiveAt)}`}
+                aside={
+                  sent ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-label2">
+                      <Check className="h-4 w-4 text-accent" strokeWidth={2.6} />
+                      連絡済み
+                    </span>
+                  ) : (
+                    <span className="text-[14px] font-semibold text-red tnum">{daysSince(c.lastActiveAt)}日</span>
+                  )
+                }
+              />
+            );
+          })}
         </ListSection>
       )}
 
@@ -145,13 +188,14 @@ function Attention({ s }: { s: ConsoleState }) {
           {a.growth.map(c => {
             const p = s.proposals[c.id];
             const wk = weeksOf(c);
-            const w = { thisWeek: wk[wk.length - 1].count };
+            const lastWeek = wk[wk.length - 1].count;
+            const total = sinceSignup(c);
             return (
               <AttentionRow
                 key={c.id}
                 clinic={c}
                 onOpen={() => open(c)}
-                subtitle={p ? `${when(p.at, t)}に${planLabel(p.plan)}プランを提案` : phone ? `登録${daysSince(c.createdAt)}日・予約${c.appts30d}件` : `登録から${daysSince(c.createdAt)}日で予約${c.appts30d}件 · 今週 ${w.thisWeek}件`}
+                subtitle={p ? `${planLabel(p.plan)}プランを提案済み · ${when(p.at, t)}` : phone ? `登録${daysSince(c.createdAt)}日・予約${total}件` : `登録から${daysSince(c.createdAt)}日で予約${total}件 · 先週 ${lastWeek}件`}
                 action={
                   p ? (
                     <span className="inline-flex shrink-0 items-center gap-1 pr-1 text-[13px] font-medium text-label2">
@@ -202,7 +246,10 @@ function PlanMix({ s }: { s: ConsoleState }) {
   const n = s.clinics.length;
   return (
     <section className="min-w-0">
-      <SectionTitle className="!mt-4" aside={<span className="text-footnote text-label2 tnum">{n}医院</span>}>プラン別</SectionTitle>
+      <SectionTitle className="!mt-8 min-[1180px]:!mt-0">
+        プラン別
+        <span className="ml-2 font-normal text-label3 tnum">{n}</span>
+      </SectionTitle>
       <Surface>
         <div className="grid grid-cols-[52px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 text-[12px] text-label2">
           <span>医院数</span>
@@ -239,6 +286,7 @@ const ICON: Record<ConsoleEvent["kind"], LucideIcon> = {
   addon_on: Puzzle,
   addon_off: CircleMinus,
   suspend: CirclePause,
+  resume: CirclePlay,
   proposal: Send,
   guide: Mail,
   checkin: Mail,
@@ -256,6 +304,7 @@ function describe(e: ConsoleEvent, s: ConsoleState): { title: string; detail: st
     case "addon_on": return { title: c?.name ?? "", detail: `オプション追加 · ${a?.name ?? ""}` };
     case "addon_off": return { title: c?.name ?? "", detail: `オプション解約 · ${a?.name ?? ""}` };
     case "suspend": return { title: c?.name ?? "", detail: "利用を停止" };
+    case "resume": return { title: c?.name ?? "", detail: "利用を再開" };
     case "proposal": return { title: c?.name ?? "", detail: `アップグレードを提案 · ${planLabel(e.to!)}` };
     case "guide": return { title: c?.name ?? "", detail: "初期設定の案内を送信" };
     case "checkin": return { title: c?.name ?? "", detail: "利用状況の確認メールを送信" };
@@ -271,7 +320,7 @@ function Activity({ s }: { s: ConsoleState }) {
   const items = [...s.events].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 6);
   return (
     <section className="min-w-0">
-      <SectionTitle className="!mt-4">最近の動き</SectionTitle>
+      <SectionTitle className="!mt-8">最近の動き</SectionTitle>
       <ListSection className="!mt-0">
         {items.map(e => {
           const d = describe(e, s);

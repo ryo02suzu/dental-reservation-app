@@ -102,14 +102,13 @@ export function PhoneSchedule({ param }: { param?: string }) {
           whileTap={tap}
           aria-label={unitShort ? `表示の絞り込み（${unitShort}）` : "表示の絞り込み"}
           className={cn(
-            "flex h-11 items-center justify-center gap-1 rounded-full text-accent",
-            unitShort || showCancelled ? "px-1" : "w-11",
+            "flex items-center justify-center gap-1 rounded-full text-accent",
+            // 絞り込み中は、砂色の小さなカプセルにして「いま絞っている」ことを見せる
+            unitShort || showCancelled ? "my-[5px] h-[34px] bg-sand/25 px-3" : "h-11 w-11",
           )}
         >
-          <span className={cn("flex items-center gap-1", (unitShort || showCancelled) && "h-[30px] rounded-full bg-sand/25 px-2.5")}>
-            <ListFilter className="h-[20px] w-[20px]" strokeWidth={2.1} />
-            {unitShort && <span className="text-[15px] font-semibold tnum">{unitShort}</span>}
-          </span>
+          <ListFilter className="h-[20px] w-[20px]" strokeWidth={2.1} />
+          {unitShort && <span className="text-[15px] font-semibold tnum">{unitShort}</span>}
         </motion.button>
       }
     >

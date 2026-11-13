@@ -3,9 +3,10 @@ import { TODAY } from "@/lib/clock";
 import { duration, fromKey, hm, mdw, relDay } from "@/lib/format";
 import { useIsPhone } from "@/lib/media";
 import { useRoute } from "@/lib/nav";
+import { useStore } from "@/lib/store";
 import { Button, ListSection } from "@/ui";
 import { BookingPage } from "./BookingPage";
-import { birthLabel, digitsOf, formatPhone, priceLong, range, roleOf, type Draft } from "./booking";
+import { asksProfile, birthLabel, digitsOf, formatPhone, pastDeadline, priceLong, range, resolveReturning, roleOf, type Draft } from "./booking";
 import { useNotify } from "./session";
 import { ActionBar } from "./shell";
 import { KVRow } from "./ui";
@@ -23,12 +24,17 @@ export function StepConfirm({ d }: { d: Draft }) {
   const { go } = useRoute();
   const phone = useIsPhone();
   const notify = useNotify();
+  const { patients } = useStore();
   const sv = serviceById(d.serviceId!);
   const day = fromKey(d.date!);
   const first = d.visit === "first";
   const number = digitsOf(d.number);
   const rel = relDay(day, TODAY);
   const near = rel === "今日" || rel === "明日" || rel === "明後日" ? rel : undefined;
+  // Webで変更・キャンセルできない予約（当日・前日18時以降）は、確定する前にそう伝える
+  const closed = pastDeadline(d.date!);
+  // ご家族の再診で、台帳の方を確認できなかったとき（本人に寄せず、医院で確認する仮予約にする）
+  const unverified = !first && !resolveReturning(d, patients);
 
   return (
     <BookingPage
@@ -36,7 +42,7 @@ export function StepConfirm({ d }: { d: Draft }) {
       d={d}
       subtitle="まだ予約は確定していません。内容をご確認のうえ、下のボタンを押してください。"
       footer={
-        <ActionBar note={`${mdw(day)} ${hm(d.start!)}・${sv.name}`}>
+        <ActionBar note={`${mdw(day)} ${hm(d.start!)}・${sv.name}${closed ? "・Webでの変更はできません" : ""}`}>
           <Button size="lg" full={phone} className={phone ? undefined : "min-w-[220px]"} onClick={() => go("book", "done")}>
             予約を確定する
           </Button>
@@ -67,11 +73,21 @@ export function StepConfirm({ d }: { d: Draft }) {
         </div>
       </section>
 
-      <ListSection header="受診される方" aside={<EditLink onClick={() => go("book", "info")} />} className="!mt-8">
+      {unverified && (
+        <section className="mt-6 rounded-cell bg-sand/15 px-4 py-3.5">
+          <h3 className="text-[15px] font-semibold">診察券番号を医院で確認します</h3>
+          <p className="mt-1 text-footnote leading-[1.65] text-label2">
+            {number ? `診察券番号 ${number} と、お名前が一致しませんでした。` : "診察券番号が入力されていないため、ご登録を確認できませんでした。"}
+            医院で確認したあとに確定するため、「仮予約」としてお受けします。
+          </p>
+        </section>
+      )}
+
+      <ListSection header="受診される方" aside={<EditLink onClick={() => go("book", "info")} />} className={unverified ? "!mt-6" : "!mt-8"}>
         <KVRow label="お名前">{d.name}</KVRow>
         <KVRow label="ふりがな">{d.kana}</KVRow>
-        {first && d.birth && <KVRow label="生年月日">{birthLabel(d.birth)}</KVRow>}
-        {first && d.sex && <KVRow label="性別">{d.sex}</KVRow>}
+        {asksProfile(d) && d.birth && <KVRow label="生年月日">{birthLabel(d.birth)}</KVRow>}
+        {asksProfile(d) && d.sex && <KVRow label="性別">{d.sex}</KVRow>}
         {!first && <KVRow label="診察券番号">{number ? <span className="tnum">{number}</span> : <span className="text-label3">未入力</span>}</KVRow>}
         <KVRow label="初診・再診">{first ? "はじめて（初診）" : "通院中（再診）"}</KVRow>
       </ListSection>
@@ -93,7 +109,16 @@ export function StepConfirm({ d }: { d: Draft }) {
       <section className="mt-8 rounded-cell bg-surface px-4 py-4">
         <h3 className="text-[15px] font-semibold">変更・キャンセルについて</h3>
         <p className="mt-1.5 text-footnote leading-[1.65] text-label2">
-          変更・キャンセルは前日18時までにお願いします。それ以降は、お電話（<span className="tnum">{clinic.phone}</span>）でご連絡ください。
+          {closed ? (
+            <>
+              <span className="font-semibold text-label">このご予約は、Webでの変更・キャンセルができません。</span>
+              変更・キャンセルは、お電話（<span className="tnum">{clinic.phone}</span>）でご連絡ください。
+            </>
+          ) : (
+            <>
+              変更・キャンセルは前日18時までにお願いします。それ以降は、お電話（<span className="tnum">{clinic.phone}</span>）でご連絡ください。
+            </>
+          )}
         </p>
         {first && (
           <>

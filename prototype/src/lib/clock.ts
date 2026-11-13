@@ -10,8 +10,11 @@ export function isClinicOpenDay(d: Date): boolean {
   return !CLOSED_WEEKDAYS.has(d.getDay()) && !isHoliday(format(d, "yyyy-MM-dd"));
 }
 
+// 確認用：window.__ARCHE_NOW__ に日付（例 "2026-11-13"）があれば、その日をデモの今日にする（撮影ツールが使う）
+const FORCED = (globalThis as { __ARCHE_NOW__?: string }).__ARCHE_NOW__;
+
 function demoBase(): Date {
-  const d = new Date();
+  const d = FORCED ? new Date(`${FORCED}T12:00:00`) : new Date();
   d.setHours(10, 42, 0, 0);
   while (!isClinicOpenDay(d)) d.setDate(d.getDate() + 1);
   return d;

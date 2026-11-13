@@ -1,14 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { addMonths, differenceInCalendarDays } from "date-fns";
-import { BellRing, CalendarPlus, Check, ChevronsUpDown, Copy, History, Send } from "lucide-react";
+import { BellRing, CalendarPlus, Check, ChevronsUpDown, Copy, History, Play, Send, UserCheck } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { TODAY, TODAY_KEY, minutesOfDay } from "@/lib/clock";
+import { TODAY, TODAY_KEY, minutesOfDay, now } from "@/lib/clock";
 import { ago, fromKey, hm, md, mdw, relDay, wd } from "@/lib/format";
 import { serviceById, staffById, unitById, type Appointment, type Patient } from "@/data";
 import { Button, ListSection, Menu, MenuItem, StatusPill, Tag, cn, tapSoft, useToast, type StatusKey } from "@/ui";
 import { statusOf } from "@/apps/clinic/helpers";
-import { dateSmart, riskOfMeta, ymd, type PatientMeta } from "./util";
+import { dateCol, dateSmart, ymd, type PatientMeta } from "./util";
 
 function ShowAll({ open, total, onClick }: { open: boolean; total: number; onClick: () => void }) {
   return (
@@ -61,7 +61,30 @@ export function UpcomingSection({ p, m, upcoming, now, onOpen, onBook, onCopyPho
   );
 }
 
-function HeroRow({ a, p, now, onOpen, onCopyPhone }: { a: Appointment; p: Patient; now: Date; onOpen: (id: string) => void; onCopyPhone: () => void }) {
+/** 今日の予約なら、その場で受付・診療開始できるボタン（今日の画面と同じ動き） */
+function TodayAction({ a, p, status }: { a: Appointment; p: Patient; status: StatusKey }) {
+  const { setStatus } = useStore();
+  const toast = useToast();
+  if (a.date !== TODAY_KEY) return null;
+  if (status === "late" || status === "confirmed") {
+    return (
+      <Button size="sm" icon={UserCheck} onClick={() => { setStatus(a.id, "arrived"); toast("受付しました", { icon: UserCheck, detail: `${p.name}さん・${hm(minutesOfDay(now()))} 来院` }); }}>
+        受付する
+      </Button>
+    );
+  }
+  if (status === "arrived") {
+    return (
+      <Button size="sm" icon={Play} onClick={() => { setStatus(a.id, "in_progress"); toast("診療を開始しました", { icon: Play, detail: `${unitById(a.unitId).name}・${staffById(a.staffId).short}` }); }}>
+        診療を開始
+      </Button>
+    );
+  }
+  return null;
+}
+
+function HeroRow({ a, p, now: nowD, onOpen, onCopyPhone }: { a: Appointment; p: Patient; now: Date; onOpen: (id: string) => void; onCopyPhone: () => void }) {
+  const now = nowD;
   const s = serviceById(a.serviceId);
   const st = staffById(a.staffId);
   const u = unitById(a.unitId);
@@ -93,16 +116,16 @@ function HeroRow({ a, p, now, onOpen, onCopyPhone }: { a: Appointment; p: Patien
               </div>
               <div className="mt-0.5 truncate text-footnote text-label2">{st.name}<span className="px-1 text-label4">·</span>{u.name}</div>
             </div>
-            <StatusPill status={status} compact className="mt-0.5" />
+            {status !== "confirmed" && <StatusPill status={status} compact className="mt-0.5" />}
           </div>
           {a.note && <p className="mt-2 text-footnote leading-[1.55] text-label">{a.note}</p>}
           {late && <p className="mt-2 text-footnote font-medium text-red tnum">予約時刻（{hm(a.start)}）から{minutesOfDay(now) - a.start}分たっています</p>}
         </div>
       </motion.button>
-      {late && (
-        <div className="-mt-1.5 flex items-center gap-2 pb-3.5 pl-[78px] pr-4">
-          <Button variant="tinted" size="sm" icon={Copy} onClick={onCopyPhone} aria-label={`電話番号をコピー（${p.phone}）`} className="tnum">{p.phone}</Button>
-          <span className="truncate text-footnote text-label2">電話で確認</span>
+      {today && (status === "late" || status === "confirmed" || status === "arrived") && (
+        <div className="-mt-1.5 flex flex-wrap items-center gap-2 pb-3.5 pl-[78px] pr-4">
+          <TodayAction a={a} p={p} status={status} />
+          {late && <Button variant="tinted" size="sm" icon={Copy} onClick={onCopyPhone} aria-label={`電話番号をコピー（${p.phone}）`} className="tnum">{p.phone}</Button>}
         </div>
       )}
       <Sep />
@@ -133,7 +156,7 @@ function CompactRow({ a, now, onOpen, stacked }: { a: Appointment; now: Date; on
           {u.short}
         </span>
       </span>
-      <StatusPill status={statusOf(a, now)} compact />
+      {statusOf(a, now) !== "confirmed" && <StatusPill status={statusOf(a, now)} compact />}
       <Sep />
     </button>
   );
@@ -180,7 +203,7 @@ function HistRow({ h, onOpen }: { h: HistItem; onOpen: (id: string) => void }) {
   const off = h.status && h.status !== "completed";
   const inner = (
     <>
-      <span className="w-[7.4em] shrink-0 pt-px text-footnote text-label2 tnum">{dateSmart(h.date)}</span>
+      <span className="w-[7.6em] shrink-0 whitespace-nowrap pt-px text-footnote text-label2 tnum">{dateCol(h.date)}</span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className={cn("truncate text-[15px] font-medium leading-5 md:text-[14px]", off && "text-label2")}>{h.title}</span>
@@ -268,13 +291,13 @@ export function ContactSection({ p, onCopy }: { p: Patient; onCopy: (text: strin
 }
 
 // ─── 来院の記録・リコール ─────────────────────────────────────────────────
-function Num({ label, value, unit, sub, red }: { label: string; value: string; unit?: string; sub?: string; red?: boolean }) {
+function Num({ label, value, unit, sub }: { label: string; value: string; unit?: string; sub?: string }) {
   return (
     <div className="min-w-0">
       <div className="truncate text-caption text-label2">{label}</div>
-      <div className={cn("mt-1 flex items-baseline gap-0.5", red && "text-red")}>
+      <div className="mt-1 flex items-baseline gap-0.5">
         <span className="text-[20px] font-semibold leading-6 tracking-[-0.01em] tnum">{value}</span>
-        {unit && <span className={cn("text-footnote font-medium", red ? "text-red" : "text-label2")}>{unit}</span>}
+        {unit && <span className="text-footnote font-medium text-label2">{unit}</span>}
       </div>
       {sub && <div className="mt-0.5 truncate text-caption text-label2 tnum">{sub}</div>}
     </div>
@@ -286,16 +309,15 @@ const RECALL_OPTIONS = [3, 4, 6] as const;
 export function StatsSection({ p, m }: { p: Patient; m: PatientMeta }) {
   const { updatePatient, recalls } = useStore();
   const toast = useToast();
-  const risky = riskOfMeta(m) >= 2;
   const recall = recalls.find(r => r.patientId === p.id);
   const days = m.nextRecall ? differenceInCalendarDays(m.nextRecall, TODAY) : undefined;
   const due = days !== undefined && Math.abs(days) <= 30;
   return (
-    <ListSection header="来院の記録">
+    <ListSection header="リコール・キャンセル">
       <div className="group relative grid grid-cols-[auto_auto_auto] justify-between gap-x-4 px-4 py-3.5">
         <Num label="最終来院" value={m.lastVisit ? ago(m.lastVisit, TODAY) : "—"} sub={m.lastVisit ? md(m.lastVisit) : "来院なし"} />
-        <Num label="キャンセル" value={String(m.cancellations)} unit="回" red={risky && m.cancellations > 0} />
-        <Num label="無断キャンセル" value={String(m.noShows)} unit="回" red={risky && m.noShows > 0} />
+        <Num label="キャンセル" value={String(m.cancellations)} unit="回" />
+        <Num label="無断キャンセル" value={String(m.noShows)} unit="回" />
         <Sep />
       </div>
       <div className="group relative flex min-h-[44px] items-center gap-3 px-4 py-1.5">

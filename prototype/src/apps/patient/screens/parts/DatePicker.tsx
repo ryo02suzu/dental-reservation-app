@@ -178,7 +178,7 @@ function DayStrip({ days, selected, onSelect, bleed, onSurface, toggle }: {
                 d.level === "none" && "opacity-60",
               )}
             >
-              {sel && <motion.span layoutId={`day-${id}`} transition={spring} className="absolute inset-0 rounded-[14px] bg-ink" />}
+              {sel && <motion.span layoutId={`day-${id}`} transition={spring} className="absolute inset-0 rounded-[14px] bg-accent" />}
               <span
                 className={cn(
                   "relative text-[12px] leading-4",
@@ -285,7 +285,7 @@ function MonthCalendar({ days, selected, onSelect, onSurface, toggle }: {
                     !disabled && !sel && "group-hover:bg-fill/10",
                   )}
                 >
-                  {sel && <motion.span layoutId={`mday-${id}`} transition={spring} className="absolute inset-0 rounded-full bg-ink" />}
+                  {sel && <motion.span layoutId={`mday-${id}`} transition={spring} className="absolute inset-0 rounded-full bg-accent" />}
                   <span
                     className={cn(
                       "relative",
@@ -330,7 +330,7 @@ export function SlotGrid({ slots, selected, onSelect, onSurface }: { slots: numb
                   aria-pressed={sel}
                   className={cn(
                     "h-11 rounded-[12px] text-[17px] font-medium tnum transition-colors duration-150",
-                    sel ? "bg-ink font-semibold text-onink" : cn(onSurface ? "bg-fill/8" : "bg-surface", "text-label hover:shadow-[inset_0_0_0_1.5px_rgb(var(--accent)/0.4)]"),
+                    sel ? "bg-accent font-semibold text-onink" : cn(onSurface ? "bg-fill/8" : "bg-surface", "text-label hover:shadow-[inset_0_0_0_1.5px_rgb(var(--accent)/0.4)]"),
                   )}
                 >
                   {hm(t)}

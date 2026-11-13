@@ -3,11 +3,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check } from "lucide-react";
 import type { ConsoleClinic } from "@/data";
 import { yen } from "@/lib/format";
+import { useState } from "react";
 import { Tag, cn, springBouncy, useToast } from "@/ui";
 import { addonMeta } from "./addonMeta";
-import { addonMRR, addonStats, addonsTotal } from "./model";
+import { addonMRR, addonStats, addonsTotal, clinicMRR } from "./model";
 import { CLINIC_KANA, setClinicAddon, useConsole } from "./store";
-import { ClinicMark } from "./ui";
+import { ClinicMark, ConfirmSheet, SheetGroup } from "./ui";
 
 export function AddonMatrix({ onOpenClinic }: { onOpenClinic: (id: string) => void }) {
   const s = useConsole();
@@ -15,11 +16,21 @@ export function AddonMatrix({ onOpenClinic }: { onOpenClinic: (id: string) => vo
   const clinics = [...s.clinics].sort((a, b) => Number(b.active) - Number(a.active) || (CLINIC_KANA[a.id] ?? "").localeCompare(CLINIC_KANA[b.id] ?? "", "ja"));
   const template = `minmax(160px,1.6fr) repeat(${s.addons.length}, minmax(80px,1fr)) 80px`;
 
+  const [cancel, setCancel] = useState<{ clinic: ConsoleClinic; key: string } | null>(null);
+  // 追加はその場で。解約は請求が変わるので確認してから
   const toggle = (c: ConsoleClinic, key: string) => {
     const a = s.addons.find(x => x.key === key)!;
-    const on = !c.addons.includes(key);
-    setClinicAddon(c.id, key, on);
-    toast(on ? `${a.name}を追加しました` : `${a.name}を解約しました`, { detail: on ? `${c.name} · ${yen(a.price)} / 月` : c.name });
+    if (c.addons.includes(key)) return setCancel({ clinic: c, key });
+    setClinicAddon(c.id, key, true);
+    toast(`${a.name}を追加しました`, { detail: `${c.name} · ${yen(a.price)} / 月` });
+  };
+  const ca = cancel ? s.addons.find(x => x.key === cancel.key) : undefined;
+  const cc = cancel ? s.clinics.find(x => x.id === cancel.clinic.id) : undefined;
+  const confirmCancel = () => {
+    if (!ca || !cc) return;
+    setClinicAddon(cc.id, ca.key, false);
+    toast(`${ca.name}を解約しました`, { detail: cc.name });
+    setCancel(null);
   };
 
   return (
@@ -82,6 +93,26 @@ export function AddonMatrix({ onOpenClinic }: { onOpenClinic: (id: string) => vo
           <div role="cell" className="text-right text-[15px] font-semibold tnum">{yen(addonMRR(s))}</div>
         </div>
       </div>
+      <ConfirmSheet open={!!cancel} onClose={() => setCancel(null)} title="オプションを解約" confirmLabel="解約する" destructive onConfirm={confirmCancel}>
+        {ca && cc && (
+          <>
+            <p className="px-1 pb-1 text-[15px] leading-[1.7] [text-wrap:pretty] [word-break:auto-phrase]">
+              <span className="font-semibold">{cc.name}</span>の<span className="font-semibold">{ca.name}</span>を解約します。
+              {!ca.active && "提供を停止しているため、解約すると再び追加することはできません。"}
+            </p>
+            <SheetGroup header="月額の変化" footer="解約は今日から有効です。差額は日割りで、次回の請求に反映されます。">
+              <div className="flex items-center justify-between gap-3 px-4 py-3 text-[15px] tnum">
+                <span>
+                  <span className="text-label2">{yen(clinicMRR(s, cc))}</span>
+                  <span className="mx-1.5 text-label3">→</span>
+                  <span className="font-semibold">{yen(clinicMRR(s, cc) - ca.price)}</span>
+                </span>
+                <span className="shrink-0 text-[14px] font-semibold text-label2">−{yen(ca.price)}</span>
+              </div>
+            </SheetGroup>
+          </>
+        )}
+      </ConfirmSheet>
     </div>
   );
 }
@@ -104,13 +135,13 @@ function CheckToggle({ on, disabled, label, hint, onToggle }: { on: boolean; dis
       <span
         className={cn(
           "flex h-[22px] w-[22px] items-center justify-center rounded-full transition-colors duration-150",
-          on ? (disabled ? "bg-fill/30 text-surface" : "bg-accent text-surface") : disabled ? "shadow-[inset_0_0_0_1.5px_rgb(var(--label-4)/0.5)]" : "shadow-[inset_0_0_0_1.5px_rgb(var(--label-4))] group-hover/check:shadow-[inset_0_0_0_1.5px_rgb(var(--label-3))]",
+          on ? (disabled ? "text-label3" : "text-label") : disabled ? "" : "shadow-[inset_0_0_0_1.5px_rgb(var(--label-4)/0.6)] group-hover/check:shadow-[inset_0_0_0_1.5px_rgb(var(--label-3))]",
         )}
       >
         <AnimatePresence initial={false}>
           {on && (
             <motion.span initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.3, opacity: 0 }} transition={springBouncy} className="flex">
-              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+              <Check className="h-[18px] w-[18px]" strokeWidth={2.6} />
             </motion.span>
           )}
         </AnimatePresence>

@@ -2,11 +2,11 @@ import { forwardRef } from "react";
 import { motion } from "framer-motion";
 import { CornerDownRight, Pin } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { fromKey, hm, md, toothLabel } from "@/lib/format";
+import { fromKey, hm, md } from "@/lib/format";
 import { patientById, serviceById, staffById, type Memo } from "@/data";
 import { Avatar, Tag, cn, springSoft, useToast } from "@/ui";
 import { useClinicUI } from "@/apps/clinic/context";
-import { sortTeeth } from "./util";
+import { sortTeeth, toothName } from "./util";
 
 /** 診療メモ1件。患者・時刻・本文・歯・次回・書いた人、右上にピン留め */
 export const MemoCard = forwardRef<HTMLDivElement, { m: Memo; showDate?: boolean; fresh?: boolean }>(function MemoCard({ m, showDate, fresh }, ref) {
@@ -70,7 +70,7 @@ export const MemoCard = forwardRef<HTMLDivElement, { m: Memo; showDate?: boolean
           <p className="mt-1.5 whitespace-pre-wrap text-[15px] leading-[1.7] text-label [word-break:auto-phrase] md:text-[14px]">{m.body}</p>
           {m.teeth && m.teeth.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
-              {sortTeeth(m.teeth).map(t => <Tag key={t} tone="outline">{toothLabel(t)}</Tag>)}
+              {sortTeeth(m.teeth).map(t => <Tag key={t} tone="outline">{toothName(t)}</Tag>)}
             </div>
           )}
           {m.next && (

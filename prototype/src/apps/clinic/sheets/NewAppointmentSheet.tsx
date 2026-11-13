@@ -1,24 +1,25 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Plus, TriangleAlert, UserRoundPlus } from "lucide-react";
+import { Check, TriangleAlert, UserRoundPlus } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useIsPhone } from "@/lib/media";
 import { TODAY, TODAY_KEY, minutesOfDay, now } from "@/lib/clock";
-import { age, fromKey, hm, key, mdw, toKatakana } from "@/lib/format";
-import { serviceById, services, staffById, unitById, units, type ApptSource, type InsuranceType, type Patient, type Service } from "@/data";
+import { fromKey, hm, key, mdw, toKatakana } from "@/lib/format";
+import { serviceById, services, staffById, unitById, units, type ApptSource, type Patient, type Service } from "@/data";
 import { Avatar, Button, FieldRow, SearchField, Segmented, Sheet, Tag, cn, spring, useToast } from "@/ui";
 import type { NewPrefill } from "../context";
 import { alertsOf } from "../helpers";
 import {
-  ageOf, eligibleStaff, markDeskBooked, markNoBirth, openStarts, pickStaff, pickUnit, priceLabel, pushRecentPatient, searchHit, staffConflict, unitBusy,
-  upcomingDays, visitLabel, type DayOption,
+  ageOf, eligibleStaff, openStarts, pickStaff, pickUnit, priceLabel, pushRecentPatient, recordedTimes, searchHit, staffConflict, unitBusy, unitFits,
+  unitRoleLabel, upcomingDays, visitLabel, type DayOption,
 } from "./logic";
+import { NewPatientFields, checkDraft, emptyDraft, type PatientDraft } from "../screens/patients/NewPatientFields";
 import { AutoText, Chip, DayStrip, Inset, Reveal, RowSep, SlotGrid, Title } from "./parts";
 
 type Source = Extract<ApptSource, "phone" | "walkin" | "line">;
 const SOURCES: { value: Source; label: string }[] = [
   { value: "phone", label: "電話" },
-  { value: "walkin", label: "来院時" },
+  { value: "walkin", label: "窓口" },
   { value: "line", label: "LINE" },
 ];
 const CATEGORIES: Service["category"][] = ["予防", "一般", "歯周", "外科", "補綴", "小児", "審美", "相談"];
@@ -27,8 +28,8 @@ const CHECKUPS = new Set(["sv01", "sv02", "sv09"]);
 
 interface Form {
   patientId?: string;
-  /** この画面で登録した新しい患者さん（初診） */
-  registered: boolean;
+  /** この画面で入力した新しい患者（初診）。「予約を登録」したときに患者として登録する */
+  draft?: Omit<Patient, "id" | "number">;
   serviceId?: string;
   day: string;
   start?: number;
@@ -58,30 +59,31 @@ export function NewAppointmentSheet({ open, prefill, onClose }: { open: boolean;
   }
   const set = (patch: Partial<Form>) => setForm(f => ({ ...f, ...patch }));
 
-  const patient = form.patientId ? store.patients.find(p => p.id === form.patientId) : undefined;
+  const patient: Patient | undefined = form.draft ? { ...form.draft, id: DRAFT_ID, number: "" } : form.patientId ? store.patients.find(p => p.id === form.patientId) : undefined;
   const sv = form.serviceId ? serviceById(form.serviceId) : undefined;
   const minutes = sv?.minutes ?? 30;
   const days = useMemo(() => upcomingDays(form.span), [form.span]);
   const dayOpt = days.find(d => d.key === form.day && d.open) ?? days.find(d => d.open)!;
-  const avail = useMemo(() => openStarts(dayOpt.date, minutes, store.appointments), [dayOpt, minutes, store.appointments]);
+  const avail = useMemo(() => openStarts(dayOpt.date, minutes, store.appointments, sv?.by), [dayOpt, minutes, store.appointments, sv?.by]);
   const start = form.start !== undefined && avail.has(form.start) ? form.start : undefined;
   const lostStart = form.start !== undefined && start === undefined;
   const end = start !== undefined ? start + minutes : undefined;
   const unitId = sv && start !== undefined ? pickUnit(store.appointments, sv, dayOpt.key, start, start + minutes, form.unitId) : undefined;
   const staffId = sv && start !== undefined && unitId ? pickStaff(store.appointments, sv, unitId, dayOpt.key, start, start + minutes, form.staffId) : undefined;
-  const firstVisit = form.registered || form.serviceId === FIRST_VISIT || (!!patient && patient.visits === 0);
+  const firstVisit = !!form.draft || form.serviceId === FIRST_VISIT || (!!patient && patient.visits === 0);
   const ready = !!patient && !!sv && start !== undefined && !!unitId && !!staffId;
 
   const submit = () => {
     if (!ready || !patient || !sv || start === undefined || !unitId || !staffId) return;
-    const a = store.addAppointment({
-      date: dayOpt.key, start, end: start + sv.minutes, patientId: patient.id, serviceId: sv.id, staffId, unitId,
+    // 新しい患者は、予約と一緒にここで登録する（途中で閉じたら登録しない）
+    const p = form.draft ? store.addPatient(form.draft) : patient;
+    store.addAppointment({
+      date: dayOpt.key, start, end: start + sv.minutes, patientId: p.id, serviceId: sv.id, staffId, unitId,
       status: "confirmed", source: form.source, firstVisit, note: form.note.trim() || undefined,
     });
-    if (form.source === "walkin") markDeskBooked(a.id);
-    if (CHECKUPS.has(sv.id) && store.recalls.some(r => r.patientId === patient.id && r.status !== "予約済み")) store.setRecall(patient.id, "予約済み");
-    pushRecentPatient(patient.id);
-    toast("予約を登録しました", { detail: `${patient.name}さん・${mdw(dayOpt.date)} ${hm(start)}` });
+    if (CHECKUPS.has(sv.id) && store.recalls.some(r => r.patientId === p.id && r.status !== "予約済み")) store.setRecall(p.id, "予約済み");
+    pushRecentPatient(p.id);
+    toast(form.draft ? "患者と予約を登録しました" : "予約を登録しました", { detail: `${p.name}さん${form.draft ? `（診察券 ${p.number}）` : ""}・${mdw(dayOpt.date)} ${hm(start)}` });
     onClose();
   };
 
@@ -91,7 +93,7 @@ export function NewAppointmentSheet({ open, prefill, onClose }: { open: boolean;
     start !== undefined && unitId ? unitById(unitId).name : undefined,
     start !== undefined && staffId ? staffById(staffId).short : undefined,
   ].filter(Boolean).join("・");
-  const missing = [!patient && "患者さん", !sv && "メニュー", start === undefined && "時間"].filter(Boolean) as string[];
+  const missing = [!patient && "患者", !sv && "メニュー", start === undefined && "時間"].filter(Boolean) as string[];
 
   return (
     <Sheet
@@ -104,7 +106,7 @@ export function NewAppointmentSheet({ open, prefill, onClose }: { open: boolean;
         <div className={cn(phone ? "space-y-3" : "flex items-center gap-5")}>
           <div className="min-w-0 flex-1">
             <div className={cn("truncate text-[13px] leading-[18px]", patient ? "text-label2" : "text-label3")}>
-              {patient ? `${patient.name}さん${firstVisit ? "・初診" : ""}` : "患者さん未選択"}
+              {patient ? `${patient.name}さん${firstVisit ? "・初診" : ""}` : "患者が未選択です"}
             </div>
             <div className={cn("mt-0.5 truncate text-[15px] font-medium leading-5 tnum md:text-[16px] md:leading-[22px]", missing.length && "text-label2")}>
               {missing.length ? `${missing.join("・")}を選んでください` : summary}
@@ -142,11 +144,10 @@ function initForm(pf: NewPrefill | undefined, store: ReturnType<typeof useStore>
   const okDay = pf?.date && all.some(d => d.key === pf.date && d.open) ? pf.date : undefined;
   // 今日はもう空きがなければ次の診療日から
   const firstFree = all.find(d => d.open && openStarts(d.date, 30, store.appointments).size > 0)?.key ?? all.find(d => d.open)!.key;
-  // 今日来院している患者さんの「次回の予約」は窓口（来院時）での予約
+  // 今日来院している患者の「次回の予約」は窓口での予約
   const here = !!p && store.appointments.some(a => a.patientId === p.id && a.date === TODAY_KEY && (a.status === "completed" || a.status === "in_progress" || a.status === "arrived"));
   return {
     patientId: p?.id,
-    registered: false,
     serviceId: pf?.serviceId ?? (p && p.visits === 0 ? FIRST_VISIT : undefined),
     day: okDay ?? firstFree,
     start: pf?.start,
@@ -175,26 +176,27 @@ function Body({ form, set, patient, sv, days, dayOpt, avail, start, lostStart, u
   const phone = useIsPhone();
   const store = useStore();
   const root = useRef<HTMLDivElement>(null);
-  // PC：患者さんが決まっていれば本文に、決まっていなければ検索欄にフォーカス（検索欄は autoFocus）
+  // PC：患者が決まっていれば本文に、決まっていなければ検索欄にフォーカス（検索欄は autoFocus）
   useLayoutEffect(() => {
     if (!phone && form.patientId) root.current?.focus({ preventScroll: true });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const minutes = sv?.minutes ?? 30;
   const counts = useMemo(
-    () => Object.fromEntries(days.filter(d => d.open).map(d => [d.key, openStarts(d.date, minutes, store.appointments).size])),
-    [days, minutes, store.appointments],
+    () => Object.fromEntries(days.filter(d => d.open).map(d => [d.key, openStarts(d.date, minutes, store.appointments, sv?.by).size])),
+    [days, minutes, store.appointments, sv?.by],
   );
   return (
     <div ref={root} tabIndex={-1} className={cn("pt-1 outline-none", phone ? "min-h-[calc(94dvh-206px)]" : "min-h-[calc(86vh-176px)]")}>
       <PatientSection
         patient={patient}
-        registered={form.registered}
-        onPick={(id, registered) => {
+        draft={!!form.draft}
+        onPick={id => {
           const p = store.patients.find(x => x.id === id);
           pushRecentPatient(id);
-          set({ patientId: id, registered, serviceId: form.serviceId ?? (registered || p?.visits === 0 ? FIRST_VISIT : undefined) });
+          set({ patientId: id, draft: undefined, serviceId: form.serviceId ?? (p?.visits === 0 ? FIRST_VISIT : undefined) });
         }}
-        onClear={() => set({ patientId: undefined, registered: false })}
+        onDraft={d => set({ draft: d, patientId: undefined, serviceId: form.serviceId ?? FIRST_VISIT })}
+        onClear={() => set({ patientId: undefined, draft: undefined })}
       />
 
       <MenuSection patient={patient} value={form.serviceId} onChange={id => set({ serviceId: id })} />
@@ -237,7 +239,7 @@ function Body({ form, set, patient, sv, days, dayOpt, avail, start, lostStart, u
           <Title>予約経路</Title>
           <Segmented full value={form.source} onChange={v => set({ source: v })} options={SOURCES} />
           <p className="mt-1.5 px-1 text-[12px] leading-[1.6] text-label3">
-            {form.source === "walkin" ? "窓口で次回の予約を取ったとき" : form.source === "phone" ? "お電話で予約を受けたとき" : "LINEのメッセージで受けたとき"}
+            {form.source === "walkin" ? "来院したときに受付で次回の予約を取ったとき" : form.source === "phone" ? "お電話で予約を受けたとき" : "LINEのメッセージで受けたとき"}
           </p>
         </div>
         <div className={cn(phone && "mt-6")}>
@@ -252,29 +254,38 @@ function Body({ form, set, patient, sv, days, dayOpt, avail, start, lostStart, u
 }
 
 // ─── 1. 患者 ─────────────────────────────────────────────────────────────────
-function PatientSection({ patient, registered, onPick, onClear }: {
-  patient?: Patient; registered: boolean; onPick: (id: string, registered: boolean) => void; onClear: () => void;
+const DRAFT_ID = "draft";
+const LIMIT = 6;
+/** 生年月日の短い形（本人確認で聞く） */
+const birthShort = (p: Patient) => `${p.birth.getFullYear()}/${p.birth.getMonth() + 1}/${p.birth.getDate()}`;
+
+function PatientSection({ patient, draft, onPick, onDraft, onClear }: {
+  patient?: Patient; draft: boolean; onPick: (id: string) => void; onDraft: (d: Omit<Patient, "id" | "number">) => void; onClear: () => void;
 }) {
   const phone = useIsPhone();
   const store = useStore();
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const results = useMemo(() => {
+  const { results, more, inClinic } = useMemo(() => {
     const query = q.trim();
     if (!query) {
-      // 空欄のときは、今日来院した患者さん（窓口で次回の予約を取ることが多い）
+      // 空欄のときは、いま院内にいる患者。会計中（完了して30分以内）→ 診療中 → 来院済 の順
       const nowMin = minutesOfDay(now());
-      const seen = store.appointments
-        .filter(a => a.date === TODAY_KEY && (a.status === "completed" || a.status === "in_progress" || a.status === "arrived") && a.start <= nowMin + 60)
-        .sort((x, y) => y.start - x.start)
-        .map(a => a.patientId);
-      return [...new Set(seen)].slice(0, 4).map(id => store.patients.find(p => p.id === id)!).filter(Boolean);
+      const rank = (a: (typeof store.appointments)[number]) => (a.status === "completed" ? 0 : a.status === "in_progress" ? 1 : 2);
+      const here = store.appointments
+        .filter(a => a.date === TODAY_KEY && (a.status === "in_progress" || a.status === "arrived" || (a.status === "completed" && nowMin - (recordedTimes(a).done ?? a.end) <= 30)))
+        .sort((x, y) => rank(x) - rank(y) || y.start - x.start);
+      const seen = new Map<string, string>();
+      for (const a of here) if (!seen.has(a.patientId)) seen.set(a.patientId, a.status === "completed" ? "会計中" : a.status === "in_progress" ? "診療中" : "来院済");
+      const list = [...seen.keys()].slice(0, 4).map(id => store.patients.find(p => p.id === id)!).filter(Boolean);
+      return { results: list, more: 0, inClinic: seen };
     }
     const kq = toKatakana(query).replace(/\s/g, "");
     const nq = query.replace(/\s/g, "");
     const rank = (p: Patient) => (p.name.replace(/\s/g, "").startsWith(nq) || p.kana.replace(/\s/g, "").startsWith(kq) ? 0 : 1);
-    return store.patients.filter(p => searchHit(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja")).slice(0, 6);
+    const all = store.patients.filter(p => searchHit(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja"));
+    return { results: all.slice(0, LIMIT), more: Math.max(0, all.length - LIMIT), inClinic: undefined };
   }, [q, store.patients, store.appointments]);
 
   return (
@@ -283,23 +294,29 @@ function PatientSection({ patient, registered, onPick, onClear }: {
       <AnimatePresence mode="popLayout" initial={false}>
         {patient ? (
           <motion.div key="chip" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={spring}>
-            <PatientChip p={patient} registered={registered} onClear={() => { onClear(); setCreating(false); }} />
+            <PatientChip p={patient} draft={draft} onClear={() => { onClear(); setCreating(draft); }} />
           </motion.div>
         ) : creating ? (
           <motion.div key="new" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={spring}>
-            <NewPatientForm seed={q} onCancel={() => setCreating(false)} onDone={p => onPick(p.id, true)} onPickExisting={id => onPick(id, false)} />
+            <NewPatientForm seed={q} onCancel={() => setCreating(false)} onDone={d => { setCreating(false); onDraft(d); }} onPickExisting={id => { setCreating(false); onPick(id); }} />
           </motion.div>
         ) : (
           <motion.div key="search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
             <SearchField value={q} onChange={setQ} placeholder="氏名・ふりがな・番号で検索" autoFocus={!phone} />
             <Inset className="mt-2">
-              {!q.trim() && results.length > 0 && <div className="px-4 pb-1 pt-2.5 text-[12px] font-medium text-label2">今日来院した患者さん</div>}
+              {!q.trim() && results.length > 0 && <div className="px-4 pb-1 pt-2.5 text-[12px] font-medium text-label2">いま院内にいる患者</div>}
               {results.map(p => (
-                <PatientOption key={p.id} p={p} q={q} onClick={() => onPick(p.id, false)} />
+                <PatientOption key={p.id} p={p} q={q} here={inClinic?.get(p.id)} onClick={() => onPick(p.id)} />
               ))}
+              {more > 0 && (
+                <div className="group/row relative px-4 py-2.5 text-[13px] leading-[1.6] text-label2 tnum [word-break:auto-phrase]">
+                  ほか{more}人 — 名前を続けて入力するか、生年月日・電話番号で絞り込んでください
+                  <RowSep />
+                </div>
+              )}
               {q.trim() && results.length === 0 && (
                 <div className="group/row relative px-4 py-3 text-[14px] text-label2">
-                  「{q.trim()}」に一致する患者さんはいません
+                  「{q.trim()}」に一致する患者はいません
                   <RowSep />
                 </div>
               )}
@@ -310,7 +327,7 @@ function PatientSection({ patient, registered, onPick, onClear }: {
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sand/30">
                   <UserRoundPlus className="h-[17px] w-[17px]" strokeWidth={2.1} />
                 </span>
-                <span className="text-[16px] font-medium md:text-[15px]">新しい患者さんを登録</span>
+                <span className="text-[16px] font-medium md:text-[15px]">新しい患者を登録</span>
               </button>
             </Inset>
           </motion.div>
@@ -320,13 +337,15 @@ function PatientSection({ patient, registered, onPick, onClear }: {
   );
 }
 
-function PatientOption({ p, q, onClick }: { p: Patient; q: string; onClick: () => void }) {
+function PatientOption({ p, q, here, onClick }: { p: Patient; q: string; here?: string; onClick: () => void }) {
   const store = useStore();
   const phone = useIsPhone();
   const age = ageOf(p);
   const alerts = alertsOf(p).filter(x => x.tone === "red");
-  const visit = visitLabel(store.appointments, p, minutesOfDay(now()), phone);
-  const digits = /\d{2,}/.test(q);
+  const visit = here ? `今日 ${here}` : visitLabel(store.appointments, p, minutesOfDay(now()), phone);
+  const digits = /\d{2,}/.test(q) ? q.replace(/\D/g, "") : "";
+  const byPhone = digits.length >= 4 && p.phone.replace(/\D/g, "").includes(digits);
+  const byNumber = digits.length >= 3 && p.number.includes(digits);
   return (
     <button onClick={onClick} className="group/row relative flex min-h-[60px] w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-fill/[0.06] active:bg-fill/12 md:min-h-[54px]">
       <Avatar name={p.name} size={36} />
@@ -336,10 +355,10 @@ function PatientOption({ p, q, onClick }: { p: Patient; q: string; onClick: () =
           <span className="truncate text-[12px] text-label2">{p.kana}</span>
         </div>
         <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2 tnum">
-          {age === null ? "" : `${age}歳`}
-          {(!phone || digits) && <>{age === null ? "" : "・"}診察券 {p.number}</>}
+          {age === null ? "年齢未登録" : `${age}歳`}
+          {byPhone ? <>・{p.phone}</> : byNumber ? <>・診察券 {p.number}</> : <>（{birthShort(p)}）</>}
           <span className="text-label4">・</span>
-          {digits && p.phone.replace(/\D/g, "").includes(q.replace(/\D/g, "")) ? p.phone : visit}
+          <span className={cn(here === "会計中" && "font-medium text-label")}>{visit}</span>
         </div>
       </div>
       {alerts.length > 0 && <TriangleAlert className="h-4 w-4 shrink-0 text-red" strokeWidth={2.2} aria-label="注意事項あり" />}
@@ -356,23 +375,24 @@ function nextOf(appts: ReturnType<typeof useStore>["appointments"], patientId: s
   return n ? { d: fromKey(n.date), start: n.start, serviceId: n.serviceId } : undefined;
 }
 
-function PatientChip({ p, registered, onClear }: { p: Patient; registered: boolean; onClear: () => void }) {
+function PatientChip({ p, draft, onClear }: { p: Patient; draft: boolean; onClear: () => void }) {
   const store = useStore();
   const age = ageOf(p);
   const alerts = alertsOf(p);
-  const next = nextOf(store.appointments, p.id);
+  const next = draft ? undefined : nextOf(store.appointments, p.id);
   return (
     <Inset className="flex items-start gap-3 px-4 py-3">
       <Avatar name={p.name} size={40} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[17px] font-semibold leading-[22px] palt">{p.name}</span>
-          {(registered || p.visits === 0) && <Tag tone="accent">初診</Tag>}
+          {(draft || p.visits === 0) && <Tag tone="accent">初診</Tag>}
         </div>
         <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2">{p.kana}</div>
         <div className="truncate text-[13px] leading-[18px] text-label2 tnum">
-          {age === null ? "年齢未登録" : `${age}歳`}・{p.sex}・診察券 {p.number}
+          {age === null ? "年齢未登録" : `${age}歳（${birthShort(p)}）`}・{p.sex}・{draft ? p.phone : `診察券 ${p.number}`}
         </div>
+        {draft && <p className="mt-1.5 text-[12px] leading-[1.6] text-label2">新しい患者です。予約を登録すると、患者も一緒に登録され、診察券番号が付きます。</p>}
         {alerts.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {alerts.map(x => <Tag key={x.label} tone={x.tone === "red" ? "red" : "neutral"}>{x.label}</Tag>)}
@@ -385,131 +405,50 @@ function PatientChip({ p, registered, onClear }: { p: Patient; registered: boole
         )}
       </div>
       <button onClick={onClear} className="-mr-1 shrink-0 rounded-full px-2 py-1 text-[15px] text-accent transition-opacity active:opacity-50 md:text-[14px]">
-        変更
+        {draft ? "修正" : "変更"}
       </button>
     </Inset>
   );
 }
 
-const KANA = /^[ぁ-ゖァ-ヺー・\s　]+$/;
-
 function NewPatientForm({ seed, onCancel, onDone, onPickExisting }: {
-  seed: string; onCancel: () => void; onDone: (p: Patient) => void; onPickExisting: (id: string) => void;
+  seed: string; onCancel: () => void; onDone: (d: Omit<Patient, "id" | "number">) => void; onPickExisting: (id: string) => void;
 }) {
   const store = useStore();
-  const toast = useToast();
-  const s = seed.trim();
-  const [name, setName] = useState(s && !KANA.test(s) && !/\d/.test(s) ? s : "");
-  const [kana, setKana] = useState(s && KANA.test(s) ? s : "");
-  const [tel, setTel] = useState(/^[\d\-\s]+$/.test(s) ? s : "");
-  const [birth, setBirth] = useState("");
-  const [sex, setSex] = useState<Patient["sex"] | null>(null);
+  const [draft, setDraft] = useState<PatientDraft>(() => emptyDraft(seed));
   const [tried, setTried] = useState(false);
-
-  const digits = tel.replace(/\D/g, "");
-  const born = parseBirth(birth);
-  const error =
-    !name.trim() ? "氏名を入力してください"
-    : !kana.trim() ? "ふりがなを入力してください"
-    : !KANA.test(kana.trim()) ? "ふりがなは、ひらがなかカタカナで入力してください"
-    : !digits ? "電話番号を入力してください"
-    : /[^\d\-\s()]/.test(tel) || digits.length < 10 || digits.length > 11 ? "電話番号は数字10〜11桁で入力してください"
-    : birth.trim() && !born ? "生年月日は「1985/4/12」か「S60.4.12」の形で入力してください"
-    : !sex ? "性別を選んでください"
-    : null;
-  const dup = digits.length >= 10 ? store.patients.find(p => p.phone.replace(/\D/g, "") === digits) : undefined;
-
+  const check = checkDraft(draft, store.patients);
   const submit = () => {
     setTried(true);
-    if (error) return;
-    const b = born ?? TODAY;
-    const years = born ? age(born, TODAY) : 30;
-    const insurance: InsuranceType = years < 15 ? "子ども医療証" : years >= 75 ? "後期高齢者" : "社保本人";
-    const p = store.addPatient({
-      name: tidy(name), kana: tidy(toKatakana(kana)), sex: sex!, birth: b, phone: formatTel(digits), insurance,
-      firstVisit: TODAY, visits: 0, recallMonths: 3, cancellations: 0, noShows: 0, line: false, allergies: [], conditions: [], teeth: {},
-    });
-    if (!born) markNoBirth(p.id);
-    toast("患者さんを登録しました", { detail: `${p.name}さん・診察券 ${p.number}` });
-    onDone(p);
+    if (check.value) onDone(check.value);
   };
-
   return (
     <div>
       <Inset>
-        <FieldRow label="氏名" value={name} onChange={setName} placeholder="山田 花子" />
-        <FieldRow label="ふりがな" value={kana} onChange={setKana} placeholder="やまだ はなこ" />
-        <FieldRow label="電話番号" value={tel} onChange={setTel} placeholder="090-1234-5678" type="tel" inputMode="tel" />
-        <label className="group relative flex min-h-[48px] items-center gap-3 px-4">
-          <span className="w-[6.5em] shrink-0 text-[16px] text-label md:text-[15px]">生年月日</span>
-          <input
-            value={birth}
-            inputMode="numeric"
-            onChange={e => setBirth(e.target.value)}
-            placeholder="1985/4/12・S60.4.12"
-            className="min-w-0 flex-1 bg-transparent py-3 text-[16px] tnum outline-none placeholder:text-label3 md:text-[15px]"
-          />
-          <span className={cn("shrink-0 text-[13px] tnum", born ? "font-medium text-label2" : "text-label3")}>{born ? `${age(born, TODAY)}歳` : "任意"}</span>
-          <span aria-hidden className="pointer-events-none absolute bottom-0 left-4 right-0 h-px origin-bottom scale-y-50 bg-sep/30" />
-        </label>
-        <div className="flex min-h-[52px] items-center gap-3 px-4 py-2">
-          <span className="w-[6.5em] shrink-0 text-[16px] text-label md:text-[15px]">性別</span>
-          <div className="flex gap-2">
-            {(["女性", "男性"] as const).map(x => (
-              <Chip key={x} selected={sex === x} onClick={() => setSex(x)} className="min-w-[4.5rem]">{x}</Chip>
-            ))}
-          </div>
-        </div>
+        <NewPatientFields draft={draft} onChange={x => { setDraft(d => ({ ...d, ...x })); setTried(false); }} check={check} />
       </Inset>
-      {dup && (
+      {check.dup && (
         <div className="mt-2 flex items-center gap-3 rounded-cell bg-sand/20 px-4 py-2.5">
           <p className="min-w-0 flex-1 text-[13px] leading-[1.6] text-label">
-            同じ電話番号の患者さんがいます：<span className="font-semibold">{dup.name}</span>（診察券 {dup.number}）
+            {check.dup.why}：<span className="font-semibold">{check.dup.p.name}</span>（診察券 {check.dup.p.number}）
           </p>
-          <Button size="sm" variant="tinted" onClick={() => onPickExisting(dup.id)}>この方を選ぶ</Button>
+          <Button size="sm" variant="tinted" onClick={() => onPickExisting(check.dup!.p.id)}>この患者を選ぶ</Button>
         </div>
       )}
       <AnimatePresence initial={false}>
-        {tried && error && (
-          <motion.p key={error} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-2 px-1 text-[13px] text-red">
-            {error}
+        {tried && check.error && (
+          <motion.p key={check.error} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-2 px-1 text-[13px] text-red">
+            {check.error}
           </motion.p>
         )}
       </AnimatePresence>
-      <p className="mt-2 px-1 text-[12px] leading-[1.6] text-label3">保険証・問診票は初診の受付で確認します。</p>
+      <p className="mt-2 px-1 text-[12px] leading-[1.6] text-label3">保険証・問診票は初診の受付で確認します。患者は「予約を登録」したときに登録されます。</p>
       <div className="mt-3 flex gap-2">
         <Button variant="gray" onClick={onCancel}>やめる</Button>
-        <Button variant="filled" icon={Plus} className="flex-1" onClick={submit}>登録して選ぶ</Button>
+        <Button variant="filled" className="flex-1" onClick={submit}>この患者で予約する</Button>
       </div>
     </div>
   );
-}
-
-/** 和暦の元年（昭和・平成・令和） */
-const ERAS: Record<string, number> = { S: 1925, 昭和: 1925, H: 1988, 平成: 1988, R: 2018, 令和: 2018 };
-
-/** 生年月日の入力を読む。「1985/4/12」「1985-04-12」「19850412」「S60.4.12」「昭和60年4月12日」 */
-function parseBirth(input: string): Date | null {
-  const s = input.trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).toUpperCase();
-  if (!s) return null;
-  let y: number, m: number, d: number;
-  const era = s.match(/^(S|H|R|昭和|平成|令和)\s*(\d{1,2}|元)[.\/\-年\s]\s*(\d{1,2})[.\/\-月\s]\s*(\d{1,2})日?$/);
-  const west = s.match(/^(\d{4})[.\/\-年\s]\s*(\d{1,2})[.\/\-月\s]\s*(\d{1,2})日?$/);
-  const packed = s.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (era) [y, m, d] = [ERAS[era[1]] + (era[2] === "元" ? 1 : +era[2]), +era[3], +era[4]];
-  else if (west) [y, m, d] = [+west[1], +west[2], +west[3]];
-  else if (packed) [y, m, d] = [+packed[1], +packed[2], +packed[3]];
-  else return null;
-  const dt = new Date(y, m - 1, d);
-  if (dt.getMonth() !== m - 1 || dt.getDate() !== d || dt > TODAY || y < 1900) return null;
-  return dt;
-}
-
-const tidy = (s: string) => s.replace(/　/g, " ").replace(/\s+/g, " ").trim();
-function formatTel(d: string) {
-  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
-  if (/^0[36]/.test(d)) return `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`;
-  return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
 }
 
 // ─── 2. メニュー ─────────────────────────────────────────────────────────────
@@ -519,7 +458,7 @@ const MENU_COLUMNS: Service["category"][][] = [["予防", "一般", "歯周", "�
 function MenuSection({ patient, value, onChange }: { patient?: Patient; value?: string; onChange: (id: string) => void }) {
   const phone = useIsPhone();
   const [editing, setEditing] = useState(!value);
-  // 外から決まったとき（新しい患者さん→初診 など）も畳む
+  // 外から決まったとき（新しい患者→初診 など）も畳む
   const [seen, setSeen] = useState(value);
   if (value !== seen) {
     setSeen(value);
@@ -625,20 +564,21 @@ function Assignment({ sv, day, start, unitId, staffId, onUnit, onStaff }: {
       <Reveal show={edit === "unit"}>
         <div className="grid grid-cols-4 gap-2 px-4 pb-3 pt-1">
           {units.map(u => {
+            const fits = unitFits(sv, u.id);
             const busy = unitBusy(store.appointments, u.id, day, start, end);
             const on = u.id === unitId;
             return (
               <button
                 key={u.id}
-                disabled={busy}
+                disabled={busy || !fits}
                 onClick={() => { onUnit(u.id); setEdit(null); }}
                 className={cn(
                   "flex h-12 flex-col items-center justify-center rounded-[10px] transition-colors",
-                  on ? "bg-ink text-onink" : busy ? "text-label3" : "bg-surface text-label hover:bg-surface/70",
+                  on ? "bg-ink text-onink" : busy || !fits ? "text-label3" : "bg-surface text-label hover:bg-surface/70",
                 )}
               >
                 <span className={cn("text-[14px] leading-tight", on ? "font-semibold" : "font-medium")}>{u.name}</span>
-                <span className={cn("mt-0.5 text-[11px] leading-tight", on ? "text-onink/70" : "text-label3")}>{busy ? "使用中" : on ? "選択中" : "空き"}</span>
+                <span className={cn("mt-0.5 text-[11px] leading-tight", on ? "text-onink/70" : "text-label3")}>{!fits ? unitRoleLabel(u.id) : busy ? "使用中" : on ? "選択中" : "空き"}</span>
               </button>
             );
           })}

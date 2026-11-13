@@ -17,7 +17,14 @@ export interface Metric {
   kind: "pct" | "pt";
   /** 上がると良いか */
   good: boolean;
+  /** 人数などの小さな数は、率ではなく差（+2人）で見せる */
+  diff?: number;
+  /** 目安を超えていて、いま気にかけるべき値か（赤はこれだけに使う） */
+  alert?: boolean;
 }
+
+/** 無断キャンセル率の目安（これを超えたら赤で知らせる） */
+export const NO_SHOW_ALERT = 0.03;
 
 const pct1 = (r: number) => (r * 100).toFixed(1);
 const pct0 = (r: number) => String(Math.round(r * 100));
@@ -48,19 +55,25 @@ function raw(period: Period): { cur: Raw; prev: Raw } {
   return { cur: at(11), prev: at(10) };
 }
 
-export function metricsFor(period: Period): Metric[] {
+/** 数（人）の指標。20未満なら差で、それ以上なら率で比べる */
+const count = (key: string, label: string, a: number, b: number): Metric => ({
+  key, label, value: a.toLocaleString("ja-JP"), unit: "人", delta: b ? (a - b) / b : 0, kind: "pct", good: true, diff: Math.max(a, b) < 20 ? a - b : undefined,
+});
+
+/** 主役の来院数と、その下に並べる4つの指標 */
+export function metricsFor(period: Period): { hero: Metric; rest: Metric[]; selfPay: Metric } {
   const { cur, prev } = raw(period);
   const rel = (a: number, b: number) => (b ? (a - b) / b : 0);
-  return [
-    { key: "visits", label: "来院数", value: cur.visits.toLocaleString("ja-JP"), unit: "人", delta: rel(cur.visits, prev.visits), kind: "pct", good: true },
-    { key: "new", label: "新患数", value: String(cur.newP), unit: "人", delta: rel(cur.newP, prev.newP), kind: "pct", good: true },
-    { key: "cancel", label: "キャンセル率", value: pct1(cur.cancel), unit: "%", delta: cur.cancel - prev.cancel, kind: "pt", good: false },
-    { key: "noshow", label: "無断キャンセル率", value: pct1(cur.noShow), unit: "%", delta: cur.noShow - prev.noShow, kind: "pt", good: false },
-    { key: "web", label: "Web予約の割合", value: pct0(cur.web), unit: "%", delta: cur.web - prev.web, kind: "pt", good: true },
-    { key: "selfpay", label: "自費の売上", value: yen(cur.selfPay), delta: rel(cur.selfPay, prev.selfPay), kind: "pct", good: true },
-    { key: "util", label: "ユニット稼働率", value: pct0(cur.util), unit: "%", delta: cur.util - prev.util, kind: "pt", good: true },
-    { key: "recall", label: "リコールからの来院率", value: pct0(cur.recall), unit: "%", delta: cur.recall - prev.recall, kind: "pt", good: true },
-  ];
+  return {
+    hero: count("visits", "来院数", cur.visits, prev.visits),
+    rest: [
+      count("new", "新患数", cur.newP, prev.newP),
+      { key: "cancel", label: "キャンセル率", value: pct1(cur.cancel), unit: "%", delta: cur.cancel - prev.cancel, kind: "pt", good: false },
+      { key: "noshow", label: "無断キャンセル率", value: pct1(cur.noShow), unit: "%", delta: cur.noShow - prev.noShow, kind: "pt", good: false, alert: cur.noShow > NO_SHOW_ALERT },
+      { key: "util", label: "ユニット稼働率", value: pct0(cur.util), unit: "%", delta: cur.util - prev.util, kind: "pt", good: true },
+    ],
+    selfPay: { key: "selfpay", label: "自費の売上", value: yen(cur.selfPay), delta: rel(cur.selfPay, prev.selfPay), kind: "pct", good: true },
+  };
 }
 
 /** 冒頭の一文（事実だけ） */
@@ -77,8 +90,10 @@ export function headline(period: Period): string {
 /** 期間（内訳の集計に使う日付の範囲） */
 export function rangeOf(period: Period): { from: string; to: string; label: string; compare: string } {
   if (period === "month") {
-    const from = subDays(TODAY, 29);
-    return { from: key(from), to: key(TODAY), label: `${md(from)}〜${md(TODAY)}`, compare: "前の30日と比較" };
+    // 指標（kpis）と同じく、今日を除いた直近30日
+    const from = subDays(TODAY, 30);
+    const to = subDays(TODAY, 1);
+    return { from: key(from), to: key(to), label: `${md(from)}〜${md(to)}`, compare: "前の30日と比較" };
   }
   // 週は「先週（月〜日）」を、その前の週と比べる（今週はまだ途中なので）
   const from = subDays(startOfWeek(TODAY, { weekStartsOn: 1 }), 7);
@@ -100,7 +115,7 @@ const CATEGORY_LABEL: Record<Service["category"], string> = {
   予防: "定期検診・予防", 一般: "むし歯・根管治療", 歯周: "歯周病治療", 外科: "抜歯", 補綴: "被せ物・入れ歯", 小児: "小児歯科", 審美: "ホワイトニング", 相談: "初診・相談",
 };
 
-export const SOURCE_LABEL: Record<ApptSource, string> = { web: "Web", phone: "電話", line: "LINE", walkin: "飛び込み" };
+export const SOURCE_LABEL: Record<ApptSource, string> = { web: "Web", phone: "電話", line: "LINE", walkin: "直接来院" };
 
 /** ストアの予約から、期間内の内訳をまとめる */
 export function breakdown(appointments: Appointment[], period: Period) {
@@ -134,10 +149,24 @@ export function breakdown(appointments: Appointment[], period: Period) {
     categories: toShares(cat),
     insurance: { ins, self, selfShare: self / Math.max(1, ins + self) },
     selfPayMenus: toShares(selfPayBy),
-    sources: toShares(src, ["Web", "電話", "LINE", "飛び込み"]),
+    sources: toShares(src, ["Web", "電話", "LINE", "直接来院"]),
     sourceTotal: inRange.length,
     reasons: toShares(reasons),
     cancelled: cancelled.length,
+    daily: dailyVisits(inRange, from, to),
     noShows: inRange.filter(a => a.status === "no_show").length,
   };
 }
+
+/** 日ごとの来院数（診療のあった日だけ。来院の推移の小さな線に使う） */
+function dailyVisits(xs: Appointment[], from: string, to: string): number[] {
+  const m = new Map<string, number>();
+  for (const a of xs) if (a.status === "completed") m.set(a.date, (m.get(a.date) ?? 0) + 1);
+  const out: number[] = [];
+  for (let d = fromKeyLocal(from); key(d) <= to; d = addDays(d, 1)) {
+    const v = m.get(key(d));
+    if (v) out.push(v);
+  }
+  return out;
+}
+const fromKeyLocal = (k: string) => new Date(`${k}T00:00:00`);

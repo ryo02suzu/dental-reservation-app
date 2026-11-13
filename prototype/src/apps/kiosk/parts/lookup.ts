@@ -1,5 +1,5 @@
 // 受付端末の照合ロジック（診察券番号・電話番号・QR）。表示とは切り離しておく。
-import { TODAY, TODAY_KEY } from "@/lib/clock";
+import { TODAY_KEY } from "@/lib/clock";
 import type { Appointment, Patient } from "@/data";
 
 const WAITING = new Set<Appointment["status"]>(["confirmed", "pending"]);
@@ -58,19 +58,4 @@ export function demoNumber(appts: Appointment[], patients: Patient[], nowMin: nu
     .filter(x => x.date === TODAY_KEY && WAITING.has(x.status) && x.end > nowMin)
     .sort((x, y) => Math.abs(x.start - nowMin) - Math.abs(y.start - nowMin))[0];
   return a ? patients.find(p => p.id === a.patientId)?.number : undefined;
-}
-
-/** 受付番号：今日すでに受付した人数＋1 */
-export function nextReceipt(appts: Appointment[]): number {
-  return appts.filter(a => a.date === TODAY_KEY && CHECKED.has(a.status)).length + 1;
-}
-
-/** 今月はじめての来院か（保険証の確認が必要） */
-export function firstOfMonth(appts: Appointment[], patient: Patient, appt: Appointment): boolean {
-  if (appt.firstVisit) return true;
-  const month = TODAY_KEY.slice(0, 7);
-  const visitedInStore = appts.some(a => a.patientId === patient.id && a.status === "completed" && a.date.startsWith(month) && a.date < TODAY_KEY);
-  const lv = patient.lastVisit;
-  const visitedBefore = !!lv && lv.getFullYear() === TODAY.getFullYear() && lv.getMonth() === TODAY.getMonth() && lv < TODAY;
-  return !(visitedInStore || visitedBefore);
 }

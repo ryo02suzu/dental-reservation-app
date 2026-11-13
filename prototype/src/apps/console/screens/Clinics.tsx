@@ -7,8 +7,8 @@ import { useRoute } from "@/lib/nav";
 import { Button, EmptyState, IconButton, ListRow, ListSection, Menu, MenuItem, Page, SearchField, Segmented, cn, spring } from "@/ui";
 import { ClinicDetail } from "./parts/ClinicDetail";
 import { ClinicTable, sortClinics, type SortState } from "./parts/ClinicTable";
-import { isDormant, isGrowingFree, matchesClinic, needsAction, reasonOf } from "./parts/model";
-import { useConsole } from "./parts/store";
+import { isDormant, isGrowingFree, matchesClinic, needsAction, reasonOf, recentOf } from "./parts/model";
+import { useConsole, type ConsoleState } from "./parts/store";
 import { ClinicMark, PlanTag, PushStack, useElementWidth } from "./parts/ui";
 
 type Filter = "all" | "active" | "attention" | "stopped";
@@ -54,7 +54,7 @@ export default function ConsoleClinics({ param }: { param?: string }) {
         {selected ? (
           <DetailPage id={selected} onBack={() => go("clinics")} />
         ) : (
-          <PhoneList {...props} onOpen={id => go("clinics", id)} />
+          <PhoneList {...props} s={s} onOpen={id => go("clinics", id)} />
         )}
       </PushStack>
     );
@@ -88,7 +88,7 @@ function FilterBar({ filter, setFilter, counts, full }: Pick<ListProps, "filter"
 }
 
 // ─── iPhone ─────────────────────────────────────────────────────────────────
-function PhoneList({ rows, query, setQuery, filter, setFilter, counts, subtitle, sort, setSort, clear, onOpen }: ListProps & { onOpen: (id: string) => void }) {
+function PhoneList({ s, rows, query, setQuery, filter, setFilter, counts, subtitle, sort, setSort, clear, onOpen }: ListProps & { s: ConsoleState; onOpen: (id: string) => void }) {
   return (
     <Page
       title="医院"
@@ -112,8 +112,8 @@ function PhoneList({ rows, query, setQuery, filter, setFilter, counts, subtitle,
       {rows.length ? (
         <ListSection
           header={SORTS.find(o => o.sort.key === sort.key && o.sort.dir === sort.dir)?.label ?? "並べ替え中"}
-          aside={<span className="pr-[30px] text-footnote font-medium text-label2">30日の予約</span>}
-          footer={`${rows.length}医院 · 右上のボタンで並べ替えを変えられます`}
+          aside={<span className="pr-[30px] text-footnote font-medium text-label2">直近4週の予約</span>}
+          footer={`${rows.length}医院`}
         >
           {rows.map(c => (
             <ListRow
@@ -126,11 +126,11 @@ function PhoneList({ rows, query, setQuery, filter, setFilter, counts, subtitle,
                   <PlanTag plan={c.plan} className="shrink-0" />
                   <span className="truncate">
                     {shortCity(c.city)}
-                    <PhoneState clinic={c} />
+                    <PhoneState clinic={c} s={s} />
                   </span>
                 </span>
               }
-              value={<span className="tnum text-label">{c.appts30d.toLocaleString("ja-JP")}</span>}
+              value={<span className="tnum text-label">{recentOf(c).last4.toLocaleString("ja-JP")}</span>}
               chevron
               onClick={() => onOpen(c.id)}
             />
@@ -147,10 +147,12 @@ function PhoneList({ rows, query, setQuery, filter, setFilter, counts, subtitle,
 const shortCity = (city: string) => city.replace(/^(東京都|北海道|(?:大阪|京都)府|.{2,3}?県)/, "") || city;
 
 /** 一覧の行の状態。ふつうに稼働中なら出さず、停止中・要対応のときだけ短く出す */
-function PhoneState({ clinic }: { clinic: ConsoleClinic }) {
+function PhoneState({ clinic, s }: { clinic: ConsoleClinic; s: ConsoleState }) {
   if (!clinic.active) return <> · 停止中</>;
   const r = reasonOf(clinic);
   if (!r) return null;
+  const done = isDormant(clinic) ? s.checkins[clinic.id] : isGrowingFree(clinic) ? s.proposals[clinic.id] : s.guides[clinic.id];
+  if (done) return <> · {isDormant(clinic) ? "連絡済み" : isGrowingFree(clinic) ? "提案済み" : "案内済み"}</>;
   const short = isGrowingFree(clinic) ? "予約増加中" : isDormant(clinic) ? r : r.replace("初期設定 ", "設定 ");
   return <> · <span className={isDormant(clinic) ? "text-red" : isGrowingFree(clinic) ? "text-accent" : undefined}>{short}</span></>;
 }
@@ -172,9 +174,9 @@ const GAP = 24;
 
 function DesktopClinics({ rows, query, setQuery, filter, setFilter, counts, subtitle, sort, setSort, clear, selected }: ListProps & { selected?: string }) {
   const { go, route } = useRoute();
-  const [rootRef, rootW] = useElementWidth<HTMLDivElement>(typeof window === "undefined" ? 1200 : window.innerWidth - 232);
+  const [rootRef, rootW] = useElementWidth<HTMLDivElement>(typeof window === "undefined" ? 1200 : window.innerWidth - 264);
   const content = rootW - 64; // Page の左右の余白
-  const insp = content >= 1000 ? 360 : 340;
+  const insp = content >= 1000 ? 360 : 320;
   const push = content - insp - GAP < 320; // 表と並べる余地がない（iPadの縦など）
   const tableW = selected && !push ? content - insp - GAP : content;
   const close = () => go("clinics");
@@ -217,7 +219,7 @@ function DesktopClinics({ rows, query, setQuery, filter, setFilter, counts, subt
             onClose={close}
             onClearFilters={clear}
           />
-          <p className="px-4 pt-2 text-footnote text-label3">見出しで並べ替え · ↑↓で医院を切り替え · escで閉じる</p>
+          <p className="px-4 pt-2 text-footnote text-label3 tnum">{rows.length}医院</p>
         </div>
         <AnimatePresence initial={false}>
           {selected && !push && (

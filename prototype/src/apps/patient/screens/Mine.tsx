@@ -1,27 +1,36 @@
+import { useEffect, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
 import { ME } from "@/data";
-import { md } from "@/lib/format";
-import { useIsWide } from "@/lib/media";
+import { useMinWidth } from "@/lib/media";
 import { useRoute } from "@/lib/nav";
-import { Button } from "@/ui";
 import { ApptCard } from "./parts/ApptCard";
 import { useUpcoming } from "./parts/appts";
 import { HistorySection, NotifySection, PatientCard } from "./parts/mine";
 import { PatientPage } from "./parts/shell";
 import { SectionHeading } from "./parts/ui";
+import { NoUpcoming } from "./parts/NoUpcoming";
 
 /** 予約の確認（今後のご予約・診察券・通院履歴・お知らせの設定） */
 export default function MyAppointments({ param }: { param?: string }) {
-  void param;
   const { go } = useRoute();
-  const wide = useIsWide();
+  const wide = useMinWidth(1024); // 右の列が出る幅（PatientPage と同じ）
   const upcoming = useUpcoming();
+  const mine = upcoming.filter(a => a.patientId === ME.id);
+  const others = upcoming.filter(a => a.patientId !== ME.id);
+
+  // ホームの「診察券」から来たときは、診察券を見えるところまで送る
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (param !== "card") return;
+    const t = window.setTimeout(() => cardRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 420);
+    return () => window.clearTimeout(t);
+  }, [param]);
 
   const card = (
-    <>
-      <SectionHeading>診察券</SectionHeading>
+    <div ref={cardRef} className="mt-10 scroll-mt-20 first:mt-0">
+      <SectionHeading className="!mt-0">診察券</SectionHeading>
       <PatientCard />
-    </>
+    </div>
   );
 
   return (
@@ -39,21 +48,25 @@ export default function MyAppointments({ param }: { param?: string }) {
       <SectionHeading>今後のご予約</SectionHeading>
       <div className="space-y-3">
         <AnimatePresence initial={false} mode="popLayout">
-          {upcoming.map(a => (
+          {mine.map(a => (
             <ApptCard key={a.id} appt={a} />
           ))}
         </AnimatePresence>
       </div>
-      {upcoming.length === 0 && (
-        <div className="rounded-card bg-surface px-4 py-5 md:px-5">
-          <div className="text-[16px] font-semibold">今後のご予約はありません</div>
-          <p className="mt-1 text-footnote leading-[1.6] text-label2">
-            {ME.nextRecall ? `定期検診の目安は${md(ME.nextRecall)}ごろです。` : "定期検診は3か月ごとがおすすめです。"}
-          </p>
-          <Button className="mt-3.5" onClick={() => go("book", "type")}>
-            予約する
-          </Button>
-        </div>
+      {mine.length === 0 && <NoUpcoming title="今後のご予約はありません" />}
+
+      {others.length > 0 && (
+        <>
+          <SectionHeading>ご家族・ほかの方のご予約</SectionHeading>
+          <p className="-mt-1.5 mb-3 px-1 text-footnote leading-[1.6] text-label2">この端末からお取りしたご予約です。</p>
+          <div className="space-y-3">
+            <AnimatePresence initial={false} mode="popLayout">
+              {others.map(a => (
+                <ApptCard key={a.id} appt={a} />
+              ))}
+            </AnimatePresence>
+          </div>
+        </>
       )}
 
       {!wide && card}

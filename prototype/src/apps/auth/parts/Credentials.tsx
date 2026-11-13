@@ -13,22 +13,34 @@ export function Credentials({ onDone, phone, footer }: { onDone: (via: "password
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
   const [keep, setKeep] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | false>(false);
   const [busy, setBusy] = useState<"password" | "passkey" | null>(null);
   const [forgot, setForgot] = useState(false);
   const [sent, setSent] = useState(false);
   const shake = useAnimationControls();
   const pwRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const submit = () => {
     if (busy) return;
-    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && pw.length >= 4;
-    if (!ok) {
-      setError(true);
+    // 何が足りないのかを、そのまま伝える（未入力を「違います」と言わない）
+    const mail = email.trim();
+    const problem = !mail
+      ? "メールアドレスを入力してください"
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)
+        ? "メールアドレスの形式をご確認ください"
+        : !pw
+          ? "パスワードを入力してください"
+          : pw.length < 4
+            ? "パスワードは4文字以上です。もう一度ご確認ください"
+            : null;
+    if (problem) {
+      setError(problem);
       shake.start({ x: [0, -9, 9, -6, 6, -2, 0], transition: { duration: 0.42 } });
-      pwRef.current?.focus();
+      if (problem.startsWith("メール")) emailRef.current?.focus();
+      else pwRef.current?.focus();
       return;
     }
     setBusy("password");
@@ -79,6 +91,7 @@ export function Credentials({ onDone, phone, footer }: { onDone: (via: "password
           <div className={cn("overflow-hidden rounded-cell bg-surface transition-shadow duration-200", phone ? "" : "hairline", error && "shadow-[inset_0_0_0_1px_rgb(var(--red)/0.55)]")}>
             <Field label="メールアドレス">
               <input
+                ref={emailRef}
                 type="email"
                 autoComplete="username"
                 inputMode="email"
@@ -110,7 +123,7 @@ export function Credentials({ onDone, phone, footer }: { onDone: (via: "password
                 onChange={e => { setPw(e.target.value); setError(false); }}
                 className="w-full bg-transparent text-[16px] outline-none placeholder:text-label3"
                 placeholder="必須"
-                aria-invalid={error}
+                aria-invalid={!!error}
                 aria-describedby={error ? "login-error" : undefined}
               />
             </Field>
@@ -129,15 +142,15 @@ export function Credentials({ onDone, phone, footer }: { onDone: (via: "password
             >
               <div className="flex items-start gap-1.5 px-1 pt-2.5 text-[13px] leading-[1.6] text-red">
                 <CircleAlert className="mt-[2px] h-[15px] w-[15px] shrink-0" strokeWidth={2.2} />
-                <span>メールアドレスかパスワードが違います{pw.length > 0 && pw.length < 4 ? <span className="block text-red/85">パスワードは4文字以上です</span> : null}</span>
+                <span>{error}</span>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
         <div className={cn("mt-3 flex min-h-[48px] items-center justify-between gap-3 rounded-cell px-4", phone ? "bg-surface" : "bg-surface2")}>
-          <span className="text-[15px]">ログインしたままにする</span>
-          <Switch checked={keep} onChange={setKeep} label="ログインしたままにする" />
+          <span className="text-[15px]">サインインしたままにする</span>
+          <Switch checked={keep} onChange={setKeep} label="サインインしたままにする" />
         </div>
         <p className="mt-2 px-1 text-[12px] leading-[1.6] text-label3">{keep ? "この端末で30日間、サインインしたままになります。" : "ブラウザを閉じると、サインアウトします。"}</p>
 

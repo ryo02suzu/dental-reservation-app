@@ -95,7 +95,7 @@ export function PlanSheet({ clinic, open, onClose, initial }: { clinic: ConsoleC
 
       <SheetGroup
         header="月額の変化"
-        footer={down ? "今日から下のプランになり、使えなくなる機能があります。差額は日割りで、次回の請求に反映されます。" : "変更は今日から有効です。差額は日割りで、次回の請求に反映されます。"}
+        footer={down ? "変更は今日から有効です。差額は日割りで、次回の請求から差し引きます。" : "変更は今日から有効です。差額は日割りで、次回の請求に反映されます。"}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="min-w-0">

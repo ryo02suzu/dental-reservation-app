@@ -221,7 +221,7 @@ export function TodayList({ rows, flush, onAct }: { rows: Punch[]; flush?: boole
       </ListSection>
     );
   }
-  const cols = "minmax(180px,1.6fr) 120px repeat(3, minmax(64px,0.7fr)) minmax(84px,0.8fr) 32px";
+  const cols = "minmax(168px,1.6fr) 120px minmax(84px,0.9fr) repeat(2, minmax(64px,0.7fr)) minmax(84px,0.8fr) 32px";
   return (
     <section>
       <h3 className="px-4 pb-1.5 text-footnote font-medium text-label2">{header}</h3>

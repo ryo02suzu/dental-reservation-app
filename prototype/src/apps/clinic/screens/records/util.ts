@@ -1,9 +1,13 @@
 import { differenceInCalendarDays } from "date-fns";
 import { TODAY } from "@/lib/clock";
-import { fromKey, mdw } from "@/lib/format";
+import { fromKey, mdw, toothLabel } from "@/lib/format";
 import type { Memo, Quadrant } from "@/data";
 
-export type ToothKey = NonNullable<Memo["teeth"]>[number];
+/** 永久歯（1〜8）と乳歯（A〜E）。乳歯は共有の型にないので、この画面の中で広げて扱う */
+export type PermanentKey = NonNullable<Memo["teeth"]>[number];
+export type PrimaryKey = `${Quadrant}${"A" | "B" | "C" | "D" | "E"}`;
+export type ToothKey = PermanentKey | PrimaryKey;
+export type Dentition = "permanent" | "primary";
 
 /** 日付の見出し：「今日」「昨日」「11月10日（火）」 */
 export function dayLabel(k: string): string {
@@ -34,5 +38,19 @@ const row = (left: Quadrant, right: Quadrant): ToothKey[] => [
 /** 日本の歯式の並び（患者さんの右が見る人の左）。上の段：右上8→1｜左上1→8、下の段：右下8→1｜左下1→8 */
 export const UPPER = row("UR", "UL");
 export const LOWER = row("LR", "LL");
-const ORDER = [...UPPER, ...LOWER];
-export const sortTeeth = (t: ToothKey[]) => [...t].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+const prow = (left: Quadrant, right: Quadrant): ToothKey[] => [
+  ...(["E", "D", "C", "B", "A"] as const).map(n => `${left}${n}` as ToothKey),
+  ...(["A", "B", "C", "D", "E"] as const).map(n => `${right}${n}` as ToothKey),
+];
+/** 乳歯の並び：右上E→A｜左上A→E、右下E→A｜左下A→E */
+export const UPPER_P = prow("UR", "UL");
+export const LOWER_P = prow("LR", "LL");
+const ORDER = [...UPPER, ...LOWER, ...UPPER_P, ...LOWER_P];
+export const sortTeeth = <T extends string>(t: T[]) => [...t].sort((a, b) => ORDER.indexOf(a as ToothKey) - ORDER.indexOf(b as ToothKey));
+export const isPrimary = (k: string) => /[A-E]$/.test(k);
+
+/** 歯の呼び方：「右下6番」、乳歯は「右下E（乳歯）」 */
+export function toothName(k: string): string {
+  if (!isPrimary(k)) return toothLabel(k);
+  return `${toothLabel(k).replace(/番$/, "")}（乳歯）`;
+}

@@ -6,22 +6,37 @@ import { TOOTH_STATE_LABEL, hm, md, toothLabel } from "@/lib/format";
 import { staffById, type Appointment, type Memo, type Patient, type ToothState, type VisitRecord } from "@/data";
 import { Button, Tag, cn, springSoft } from "@/ui";
 import { useWidth } from "./hooks";
-import { LOWER, STATE_ORDER, UPPER, dateSmart, notesForTooth, toothKeysWithNotes, toothNum, type ToothKey } from "./util";
+import { JpText } from "./Cautions";
+import { LOWER, STATE_ORDER, UPPER, dateCol, notesForTooth, toothKeysWithNotes, toothNum, type ToothKey } from "./util";
 import { differenceInCalendarDays } from "date-fns";
 
-// 歯の状態ごとの見た目。色は控えめに：むし歯だけ赤い線、要観察は点線、処置済みは灰色の濃淡、欠損は空のマスに斜線。
+// 歯の状態ごとの見た目。色は控えめに：むし歯だけ赤（うすい赤の面と赤い文字）、要観察は破線の枠、
+// 処置済みは灰色の濃淡、欠損は枠だけのマスに斜線。
 const CELL: Record<ToothState | "none", string> = {
   none: "bg-fill/8 text-label3",
-  C: "bg-surface text-red shadow-[inset_0_0_0_1.5px_rgb(var(--red)/0.9)]",
-  観察: "bg-surface text-label2 border-[1.5px] border-dotted border-label2/70",
+  C: "bg-red/12 text-red",
+  観察: "bg-surface text-label2",
   CR: "bg-fill/16 text-label",
   In: "bg-fill/16 text-label",
   RCT: "bg-fill/16 text-label",
   Cr: "bg-fill/28 text-label",
   Br: "bg-fill/28 text-label",
   Imp: "bg-fill/36 text-label",
-  M: "bg-transparent text-label3 shadow-[inset_0_0_0_1px_rgb(var(--separator)/0.35)]",
+  M: "bg-transparent text-label3",
 };
+
+/** 要観察の破線の枠・欠損の細い枠（SVGでトークンの色を使う） */
+function Outline({ dashed }: { dashed?: boolean }) {
+  return (
+    <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
+      <rect
+        x="0.75" y="0.75" rx="5.25" fill="none" style={{ width: "calc(100% - 1.5px)", height: "calc(100% - 1.5px)" }}
+        stroke="currentColor" strokeWidth={dashed ? 1.5 : 1} strokeDasharray={dashed ? "2.5 2" : undefined}
+        className={dashed ? "text-label2" : "text-label4"}
+      />
+    </svg>
+  );
+}
 
 /** 欠損のマスに引く斜線 */
 function Strike({ className }: { className?: string }) {
@@ -58,7 +73,9 @@ export function DentalChart({ teeth, selected, onSelect, marked, picks, maxCell 
     const cols = side ? 19 : 17;
     const total = 2 * side + 16 * cell + mid + gap * (cols - 1);
     const base = side ? 2 : 1;
-    return { mid, side, gap, cell, h: Math.round(cell * 1.25), total, base, midCol: base + 8, font: cell >= 28 ? 11 : cell >= 23 ? 10 : 9 };
+    // 狭い画面ではマスを縦に長くして押しやすくする（幅は16本が並ぶぶんしか取れない）
+    const h = Math.max(Math.round(cell * 1.25), cell < 24 ? 34 : 0);
+    return { mid, side, gap, cell, h, total, base, midCol: base + 8, font: cell >= 28 ? 11 : cell >= 23 ? 10 : 9 };
   }, [w, maxCell]);
   const colOf = (i: number) => (i < 8 ? g.base + i : g.base + i + 1);
   const template = `${g.side ? `${g.side}px ` : ""}repeat(8, ${g.cell}px) ${g.mid}px repeat(8, ${g.cell}px)${g.side ? ` ${g.side}px` : ""}`;
@@ -95,7 +112,8 @@ export function DentalChart({ teeth, selected, onSelect, marked, picks, maxCell 
         animate={{ scale: selected === k ? 1.08 : 1 }}
         transition={{ type: "spring", stiffness: 600, damping: 30 }}
         className={cn(
-          "relative flex items-center justify-center whitespace-nowrap rounded-[6px] font-semibold leading-none outline-offset-2 transition-colors",
+          // 当たり判定は上下に広げて44pxに（左右は隣の歯と重ならないように広げない）
+          "relative flex items-center justify-center whitespace-nowrap rounded-[6px] font-semibold leading-none outline-offset-2 transition-colors before:absolute before:inset-x-0 before:-inset-y-[5px] before:content-['']",
           CELL[s ?? "none"],
           !s && "hover:bg-fill/14",
           on && "z-[1] outline outline-2 outline-accent",
@@ -105,7 +123,8 @@ export function DentalChart({ teeth, selected, onSelect, marked, picks, maxCell 
       >
         {sym}
         {s === "M" && <Strike />}
-        {marked?.has(k) && <span aria-hidden className="absolute bottom-[3px] left-1/2 h-[3px] w-[3px] -translate-x-1/2 rounded-full bg-accent" />}
+        {(s === "M" || s === "観察") && <Outline dashed={s === "観察"} />}
+        {marked?.has(k) && <span aria-hidden className="absolute bottom-[3px] left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full bg-accent" />}
       </motion.button>
     );
   };
@@ -143,6 +162,7 @@ function Swatch({ s }: { s: ToothState }) {
     <span className={cn("relative inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[4px] px-1 text-[9px] font-semibold leading-none", CELL[s])}>
       {s !== "M" && s}
       {s === "M" && <Strike />}
+      {(s === "M" || s === "観察") && <Outline dashed={s === "観察"} />}
     </span>
   );
 }
@@ -160,7 +180,7 @@ export function ChartLegend({ states, marked }: { states: ToothState[]; marked: 
       {marked && (
         <li className="inline-flex items-center gap-1.5 text-caption text-label2">
           <span className="inline-flex h-[18px] w-[10px] items-center justify-center"><span className="h-[5px] w-[5px] rounded-full bg-accent" /></span>
-          記録あり
+          メモあり
         </li>
       )}
     </ul>
@@ -168,7 +188,7 @@ export function ChartLegend({ states, marked }: { states: ToothState[]; marked: 
 }
 
 /** 歯式のまとまり：図・凡例・タップした歯の詳細 */
-export function ChartCard({ p, memos, visits, appts, selected, onSelect, onWriteMemo, onOpenAppt, child }: {
+export function ChartCard({ p, memos, visits, appts, selected, onSelect, onWriteMemo, onOpenAppt, young, firstExam }: {
   p: Patient;
   memos: Memo[];
   visits: VisitRecord[];
@@ -177,7 +197,10 @@ export function ChartCard({ p, memos, visits, appts, selected, onSelect, onWrite
   onSelect: (k: ToothKey | null) => void;
   onWriteMemo: (k: ToothKey) => void;
   onOpenAppt: (id: string) => void;
-  child: boolean;
+  /** 12歳未満（混合歯列）：永久歯だけを出していると添える */
+  young: boolean;
+  /** まだ来院していない（初診の検査前） */
+  firstExam: boolean;
 }) {
   const states = useMemo(() => STATE_ORDER.filter(s => Object.values(p.teeth).includes(s)), [p.teeth]);
   const marked = useMemo(() => toothKeysWithNotes(memos, visits, appts), [memos, visits, appts]);
@@ -189,13 +212,13 @@ export function ChartCard({ p, memos, visits, appts, selected, onSelect, onWrite
     <div className="px-3 pb-4 pt-3 md:px-4">
       <DentalChart teeth={p.teeth} selected={selected} onSelect={k => onSelect(selected === k ? null : k)} marked={marked} />
       {empty ? (
-        <p className="mt-3 text-footnote text-label2">歯式の記録はまだありません。初診で検査した結果がここに入ります。</p>
+        <p className="mt-3 text-footnote text-label2">{firstExam ? "歯式の記録はまだありません。初診で検査した結果がここに入ります。" : "歯式は未登録です。"}</p>
       ) : (
         <div className="mt-3.5">
           <ChartLegend states={states} marked={marked.size > 0} />
         </div>
       )}
-      {child && <p className="mt-2.5 text-caption text-label2">15歳未満の患者さんです。ここには永久歯のみ表示しています。乳歯（A〜E）の状態はカルテで確認してください。</p>}
+      {young && <p className="mt-2.5 text-caption text-label2">混合歯列のため、永久歯だけを表示しています。乳歯（A〜E）はカルテで確認してください。</p>}
 
       <AnimatePresence initial={false}>
         {selected && (
@@ -226,17 +249,17 @@ export function ChartCard({ p, memos, visits, appts, selected, onSelect, onWrite
                     const who = n.staffId ? staffById(n.staffId) : undefined;
                     const d = differenceInCalendarDays(n.date, TODAY);
                     const appt = n.apptId ? appts.find(a => a.id === n.apptId) : undefined;
-                    const when = n.future && appt ? (d === 0 ? `今日 ${hm(appt.start)}` : d === 1 ? `明日 ${hm(appt.start)}` : `${md(n.date)} ${hm(appt.start)}`) : dateSmart(n.date);
+                    const when = n.future && appt ? (d === 0 ? `今日 ${hm(appt.start)}` : d === 1 ? `明日 ${hm(appt.start)}` : `${md(n.date)} ${hm(appt.start)}`) : dateCol(n.date);
                     const body = (
                       <>
-                        <span className={cn("w-[7.2em] shrink-0 pt-px text-footnote tnum", n.future ? "font-semibold text-accent" : "text-label2")}>{when}</span>
+                        <span className={cn("w-[7.6em] shrink-0 whitespace-nowrap pt-px text-footnote tnum", n.future ? "font-semibold text-accent" : "text-label2")}>{when}</span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5 text-footnote font-semibold text-label">
                             {n.future && <CalendarClock className="h-3.5 w-3.5 text-accent" strokeWidth={2.2} />}
                             {n.title}
                             {who && <span className="font-normal text-label2">· {who.short}</span>}
                           </span>
-                          <span className="mt-0.5 block text-footnote leading-[1.6] text-label2">{n.body}</span>
+                          <span className="mt-0.5 block text-footnote leading-[1.6] text-label2 [word-break:auto-phrase]"><JpText text={n.body} /></span>
                         </span>
                       </>
                     );

@@ -11,7 +11,7 @@ import { useStore } from "@/lib/store";
 import { springSoft } from "@/ui";
 import { Attract } from "./parts/Attract";
 import { Already, Choose, Confirm, Done, Entry, Help, Method, NotFound, Scan } from "./parts/Screens";
-import { firstOfMonth, matchByNumber, matchByPhone, nextReceipt, type Match } from "./parts/lookup";
+import { matchByNumber, matchByPhone, type Match } from "./parts/lookup";
 
 type Via = "scan" | "number" | "phone";
 type Step =
@@ -23,11 +23,12 @@ type Step =
   | { k: "choose"; apptIds: string[] }
   | { k: "confirm"; apptId: string; via: Via }
   | { k: "already"; apptId: string }
-  | { k: "done"; apptId: string; receipt: number; insurance: boolean }
+  | { k: "done"; apptId: string }
   | { k: "notfound"; via: Via; patientId?: string }
   | { k: "help"; back: Step };
 
 const IDLE_MS = 90_000; // 操作がないまま放置されたら待受にもどる
+const CALLED_MS = 30_000; // スタッフを呼んだあとは、30秒で待受にもどる（スタッフが来て対応する）
 
 export default function KioskApp() {
   const { goApp } = useRoute();
@@ -36,24 +37,27 @@ export default function KioskApp() {
   const [dir, setDir] = useState(1);
   const [entryError, setEntryError] = useState<{ message: string; key: number } | undefined>();
   const [called, setCalled] = useState(false);
+  // 同じ流れの中では、スタッフの呼び出しは1回だけ送る（待受にもどると、また送れる）
+  const sent = useRef(false);
 
   const to = useCallback((s: Step, d = 1) => {
     setDir(d);
     setEntryError(undefined);
     setStep(s);
   }, []);
-  const home = useCallback(() => { setCalled(false); to({ k: "attract" }, -1); }, [to]);
+  const home = useCallback(() => { setCalled(false); sent.current = false; to({ k: "attract" }, -1); }, [to]);
 
   // 放置されたら最初の画面にもどす（完了画面は自分で10秒後にもどる）
   const idle = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
     if (step.k === "attract" || step.k === "done") return;
-    const reset = () => { clearTimeout(idle.current); idle.current = setTimeout(home, IDLE_MS); };
+    const ms = step.k === "help" && called ? CALLED_MS : IDLE_MS;
+    const reset = () => { clearTimeout(idle.current); idle.current = setTimeout(home, ms); };
     reset();
     window.addEventListener("pointerdown", reset);
     window.addEventListener("keydown", reset);
     return () => { clearTimeout(idle.current); window.removeEventListener("pointerdown", reset); window.removeEventListener("keydown", reset); };
-  }, [step, home]);
+  }, [step, home, called]);
 
   const fromMatch = (m: Match, via: Via) => {
     if (m.kind === "ok") to({ k: "confirm", apptId: m.appt.id, via });
@@ -79,14 +83,15 @@ export default function KioskApp() {
   };
 
   const checkIn = (a: Appointment) => {
-    const receipt = nextReceipt(store.appointments);
-    const insurance = firstOfMonth(store.appointments, patientById(a.patientId), a);
     store.setStatus(a.id, "arrived");
-    to({ k: "done", apptId: a.id, receipt, insurance });
+    to({ k: "done", apptId: a.id });
   };
 
   const callStaff = () => {
-    store.addNotice({ kind: "system", title: "受付端末からの呼び出し", body: "待合室の受付端末で、患者さんがスタッフを呼んでいます。" });
+    if (!sent.current) {
+      sent.current = true;
+      store.addNotice({ kind: "system", title: "受付端末からの呼び出し", body: "待合室の受付端末で、患者さんがスタッフを呼んでいます。" });
+    }
     setCalled(true);
   };
 
@@ -97,7 +102,8 @@ export default function KioskApp() {
       case "choose": return () => to({ k: "phone" }, -1);
       case "confirm": return () => to({ k: step.via }, -1);
       case "notfound": return () => to({ k: "method" }, -1);
-      case "help": return () => { setCalled(false); to(step.back, -1); };
+      // スタッフを呼んだあとは取り消せるように見せない（「最初にもどる」だけ）
+      case "help": return called ? undefined : () => to(step.back, -1);
       default: return undefined;
     }
   };
@@ -118,7 +124,7 @@ export default function KioskApp() {
     }
     case "confirm": body = <Confirm appt={apptOf(step.apptId)} onConfirm={() => checkIn(apptOf(step.apptId))} onWrong={() => to({ k: "help", back: step })} />; break;
     case "already": body = <Already appt={apptOf(step.apptId)} onHome={home} />; break;
-    case "done": body = <Done appt={apptOf(step.apptId)} receipt={step.receipt} insurance={step.insurance} onHome={home} />; break;
+    case "done": body = <Done appt={apptOf(step.apptId)} onHome={home} />; break;
     case "notfound":
       body = (
         <NotFound
@@ -136,7 +142,7 @@ export default function KioskApp() {
   const showHelp = step.k !== "help" && step.k !== "done" && step.k !== "already";
 
   return (
-    <div className="h-full overflow-hidden bg-bg text-label">
+    <div lang="ja" className="h-full overflow-hidden bg-bg text-label [text-wrap:pretty] [word-break:auto-phrase]">
       <AnimatePresence mode="wait" initial={false}>
         {step.k === "attract" ? (
           <motion.div key="attract" className="h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.15 } }}>

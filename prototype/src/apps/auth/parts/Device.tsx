@@ -9,13 +9,16 @@ const PIN = "1234";
 /** 前回この端末を使った人（受付の石井さん） */
 const LAST_USED = "s6";
 
+// 前回この端末を使った人を先頭に
+const ordered = [...staff].sort((a, b) => Number(b.id === LAST_USED) - Number(a.id === LAST_USED));
+
 export function StaffPicker({ onPick, onOther }: { onPick: (s: Staff) => void; onOther: () => void }) {
   return (
     <div className="flex flex-col">
       <h1 className="text-[24px] font-bold leading-[1.35] tracking-[-0.01em] palt">この端末を使う人を<br />選んでください</h1>
-      <p className="mt-2 text-[15px] leading-[1.7] text-label2">ひだまり歯科クリニック・受付の共用iPad</p>
+      <p className="mt-2 text-[15px] leading-[1.7] text-label2">ひだまり歯科クリニック・受付の共用端末</p>
       <div className="mt-7 grid grid-cols-3 gap-x-2 gap-y-3">
-        {staff.map((s, i) => (
+        {ordered.map((s, i) => (
           <motion.button
             key={s.id}
             type="button"
@@ -25,9 +28,9 @@ export function StaffPicker({ onPick, onOther }: { onPick: (s: Staff) => void; o
             onClick={() => onPick(s)}
             className="flex flex-col items-center rounded-card px-1 pb-3 pt-4 transition-colors hover:bg-fill/8 active:bg-fill/12"
           >
-            <Avatar name={s.name} tone={s.tone} size={64} />
+            <Avatar name={s.name} tone={s.tone} size={64} className={s.id === LAST_USED ? "ring-2 ring-accent/45 ring-offset-2 ring-offset-bg" : undefined} />
             <span className="mt-2.5 w-full truncate text-[14px] font-semibold">{s.name}</span>
-            <span className="mt-0.5 text-[12px] text-label2">{s.role}{s.id === LAST_USED && <span className="text-label3">・前回</span>}</span>
+            <span className="mt-0.5 text-[12px] text-label2">{s.role}{s.id === LAST_USED && <span className="font-medium text-accent">・前回</span>}</span>
           </motion.button>
         ))}
       </div>

@@ -1,20 +1,20 @@
 import { createContext, useContext, useRef, type ReactNode } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { BackButton, cn } from "@/ui";
-import { useIsPhone, useIsWide } from "@/lib/media";
+import { useIsPhone, useMinWidth } from "@/lib/media";
 
 // 患者さん向け画面の土台。共有の Page と同じナビゲーションバーの動き（大見出し → スクロールで
 // すりガラスのバーに小見出し）で、PCでは幅560pxの列を中央に置き、広い画面では右に補助の列を出す。
 
 interface Layout {
   phone: boolean;
-  /** 右の補助の列を出しているか（幅1180px以上で side を渡したとき） */
+  /** 右の補助の列を出しているか（幅1024px以上で side を渡したとき） */
   split: boolean;
 }
 const LayoutCtx = createContext<Layout>({ phone: true, split: false });
 export const usePatientLayout = () => useContext(LayoutCtx);
 
-const COLS = "grid grid-cols-[minmax(0,1fr)_340px] gap-14";
+const COLS = "grid grid-cols-[minmax(0,1fr)_300px] gap-10 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-14";
 
 export interface PatientPageProps {
   title: string;
@@ -39,7 +39,7 @@ export interface PatientPageProps {
 
 export function PatientPage({ title, barTitle, subtitle, back, leading, actions, titleAccessory, eyebrow, side, footer, children }: PatientPageProps) {
   const phone = useIsPhone();
-  const wide = useIsWide();
+  const wide = useMinWidth(1024);
   const split = wide && !!side;
   const ref = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: ref });
@@ -47,6 +47,17 @@ export function PatientPage({ title, barTitle, subtitle, back, leading, actions,
   const compactOpacity = useTransform(scrollY, [threshold - 14, threshold + 4], [0, 1]);
   const barOpacity = useTransform(scrollY, [0, 10], [0, 1]);
   const frame = phone ? "px-4" : cn("mx-auto w-full px-8", split ? "max-w-[1020px]" : "max-w-[624px]");
+  const bar = (
+    <>
+      <div className="flex min-w-0 flex-1 items-center">{back ? <BackButton {...back} /> : leading}</div>
+      <motion.div
+        style={{ opacity: compactOpacity }}
+        className="pointer-events-none absolute inset-x-0 mx-auto w-fit max-w-[58%] truncate text-center text-[17px] font-semibold palt"
+      >
+        {barTitle ?? title}
+      </motion.div>
+    </>
+  );
 
   return (
     <LayoutCtx.Provider value={{ phone, split }}>
@@ -59,18 +70,18 @@ export function PatientPage({ title, barTitle, subtitle, back, leading, actions,
           <header className="sticky top-0 z-30">
             <motion.div aria-hidden style={{ opacity: barOpacity }} className="material hairline-b absolute inset-0" />
             <div className={frame}>
-              <div className={cn(split && COLS)}>
+              {split ? (
+                // 広い画面：戻る・小見出しは左の列、右側の操作は右の列の右端にそろえる
+                <div className={COLS}>
+                  <div className="relative flex h-[52px] items-center gap-2">{bar}</div>
+                  <div className="flex h-[52px] items-center justify-end gap-1.5">{actions}</div>
+                </div>
+              ) : (
                 <div className={cn("relative flex items-center gap-2", phone ? "-mx-2 h-11" : "h-[52px]")}>
-                  <div className="flex min-w-0 flex-1 items-center">{back ? <BackButton {...back} /> : leading}</div>
-                  <motion.div
-                    style={{ opacity: compactOpacity }}
-                    className="pointer-events-none absolute inset-x-0 mx-auto w-fit max-w-[58%] truncate text-center text-[17px] font-semibold palt"
-                  >
-                    {barTitle ?? title}
-                  </motion.div>
+                  {bar}
                   <div className="relative flex flex-1 items-center justify-end gap-1.5">{actions}</div>
                 </div>
-              </div>
+              )}
             </div>
           </header>
 
@@ -79,7 +90,7 @@ export function PatientPage({ title, barTitle, subtitle, back, leading, actions,
               <div className={cn("flex items-start justify-between gap-4", phone ? "pb-5 pt-1" : "pb-8 pt-2")}>
                 <div className="min-w-0">
                   {eyebrow}
-                  <h1 className={cn("palt text-balance", phone ? "text-title1" : "text-[30px] font-bold leading-[38px] tracking-[-0.01em]")}>{title}</h1>
+                  <h1 className={cn("palt text-balance", phone ? "text-large" : "text-[30px] font-bold leading-[36px] tracking-[-0.01em]")}>{title}</h1>
                   {subtitle && <div className="mt-1.5 text-subhead leading-[1.6] text-label2">{subtitle}</div>}
                 </div>
                 {titleAccessory}

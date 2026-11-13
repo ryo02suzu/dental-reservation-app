@@ -3,14 +3,14 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { NotebookPen, Pin, Search, SquarePen } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { TODAY_KEY } from "@/lib/clock";
-import { matchesPatient, toothLabel } from "@/lib/format";
+import { matchesPatient } from "@/lib/format";
 import { useIsPhone, useIsWide } from "@/lib/media";
 import { patientById, type Memo } from "@/data";
 import { Button, EmptyState, IconButton, Page, SearchField, Segmented, Sheet, cn, springSoft, useToast } from "@/ui";
 import { useClinicUI } from "../context";
 import { MemoCard } from "./records/MemoCard";
 import { ComposerFields, useComposer, type ComposerState } from "./records/Composer";
-import { dayLabel } from "./records/util";
+import { dayLabel, toothName } from "./records/util";
 
 type Filter = "all" | "today" | "pinned";
 const PAGE_DAYS = 4;
@@ -41,7 +41,7 @@ export default function RecordsScreen({ param }: { param?: string }) {
     const low = query.toLowerCase();
     return memos.filter(m => {
       const p = patientById(m.patientId);
-      return matchesPatient(p, query) || m.body.toLowerCase().includes(low) || (m.next ?? "").toLowerCase().includes(low) || (m.teeth ?? []).some(t => toothLabel(t).includes(query));
+      return matchesPatient(p, query) || m.body.toLowerCase().includes(low) || (m.next ?? "").toLowerCase().includes(low) || (m.teeth ?? []).some(t => toothName(t).includes(query));
     });
   }, [memos, query]);
 

@@ -37,7 +37,7 @@ type Item =
   | { kind: "appt"; key: string; a: Appointment }
   | { kind: "screen"; key: string; screen: (typeof SCREENS)[number] }
   | { kind: "new"; key: string; p?: Patient };
-interface Group { title: string; items: Item[] }
+interface Group { title: string; items: Item[]; more?: number }
 
 /** 全体検索（⌘K）。PCは画面上部に浮かぶパネル、スマホは全画面のシート */
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -64,15 +64,17 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const today = store.appointments.filter(a => a.date === TODAY_KEY).sort((x, y) => x.start - y.start || x.unitId.localeCompare(y.unitId));
     const query = q.trim();
     if (!query) {
-      // 最近見た患者（足りない分は、今日診た患者さん）
-      const seenToday = today
-        .filter(a => a.status === "completed" || a.status === "in_progress")
+      // 最近見た患者。足りない分は「今日 院内の患者」として分けて出す（診療中・来院済）
+      const recent = recentIds.slice(0, 4);
+      const here = [...new Set(today
+        .filter(a => a.status === "in_progress" || a.status === "arrived")
         .sort((x, y) => y.start - x.start)
-        .map(a => a.patientId);
-      const ids = [...new Set([...recentIds, ...seenToday])].slice(0, 4);
+        .map(a => a.patientId))].filter(id => !recent.includes(id)).slice(0, Math.max(2, 4 - recent.length));
       const next = today.filter(a => (a.status === "confirmed" || a.status === "pending" || a.status === "arrived") && a.end > nowMin).slice(0, 5);
+      const toItems = (ids: string[]) => ids.map(id => store.patients.find(p => p.id === id)).filter((p): p is Patient => !!p).map(p => ({ kind: "patient" as const, key: `p-${p.id}`, p }));
       return [
-        { title: "最近見た患者", items: ids.map(id => store.patients.find(p => p.id === id)).filter((p): p is Patient => !!p).map(p => ({ kind: "patient" as const, key: `p-${p.id}`, p })) },
+        { title: "最近見た患者", items: toItems(recent) },
+        { title: "今日 院内の患者", items: toItems(here) },
         { title: "今日の次の予約", items: next.map(a => ({ kind: "appt" as const, key: `a-${a.id}`, a })) },
         { title: "操作", items: [{ kind: "new" as const, key: "new" }] },
       ].filter(g => g.items.length);
@@ -81,7 +83,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const kq = toKatakana(query).replace(/\s/g, "");
     const plain = query.replace(/\s/g, "");
     const rank = (p: Patient) => (p.name.replace(/\s/g, "").startsWith(plain) || p.kana.replace(/\s/g, "").startsWith(kq) ? 0 : 1);
-    const pats = store.patients.filter(p => searchHit(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja")).slice(0, 5);
+    const hits = store.patients.filter(p => searchHit(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja"));
+    const pats = hits.slice(0, 5);
     const digits = query.replace(/\D/g, "");
     const appts = today
       .filter(a => {
@@ -95,10 +98,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       .slice(0, 5);
     const screens = SCREENS.filter(s => [s.title, ...s.words].some(w => norm(w).includes(nq)));
     const actions: Item[] = [];
-    if (pats[0]) actions.push({ kind: "new", key: `new-${pats[0].id}`, p: pats[0] });
+    // 「○○さんの予約を取る」は、患者が1人に絞れたときだけ
+    if (hits.length === 1) actions.push({ kind: "new", key: `new-${hits[0].id}`, p: hits[0] });
     if (NEW_WORDS.some(w => norm(w).includes(nq)) || (!pats.length && !appts.length && !screens.length)) actions.push({ kind: "new", key: "new" });
     return [
-      { title: "患者", items: pats.map(p => ({ kind: "patient" as const, key: `p-${p.id}`, p })) },
+      { title: "患者", items: pats.map(p => ({ kind: "patient" as const, key: `p-${p.id}`, p })), more: hits.length - pats.length },
       { title: "今日の予約", items: appts.map(a => ({ kind: "appt" as const, key: `a-${a.id}`, a })) },
       { title: "移動", items: screens.map(s => ({ kind: "screen" as const, key: `s-${s.id}`, screen: s })) },
       { title: "操作", items: actions },
@@ -207,7 +211,7 @@ function Panel({ open, onClose, q, setQ, groups, flat, run, nowD, empty }: {
                   <Kbd>esc</Kbd>
                 </div>
 
-                <motion.div ref={list} layoutScroll id={`${hl}-list`} role="listbox" aria-label="検索結果" className="h-[min(440px,56vh)] overflow-y-auto overscroll-contain px-2 pb-2">
+                <motion.div ref={list} layoutScroll id={`${hl}-list`} role="listbox" aria-label="検索結果" className="max-h-[min(440px,56vh)] overflow-y-auto overscroll-contain px-2 pb-2">
                   {empty && (
                     <div className="px-3 pb-1 pt-4">
                       <div className="text-[15px] font-semibold">「{q.trim()}」に一致する患者・予約はありません</div>
@@ -238,6 +242,7 @@ function Panel({ open, onClose, q, setQ, groups, flat, run, nowD, empty }: {
                             </div>
                           );
                         })}
+                        {!!g.more && <MoreHint n={g.more} className="px-3 pb-1 pt-1.5" />}
                       </div>
                     ))
                   )}
@@ -275,8 +280,8 @@ function ItemBody({ it, q, nowD }: { it: Item; q: string; nowD: Date }) {
         <span className="min-w-0 flex-1 truncate text-[13px] text-label2 tnum">
           {by === "kana" ? <Mark text={p.kana} q={q} kind="kana" /> : by === "number" ? <>診察券 <Mark text={p.number} q={q} kind="digits" /></> : by === "phone" ? <Mark text={p.phone} q={q} kind="digits" /> : p.kana}
         </span>
-        <span className="w-10 shrink-0 text-right text-[13px] text-label2 tnum">{age !== null ? `${age}歳` : ""}</span>
-        <span className="w-[13.5rem] shrink-0 truncate text-[13px] text-label2 tnum">{visitLabel(store.appointments, p, minutesOfDay(nowD))}</span>
+        <span className="w-[8.5rem] shrink-0 text-[13px] text-label2 tnum">{age !== null ? <>{age}歳<span className="text-label3">（{birthShort(p)}）</span></> : ""}</span>
+        <span className="w-[12rem] shrink-0 truncate text-[13px] text-label2 tnum">{visitLabel(store.appointments, p, minutesOfDay(nowD))}</span>
       </div>
     );
   }
@@ -290,7 +295,7 @@ function ItemBody({ it, q, nowD }: { it: Item; q: string; nowD: Date }) {
         <span className="w-11 shrink-0 text-[15px] font-semibold tnum">{hm(a.start)}</span>
         <span className="shrink-0 text-[15px] font-medium"><Mark text={p.name} q={q} kind={matchBy(p, q) === "name" ? "name" : null} /></span>
         <span className="min-w-0 flex-1 truncate text-[13px] text-label2">{sv.name}・{st.short}・{unitById(a.unitId).short}</span>
-        <StatusPill status={statusOf(a, nowD)} compact />
+        {statusOf(a, nowD) !== "confirmed" && <StatusPill status={statusOf(a, nowD)} compact />}
       </div>
     );
   }
@@ -350,6 +355,7 @@ function PhoneSheet({ open, onClose, q, setQ, groups, run, nowD, empty }: {
                       </button>
                     ))}
                   </div>
+                  {!!g.more && <MoreHint n={g.more} className="px-4 pt-2" />}
                 </section>
               ))
             )}
@@ -372,7 +378,7 @@ function PhoneItem({ it, q, nowD }: { it: Item; q: string; nowD: Date }) {
         <div className="min-w-0 flex-1 py-0.5">
           <div className="flex min-w-0 items-baseline gap-2">
             <span className="truncate text-[17px] leading-[22px]"><Mark text={p.name} q={q} kind={by === "name" ? "name" : null} /></span>
-            {age !== null && <span className="shrink-0 text-[13px] text-label2 tnum">{age}歳</span>}
+            {age !== null && <span className="shrink-0 text-[13px] text-label2 tnum">{age}歳（{birthShort(p)}）</span>}
           </div>
           <div className="truncate text-[13px] leading-[18px] text-label2 tnum">
             {by === "kana" ? <Mark text={p.kana} q={q} kind="kana" /> : by === "number" ? <>診察券 <Mark text={p.number} q={q} kind="digits" /></> : by === "phone" ? <Mark text={p.phone} q={q} kind="digits" /> : p.kana}
@@ -393,7 +399,7 @@ function PhoneItem({ it, q, nowD }: { it: Item; q: string; nowD: Date }) {
           <div className="truncate text-[17px] leading-[22px]"><Mark text={p.name} q={q} kind={matchBy(p, q) === "name" ? "name" : null} /></div>
           <div className="truncate text-[13px] leading-[18px] text-label2">{serviceById(a.serviceId).name}・{staffById(a.staffId).short}</div>
         </div>
-        <StatusPill status={statusOf(a, nowD)} compact />
+        {statusOf(a, nowD) !== "confirmed" && <StatusPill status={statusOf(a, nowD)} compact />}
       </>
     );
   }
@@ -419,6 +425,10 @@ function PhoneItem({ it, q, nowD }: { it: Item; q: string; nowD: Date }) {
 }
 
 // ─── 補助 ────────────────────────────────────────────────────────────────────
+const MoreHint = ({ n, className }: { n: number; className?: string }) => (
+  <p className={cn("text-[12px] leading-[1.6] text-label2 tnum [word-break:auto-phrase]", className)}>ほか{n}人 — 名前を続けて入力するか、診察券番号・電話番号で探してください</p>
+);
+const birthShort = (p: Patient) => `${p.birth.getFullYear()}/${p.birth.getMonth() + 1}/${p.birth.getDate()}`;
 function noMatchHint(q: string) {
   return /^[\d\-\s()]+$/.test(q.trim())
     ? "診察券番号は3桁から、電話番号は4桁から探せます。"

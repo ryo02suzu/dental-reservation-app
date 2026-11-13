@@ -107,8 +107,8 @@ function WaitingRow({ r, t, unit, asking, onAsk }: { r: Row; t: Today; unit: Uni
               <div className="rounded-[10px] bg-fill/8 px-3 py-2.5">
                 <p className="text-[13px] leading-[19px] text-label">
                   {unit.unit.name}は<span className="whitespace-nowrap">{busy.patient.name}さん</span>が診療中です
-                  <span className="tnum">（{left > 0 ? `あと${mins(left)}` : "終了予定を過ぎています"}）</span>。
-                  <span className="mt-0.5 block text-label2">診療の完了は、ユニットで担当が記録します。</span>
+                  <span className="whitespace-nowrap tnum">（{left > 0 ? `あと${mins(left)}` : "終了予定を過ぎています"}）。</span>
+                  <span className="mt-0.5 block text-label2">完了の記録はユニットで行います。</span>
                 </p>
                 {/* 受付から他の患者さんの診療を完了にしないよう、待つ方を主な操作にする */}
                 <div className="mt-2.5 flex flex-wrap gap-2">

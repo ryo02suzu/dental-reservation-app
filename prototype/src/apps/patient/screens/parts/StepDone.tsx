@@ -2,15 +2,15 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { Copy } from "lucide-react";
 import { clinic, serviceById, staffById } from "@/data";
 import { fromKey, hm, mdw } from "@/lib/format";
-import { useIsPhone, useIsWide } from "@/lib/media";
+import { useIsPhone, useMinWidth } from "@/lib/media";
 import { useRoute } from "@/lib/nav";
 import { useStore } from "@/lib/store";
-import { Button, StatusPill, useToast } from "@/ui";
+import { Button, StatusPill } from "@/ui";
 import { BookingPage, BringList } from "./BookingPage";
 import {
   REMIND_LABEL, assignUnit, commitBooking, pastDeadline, range, receiptOf, roleOf, toHalf, useBooking, willBePending, type Draft,
 } from "./booking";
-import { DoneMark } from "./ui";
+import { DoneMark, useCopy } from "./ui";
 import { useNotify } from "./session";
 
 /**
@@ -23,9 +23,9 @@ export function StepDone({ d }: { d: Draft }) {
   const { setDraft, reset } = useBooking();
   const store = useStore();
   const phone = useIsPhone();
-  const wide = useIsWide();
+  const wide = useMinWidth(1024); // 右の列が出る幅（PatientPage と同じ）
   const notify = useNotify();
-  const toast = useToast();
+  const copy = useCopy();
 
   const committed = useRef(false);
   useLayoutEffect(() => {
@@ -116,14 +116,7 @@ export function StepDone({ d }: { d: Draft }) {
               icon={Copy}
               full={phone}
               className={phone ? undefined : "min-w-[200px]"}
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(receipt);
-                  toast("予約番号をコピーしました", { detail: receipt });
-                } catch {
-                  toast("コピーできませんでした", { detail: `予約番号 ${receipt}` });
-                }
-              }}
+              onClick={() => copy(receipt, "予約番号")}
             >
               予約番号をコピー
             </Button>

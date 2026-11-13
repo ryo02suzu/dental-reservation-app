@@ -54,6 +54,9 @@ for (const j of jobs) {
     timezoneId: "Asia/Tokyo", locale: "ja-JP", hasTouch: w < 768, isMobile: w < 768,
   });
   const page = await ctx.newPage();
+  // --date YYYY-MM-DD（またはジョブの date）で、デモの「今日」を固定する
+  const forced = j.date ?? get("date");
+  if (forced) await page.addInitScript(d => { window.__ARCHE_NOW__ = d; }, forced);
   const errors = [];
   page.on("pageerror", e => errors.push(String(e.message || e)));
   page.on("console", m => { if (m.type() === "error" && !/fonts\.g|net::ERR_FAILED/.test(m.text())) errors.push(m.text()); });

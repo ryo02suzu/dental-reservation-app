@@ -42,23 +42,33 @@ export function Card({ title, detail, aside, children, className, footer }: {
 }
 
 // ─── 指標 ───────────────────────────────────────────────────────────────────
-export function MetricTile({ m, compare, compact }: { m: Metric; compare: string; compact?: boolean }) {
-  const up = m.delta >= 0;
-  const flat = m.kind === "pt" ? Math.abs(m.delta) < 0.0005 : Math.abs(m.delta) < 0.0005;
-  const positive = up === m.good;
-  const text = m.kind === "pt" ? `${Math.abs(m.delta * 100).toFixed(1)}pt` : `${Math.abs(m.delta * 100).toFixed(1)}%`;
+/** 前期との差。色は付けず（毎週の上下は普通のこと）、目安を超えた指標だけ赤にする */
+export function Delta({ m, compare, className }: { m: Metric; compare: string; className?: string }) {
+  const flat = m.diff !== undefined ? m.diff === 0 : Math.abs(m.delta) < 0.0005;
+  const up = m.diff !== undefined ? m.diff > 0 : m.delta > 0;
+  const text = m.diff !== undefined
+    ? `${m.diff > 0 ? "+" : "−"}${Math.abs(m.diff)}${m.unit ?? ""}`
+    : m.kind === "pt" ? `${Math.abs(m.delta * 100).toFixed(1)}pt` : `${Math.abs(m.delta * 100).toFixed(1)}%`;
+  return (
+    <div className={cn("flex items-center gap-0.5 text-[12px] font-medium leading-4 tnum text-label2", className)}>
+      {!flat && m.diff === undefined && (up ? <ArrowUpRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.4} /> : <ArrowDownRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />)}
+      {flat ? "変化なし" : text}
+      <span className="ml-1 truncate text-label3">{compare}</span>
+    </div>
+  );
+}
+
+/** 2段目の小さな指標（「今日」の上の帯と同じ控えめな形） */
+export function MetricTile({ m, compare }: { m: Metric; compare: string }) {
   return (
     <div className="min-w-0">
       <div className="truncate text-[13px] font-medium leading-[18px] text-label2">{m.label}</div>
-      <div className="mt-1.5 flex items-baseline gap-0.5">
-        <span className={cn("font-semibold leading-none tracking-[-0.02em] tnum", compact ? "text-[24px]" : "text-[28px]")}>{m.value}</span>
-        {m.unit && <span className="text-[14px] font-medium text-label2">{m.unit}</span>}
+      <div className="mt-1 flex items-baseline gap-0.5">
+        <span className={cn("text-[22px] font-semibold leading-none tracking-[-0.01em] tnum", m.alert && "text-red")}>{m.value}</span>
+        {m.unit && <span className="text-[13px] font-medium text-label2">{m.unit}</span>}
       </div>
-      <div className={cn("mt-2 flex items-center gap-0.5 text-[12px] font-semibold leading-4 tnum", flat ? "text-label2" : positive ? "text-accent" : "text-red")}>
-        {!flat && (up ? <ArrowUpRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.6} /> : <ArrowDownRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.6} />)}
-        {flat ? "変化なし" : text}
-        <span className="ml-1 truncate font-medium text-label3">{compare}</span>
-      </div>
+      <Delta m={m} compare={compare} className="mt-1.5" />
+      {m.alert && <div className="mt-1 text-[12px] leading-4 text-red">目安の3%を超えています</div>}
     </div>
   );
 }
@@ -191,7 +201,7 @@ function Row({ day, values, compact }: { day: string; values: (number | null)[];
   );
 }
 
-/** 一番混む枠と空いている枠を一文で */
+/** いちばん混む枠と空いている枠を一文で */
 export function heatmapSummary(): string {
   let max = { v: -1, d: "", h: 0 };
   let min = { v: 2, d: "", h: 0 };
@@ -207,13 +217,12 @@ export function heatmapSummary(): string {
 export function ShareList({ rows, unit = "件", tone = "accent", inline, showCount = true }: {
   rows: Share[]; unit?: string; tone?: "accent" | "neutral"; inline?: boolean; showCount?: boolean;
 }) {
-  const max = Math.max(1, ...rows.map(r => r.value));
   const bar = (r: Share, i: number) => (
     <div className={cn("h-[6px] overflow-hidden rounded-full bg-fill/8", inline ? "min-w-0 flex-1" : "mt-1.5")}>
       <motion.div
-        className={cn("h-full rounded-full", tone === "neutral" ? "bg-label3" : i === 0 ? "bg-accent" : "bg-sand/70")}
+        className={cn("h-full rounded-full", tone === "neutral" ? "bg-sand/70" : i === 0 ? "bg-accent" : "bg-sand/70")}
         initial={{ width: 0 }}
-        animate={{ width: `${(r.value / max) * 100}%` }}
+        animate={{ width: `${r.share * 100}%` }}
         transition={{ ...springSoft, delay: i * 0.03 }}
       />
     </div>

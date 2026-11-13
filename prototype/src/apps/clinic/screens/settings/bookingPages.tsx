@@ -9,6 +9,7 @@ import { duration, fromKey, hm, mdw, relDay, yen } from "@/lib/format";
 import { Avatar, Button, IconButton, ListRow, ListSection, Segmented, Sheet, Stepper, Switch, Tag, cn, useToast } from "@/ui";
 import { SheetField, SheetGroup, StepperRow, SwitchRow, inputCls, useSaved } from "./parts";
 import { patch, setSettings, useSettings, type MenuItem } from "./store";
+import { BOOKING_URL } from "../recall/model";
 
 const CATEGORIES: Service["category"][] = ["予防", "一般", "歯周", "外科", "補綴", "小児", "審美", "相談"];
 const CATEGORY_TITLE: Record<Service["category"], string> = {
@@ -114,7 +115,7 @@ export function WebPage() {
   const saved = useSaved();
   const { goApp } = useRoute();
   const off = !web.enabled;
-  const url = "arche.jp/r/hidamari-dental";
+  const url = BOOKING_URL;
   return (
     <>
       <ListSection footer={web.enabled ? "患者さんは24時間、空いている時間からご予約できます。" : "予約ページには「現在はお電話でのみ受け付けています」と表示されます。"}>
@@ -145,7 +146,7 @@ export function WebPage() {
           </div>
         </ListSection>
         <ListSection header="キャンセル・変更" footer="期限を過ぎると、予約ページに医院の電話番号を表示して、お電話での連絡をお願いします。">
-          <StepperRow title="受付の期限" subtitle="予約の何時間前まで" value={web.cancelHours} min={0} max={72} step={6} format={v => (v === 0 ? "直前まで" : `${v}時間前`)} onChange={v => patch("web", { cancelHours: v })} />
+          <StepperRow title="変更・キャンセルの期限" subtitle="予約の何時間前まで" value={web.cancelHours} min={0} max={72} step={6} format={v => (v === 0 ? "直前まで" : `${v}時間前`)} onChange={v => patch("web", { cancelHours: v })} />
         </ListSection>
       </div>
     </>
@@ -156,7 +157,7 @@ export function WebPage() {
 type Channel = "line" | "sms" | "mail";
 
 export function RemindersPage() {
-  const { reminders, line, info } = useSettings();
+  const { reminders, line, info, plan } = useSettings();
   const { appointments, patients } = useStore();
   const [ch, setCh] = useState<Channel>("line");
   const lineCount = patients.filter(p => p.line).length;
@@ -169,7 +170,9 @@ export function RemindersPage() {
   const day = fromKey(sample.a.date);
   const timing = reminders.dayBefore ? (relDay(day, TODAY) === "明日" ? "明日" : "") : "本日";
   const when = reminders.dayBefore ? `${mdw(day)} ${hm(sample.a.start)}` : hm(sample.a.start);
-  const body = `${sample.p.name}さま\n${info.name}です。${timing ? `${timing} ` : ""}${when}から「${sample.s.name}」のご予約をいただいています。\n変更・キャンセルは下のリンクからお手続きください。お気をつけてお越しください。`;
+  const lead = `${info.name}です。${timing ? `${timing} ` : ""}${when}から「${sample.s.name}」のご予約をいただいています。`;
+  const body = (how: string) => `${sample.p.name}さま\n${lead}\n変更・キャンセルは${how}からお手続きください。お気をつけてお越しください。`;
+  const link = `${BOOKING_URL}/m/${sample.a.id.replace(/\D/g, "")}`;
   const none = !reminders.dayBefore && !reminders.sameDay;
   return (
     <>
@@ -179,7 +182,7 @@ export function RemindersPage() {
       </ListSection>
       <ListSection header="送る方法" footer="LINEを優先し、LINE連携のない方にはSMS、携帯の番号がない方にはメールで送ります。">
         <SwitchRow title="LINE" subtitle={line.linked ? `連携済みの患者さん ${lineCount}人` : "LINE公式アカウントが未連携です"} checked={reminders.line && line.linked} disabled={!line.linked} onChange={v => patch("reminders", { line: v })} />
-        <SwitchRow title="SMS" subtitle="1通 3円（プロプランは月300通まで無料）" checked={reminders.sms} onChange={v => patch("reminders", { sms: v })} />
+        <SwitchRow title="SMS" subtitle={plan.addons.sms_pack ? "SMS通知パック・月100通まで（今月 23通）" : "1通 3円（送った分を月末にまとめて請求）"} checked={reminders.sms} onChange={v => patch("reminders", { sms: v })} />
         <SwitchRow title="メール" checked={reminders.mail} onChange={v => patch("reminders", { mail: v })} />
       </ListSection>
 
@@ -191,17 +194,28 @@ export function RemindersPage() {
                 <div className="mx-auto max-w-[460px] rounded-[12px] bg-surface p-4 shadow-thumb">
                   <div className="text-[12px] text-label2">差出人：{info.name}</div>
                   <div className="mt-1 text-[15px] font-semibold">{reminders.dayBefore ? "【明日】" : "【本日】"}ご予約のお知らせ</div>
-                  <div className="hairline-t mt-3 whitespace-pre-line pt-3 text-[14px] leading-[1.7]">{body}</div>
+                  <div className="hairline-t mt-3 whitespace-pre-line pt-3 text-[14px] leading-[1.7]">{body("下のリンク")}</div>
                   <div className="mt-3 text-[14px] text-accent">予約の確認・変更</div>
+                  <div className="mt-0.5 text-[12px] text-label3 tnum">{link}</div>
                 </div>
               ) : (
                 <div className="flex items-end gap-2">
                   {ch === "line" && <Avatar name={clinic.name} tone="sand" size={32} />}
                   <div className="max-w-[340px]">
                     {ch === "line" && <div className="mb-1 text-[12px] text-label2">{info.name}</div>}
-                    <div className={cn("whitespace-pre-line rounded-[18px] px-3.5 py-2.5 text-[14px] leading-[1.65]", ch === "line" ? "rounded-bl-[6px] bg-surface shadow-thumb" : "rounded-bl-[6px] bg-fill/16")}>
-                      {ch === "sms" ? `【${info.name}】${body.split("\n").slice(1).join("\n")}\nhttps://arche.jp/r/hd` : body}
-                    </div>
+                    {ch === "line" ? (
+                      // LINEのメッセージ：本文の下にボタンが付く形（押せる見た目だけ。プレビューなので動かない）
+                      <div className="overflow-hidden rounded-[18px] rounded-bl-[6px] bg-surface shadow-thumb">
+                        <div className="whitespace-pre-line px-3.5 py-2.5 text-[14px] leading-[1.65]">{body("下のボタン")}</div>
+                        <div className="hairline-t flex h-11 items-center justify-center text-[14px] font-semibold text-accent">予約の確認・変更</div>
+                      </div>
+                    ) : (
+                      <div className="whitespace-pre-line rounded-[18px] rounded-bl-[6px] bg-fill/16 px-3.5 py-2.5 text-[14px] leading-[1.65]">
+                        {`【${info.name}】${body("こちら").split("\n").slice(1).join("\n").replace(`${info.name}です。`, "")}`}
+                        {"\n"}
+                        <span className="text-accent">{link}</span>
+                      </div>
+                    )}
                   </div>
                   <span className="pb-1 text-[11px] text-label3 tnum">{reminders.dayBefore ? "18:00" : hm(Math.max(0, sample.a.start - 120))}</span>
                 </div>

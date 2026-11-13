@@ -91,7 +91,14 @@ export default function PatientsScreen({ param }: { param?: string }) {
     } else go("patients", id);
   };
 
-  const sheet = <AddPatientSheet open={adding} onClose={() => setAdding(false)} onAdded={p => onAdded(p.id)} />;
+  const sheet = (
+    <AddPatientSheet
+      open={adding}
+      onClose={() => setAdding(false)}
+      onAdded={p => onAdded(p.id)}
+      onPickExisting={id => { setAdding(false); select(id); }}
+    />
+  );
   const actions = <ListActions state={state} onAdd={() => setAdding(true)} />;
   const missing = (
     <EmptyState
@@ -106,7 +113,7 @@ export default function PatientsScreen({ param }: { param?: string }) {
   if (split) {
     return (
       <div className="flex h-full min-w-0">
-        <ColumnPage title="患者" width={wide ? 352 : 320} actions={actions} pinned={<ListControls state={state} counts={counts} size="sm" />} scrollRef={listRef}>
+        <ColumnPage title="患者" width={wide ? 352 : 320} actions={actions} pinned={<ListControls state={state} counts={counts} size="sm" compact={!wide} />} scrollRef={listRef}>
           {top => (
             <PatientSections
               sections={sections}

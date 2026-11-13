@@ -53,10 +53,7 @@ export function AddonSheet({ addonKey, onClose }: { addonKey: string | null; onC
     <Sheet open={!!addonKey} onOpenChange={o => !o && onClose()} title={a.name} cancelLabel="キャンセル" confirmLabel="保存" onConfirm={save} confirmDisabled={!!error || value === a.price}>
       <div className="flex items-center gap-3 px-1 pb-1 pt-1">
         <IconTile icon={meta.icon} tone={meta.tone} size={40} />
-        <div className="min-w-0">
-          <div className="text-[17px] font-semibold">{a.name}</div>
-          <div className="text-[13px] text-label2">{a.description}{a.active ? "" : " · 提供を停止中"}</div>
-        </div>
+        <p className="min-w-0 text-[14px] leading-[1.6] text-label2">{a.description}{a.active ? "" : " · 提供を停止中"}</p>
       </div>
 
       <SheetGroup

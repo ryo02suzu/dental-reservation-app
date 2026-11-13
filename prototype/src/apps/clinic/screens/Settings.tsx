@@ -17,40 +17,40 @@ import { useSettings, type SettingsState } from "./settings/store";
 import type { LucideIcon } from "lucide-react";
 import type { TileTone } from "@/data";
 
-interface Item { key: string; title: string; icon: LucideIcon; tone: TileTone; page: ComponentType; value?: (s: SettingsState) => string | undefined }
+interface Item { key: string; title: string; icon: LucideIcon; tone: TileTone; page: ComponentType; value?: (s: SettingsState) => string | undefined; keywords?: string[] }
 
 const GROUPS: { header: string; items: Item[] }[] = [
   {
     header: "医院",
     items: [
-      { key: "info", title: "医院の情報", icon: Building2, tone: "sand", page: InfoPage },
+      { key: "info", title: "医院の情報", icon: Building2, tone: "sand", page: InfoPage, keywords: ["医院名", "院長", "電話", "住所", "アクセス", "駐車場", "予約ページ", "アドレス"] },
       {
-        key: "hours", title: "診療時間", icon: Clock, tone: "ocean", page: HoursPage,
+        key: "hours", title: "診療時間", icon: Clock, tone: "ocean", page: HoursPage, keywords: ["午前", "午後", "昼休み", "曜日", "休診"],
         value: s => {
           const open = Object.values(s.hours).filter(h => h.open);
           if (!open.length) return "なし";
           return `${hm(Math.min(...open.map(h => h.am[0])))}–${hm(Math.max(...open.map(h => h.pm[1])))}`;
         },
       },
-      { key: "holidays", title: "休診日", icon: CalendarOff, tone: "clay", page: HolidaysPage, value: s => [1, 2, 3, 4, 5, 6, 0].filter(d => !s.hours[d].open).map(d => "日月火水木金土"[d]).concat(s.holidays.national ? ["祝"] : []).join("・") || "なし" },
-      { key: "units", title: "ユニット", icon: Armchair, tone: "slate", page: UnitsPage, value: s => `${s.units.length}台` },
+      { key: "holidays", title: "休診日", icon: CalendarOff, tone: "clay", page: HolidaysPage, keywords: ["祝日", "年末年始", "臨時休診", "研修", "学会"], value: s => [1, 2, 3, 4, 5, 6, 0].filter(d => !s.hours[d].open).map(d => "日月火水木金土"[d]).concat(s.holidays.national ? ["祝"] : []).join("・") || "なし" },
+      { key: "units", title: "ユニット", icon: Armchair, tone: "slate", page: UnitsPage, keywords: ["診療台", "チェア"], value: s => `${s.units.length}台` },
     ],
   },
   {
     header: "予約",
     items: [
-      { key: "menu", title: "診療メニュー", icon: Stethoscope, tone: "sage", page: MenuPage, value: s => `${s.menu.length}件` },
-      { key: "web", title: "Web予約", icon: Globe, tone: "ocean", page: WebPage, value: s => (s.web.enabled ? "受付中" : "停止中") },
-      { key: "reminders", title: "リマインド通知", icon: BellRing, tone: "amber", page: RemindersPage, value: s => [s.reminders.dayBefore && "前日", s.reminders.sameDay && "当日"].filter(Boolean).join("・") || "オフ" },
+      { key: "menu", title: "診療メニュー", icon: Stethoscope, tone: "sage", page: MenuPage, keywords: ["料金", "自費", "保険", "所要時間", "定期検診", "ホワイトニング"], value: s => `${s.menu.length}件` },
+      { key: "web", title: "Web予約", icon: Globe, tone: "ocean", page: WebPage, keywords: ["予約", "仮予約", "承認", "初診", "キャンセル", "締め切り", "当日"], value: s => (s.web.enabled ? "受付中" : "停止中") },
+      { key: "reminders", title: "リマインド通知", icon: BellRing, tone: "amber", page: RemindersPage, keywords: ["予約", "SMS", "LINE", "メール", "前日", "当日"], value: s => [s.reminders.dayBefore && "前日", s.reminders.sameDay && "当日"].filter(Boolean).join("・") || "オフ" },
     ],
   },
-  { header: "スタッフ", items: [{ key: "staff", title: "スタッフとアカウント", icon: Users, tone: "plum", page: StaffPage, value: s => `${staffList.length + s.invited.length}人` }] },
-  { header: "連携", items: [{ key: "line", title: "LINE公式アカウント", icon: MessageCircle, tone: "sage", page: LinePage, value: s => (s.line.linked ? "連携済み" : "未連携") }] },
+  { header: "スタッフ", items: [{ key: "staff", title: "スタッフとアカウント", icon: Users, tone: "plum", page: StaffPage, keywords: ["権限", "招待", "管理者", "歯科医師", "歯科衛生士", "受付"], value: s => `${staffList.length + s.invited.length}人` }] },
+  { header: "連携", items: [{ key: "line", title: "LINE公式アカウント", icon: MessageCircle, tone: "sage", page: LinePage, keywords: ["リコール", "リマインド", "予約", "連携"], value: s => (s.line.linked ? "連携済み" : "未連携") }] },
   {
     header: "その他",
     items: [
-      { key: "plan", title: "プランとお支払い", icon: CreditCard, tone: "graphite", page: PlanPage, value: s => PLANS[s.plan.key].label },
-      { key: "help", title: "ヘルプ", icon: HelpCircle, tone: "slate", page: HelpPage },
+      { key: "plan", title: "プランとお支払い", icon: CreditCard, tone: "graphite", page: PlanPage, keywords: ["SMS", "リコール", "請求", "オプション", "料金", "支払い"], value: s => PLANS[s.plan.key].label },
+      { key: "help", title: "ヘルプ", icon: HelpCircle, tone: "slate", page: HelpPage, keywords: ["よくある質問", "使い方", "問い合わせ"] },
     ],
   },
 ];
@@ -134,7 +134,8 @@ function SettingsSidebar({ active, onPick }: { active: string; onPick: (k: strin
   const [q, setQ] = useState("");
   const groups = useMemo(() => {
     const t = q.trim();
-    return t ? GROUPS.map(g => ({ ...g, items: g.items.filter(i => i.title.includes(t) || g.header.includes(t)) })).filter(g => g.items.length) : GROUPS;
+    const hit = (i: Item, h: string) => [i.title, h, ...(i.keywords ?? [])].some(w => w.toLowerCase().includes(t.toLowerCase()));
+    return t ? GROUPS.map(g => ({ ...g, items: g.items.filter(i => hit(i, g.header)) })).filter(g => g.items.length) : GROUPS;
   }, [q]);
   return (
     <aside className="hairline-r flex w-[280px] shrink-0 flex-col bg-surface2/60">
@@ -173,7 +174,7 @@ function SettingsSidebar({ active, onPick }: { active: string; onPick: (k: strin
           </div>
         ))}
         {!groups.length && <p className="px-2.5 pt-4 text-[13px] text-label2">「{q}」に当てはまる設定はありません</p>}
-        <div className="mt-3">
+        <div className={cn("mt-3", q.trim() && "hidden")}>
           <button onClick={() => goApp("login")} className="flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[14px] text-red transition-colors hover:bg-fill/8">
             <IconTile icon={LogOut} tone="graphite" size={22} />
             ログアウト

@@ -7,6 +7,7 @@ import { useStore } from "@/lib/store";
 import { ListRow, ListSection, Switch, cn, easeOut, useToast } from "@/ui";
 import { QrCode } from "./QrCode";
 import { setNotify, useNotify } from "./session";
+import { REMIND_LABEL } from "./booking";
 import { ClinicMark, SectionHeading } from "./ui";
 
 // ─── 診察券 ─────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ export function NotifySection() {
         />
         <ListRow
           title="前日のリマインド"
-          subtitle="ご予約の前日18時ごろにお送りします"
+          subtitle={`ご予約の${REMIND_LABEL}にお送りします`}
           trailing={
             <Switch
               checked={s.remind}
@@ -92,15 +93,16 @@ export function NotifySection() {
 const FIRST_SHOWN = 5;
 
 export function HistorySection() {
-  const { appointments, memos } = useStore();
+  const { appointments } = useStore();
   const [all, setAll] = useState(false);
-  // 42日以内はストアの完了した予約、それより前は来院記録から
+  // 42日以内はストアの完了した予約、それより前は来院記録から。
+  // 院内の診療メモ（略語や所見）は患者さんには見せず、メニューと担当だけを出す
   const items = useMemo(() => {
     const recent = appointments
       .filter(a => a.patientId === ME.id && a.status === "completed")
-      .map(a => ({ date: fromKey(a.date), serviceId: a.serviceId, staffId: a.staffId, note: memos.find(m => m.apptId === a.id)?.body ?? "" }));
+      .map(a => ({ date: fromKey(a.date), serviceId: a.serviceId, staffId: a.staffId }));
     return [...recent, ...visitsOf(ME)].sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [appointments, memos]);
+  }, [appointments]);
   const shown = all ? items : items.slice(0, FIRST_SHOWN);
   const years = [...new Set(shown.map(v => v.date.getFullYear()))];
   const first = ME.firstVisit;
@@ -130,8 +132,7 @@ export function HistorySection() {
                       <div className="min-w-0 flex-1">
                         <div className="text-[16px] leading-[22px] md:text-[15px]">{sv.name}</div>
                         <div className="mt-0.5 text-footnote text-label2">
-                          {v.note ? `${v.note}・` : ""}
-                          {st.name}
+                          担当 {st.name}（{st.role}）
                         </div>
                       </div>
                     </div>

@@ -1,14 +1,15 @@
 import { motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { CalendarCheck, ChevronRight, QrCode } from "lucide-react";
 import { ME, clinic, serviceById, staffById } from "@/data";
 import type { Appointment } from "@/data";
 import { TODAY, useNow } from "@/lib/clock";
-import { fromKey, hm, md, mdw, relDay } from "@/lib/format";
-import { useIsPhone, useIsWide } from "@/lib/media";
+import { fromKey, hm, mdw, relDay } from "@/lib/format";
+import { useIsPhone, useMinWidth } from "@/lib/media";
 import { useRoute } from "@/lib/nav";
-import { Avatar, Button, StatusPill, Surface, tap } from "@/ui";
+import { Avatar, Button, ListRow, ListSection, StatusPill, Surface, tap } from "@/ui";
 import { useUpcoming } from "./parts/appts";
-import { mePrefill, useBooking } from "./parts/booking";
+import { roleOf } from "./parts/booking";
+import { NoUpcoming } from "./parts/NoUpcoming";
 import { AccessSection, HoursTable, MenuOverview, TodayStatus } from "./parts/clinic";
 import { PatientPage } from "./parts/shell";
 import { ClinicMark, SectionHeading } from "./parts/ui";
@@ -19,7 +20,7 @@ export default function PatientHome({ param }: { param?: string }) {
   const { go } = useRoute();
   const at = useNow();
   const phone = useIsPhone();
-  const wide = useIsWide();
+  const wide = useMinWidth(1024); // 右の列が出る幅（PatientPage と同じ）
   const upcoming = useUpcoming();
 
   const info = (
@@ -37,7 +38,7 @@ export default function PatientHome({ param }: { param?: string }) {
       leading={<ClinicMark size={30} className="ml-2 md:ml-0" />}
       actions={
         <motion.button whileTap={tap} onClick={() => go("mine")} aria-label="予約の確認・診察券" title="予約の確認・診察券" className="mr-2 rounded-full md:mr-0">
-          <Avatar name={ME.name} size={32} />
+          <Avatar name={ME.name} size={32} className="ring-1 ring-sep/30" />
         </motion.button>
       }
       side={info}
@@ -51,7 +52,12 @@ export default function PatientHome({ param }: { param?: string }) {
       </div>
 
       <SectionHeading>次回のご予約</SectionHeading>
-      {upcoming[0] ? <NextCard a={upcoming[0]} more={upcoming.length - 1} /> : <NoNext />}
+      {upcoming[0] ? <NextCard a={upcoming[0]} more={upcoming.length - 1} /> : <NoUpcoming title="次回のご予約はありません" />}
+
+      <ListSection className="!mt-6">
+        <ListRow icon={CalendarCheck} tone="sand" title="予約の確認" subtitle="今後のご予約・通院履歴・お知らせの設定" chevron onClick={() => go("mine")} />
+        <ListRow icon={QrCode} tone="graphite" title="診察券" subtitle="受付の端末にかざすQRコード" chevron onClick={() => go("mine", "card")} />
+      </ListSection>
 
       {!wide && info}
       <MenuOverview />
@@ -77,7 +83,7 @@ function NextCard({ a, more }: { a: Appointment; more: number }) {
           </div>
           <div className="mt-2 text-[16px] leading-[22px]">{sv.name}</div>
           <div className="mt-0.5 text-footnote text-label2 tnum">
-            {hm(a.start)}–{hm(a.end)}・担当 {st.name}（{st.role}）
+            {hm(a.start)}–{hm(a.end)}・担当 {a.status === "pending" ? roleOf(sv) : `${st.name}（${st.role}）`}
           </div>
           {a.status === "pending" && <div className="mt-1 text-footnote text-label2">医院の確認待ちです</div>}
         </div>
@@ -92,30 +98,5 @@ function NextCard({ a, more }: { a: Appointment; more: number }) {
         </button>
       )}
     </>
-  );
-}
-
-/** 次回の予約がないとき。定期検診の目安を添えて、そのまま定期検診の予約へ */
-function NoNext() {
-  const { go } = useRoute();
-  const { setDraft } = useBooking();
-  const due = ME.nextRecall;
-  return (
-    <div className="rounded-card bg-surface px-4 py-4 md:px-5">
-      <div className="text-[16px] font-semibold">次回のご予約はありません</div>
-      <p className="mt-1 text-footnote leading-[1.6] text-label2">
-        {due ? `定期検診の目安は${md(due)}ごろです。3か月ごとの検診で、むし歯や歯周病を早めに見つけられます。` : "定期検診は3か月ごとがおすすめです。"}
-      </p>
-      <Button
-        variant="tinted"
-        className="mt-3.5"
-        onClick={() => {
-          setDraft({ visit: "return", serviceId: "sv01", date: undefined, start: undefined, ...mePrefill() });
-          go("book", "time");
-        }}
-      >
-        定期検診を予約
-      </Button>
-    </div>
   );
 }

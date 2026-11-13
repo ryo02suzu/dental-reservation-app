@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useIsPresent } from "framer-motion";
 import { useRoute } from "@/lib/nav";
 import { useStore } from "@/lib/store";
 import { demoDraft, hasFinishedBooking, isReady, isStep, useBooking, type Step } from "./parts/booking";
@@ -26,7 +27,9 @@ export default function Booking({ param }: { param?: string }) {
   const ready = isReady(step, draft);
   // 確定したあとに（ブラウザの「戻る」などで）手順の画面へ戻ってきたとき。確定済みの内容を
   // もう一度見せると二重予約の入口になるので、最初の手順なら新しい予約として始め、それ以外はホームへ。
-  const stale = step !== "done" ? !!draft.apptId : !ready && hasFinishedBooking();
+  // 抜けていく途中の画面（確認→完了で後ろに下がる確認画面など）では判定しない
+  const present = useIsPresent();
+  const stale = present && (step !== "done" ? !!draft.apptId : !ready && hasFinishedBooking());
   useEffect(() => {
     if (!stale) return;
     if (step === "type") reset();

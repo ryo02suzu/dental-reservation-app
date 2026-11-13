@@ -142,7 +142,7 @@ export function SheetGroup({ header, footer, children, className }: { header?: R
     <section className={cn("mt-6 first:mt-1", className)}>
       {header && <h3 className="px-4 pb-1.5 text-footnote font-medium text-label2">{header}</h3>}
       <div className="overflow-hidden rounded-cell bg-fill/8">{children}</div>
-      {footer && <div className="px-4 pt-1.5 text-footnote leading-[1.6] text-label2">{footer}</div>}
+      {footer && <div className="px-4 pt-1.5 text-footnote leading-[1.6] text-label2 [text-wrap:pretty] [word-break:auto-phrase]">{footer}</div>}
     </section>
   );
 }

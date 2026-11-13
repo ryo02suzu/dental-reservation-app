@@ -7,9 +7,8 @@ import { staff, staffById, type Memo, type Patient } from "@/data";
 import { Avatar, Button, ListSection, Menu, MenuItem, MenuSeparator, cn, spring, springSoft, useToast } from "@/ui";
 import { DentalChart } from "./DentalChart";
 import { ALL_TEETH, memoWhen, type ToothKey } from "./util";
+import { JpText } from "./Cautions";
 
-/** スタッフ画面で書く人の初期値（サイドバーに出ているログイン中のスタッフ） */
-const ME_STAFF = staff.find(s => s.role === "受付")!;
 const PAGE = 5;
 
 export interface ComposeRequest {
@@ -139,7 +138,15 @@ function MemoItem({ m, onTooth, onPin, onDelete }: { m: Memo; onTooth: (k: Tooth
             <MenuItem icon={Trash2} destructive onSelect={onDelete}>削除</MenuItem>
           </Menu>
         </div>
-        <p className="mt-1 whitespace-pre-wrap text-[15px] leading-[1.65] text-label">{m.body}</p>
+        {m.pinned ? (
+          // 固定したメモは上の注意事項に全文が出ているので、ここでは1行にたたむ
+          <p className="mt-1 truncate text-[15px] leading-[1.65] text-label2">
+            <span className="mr-1.5 text-footnote font-medium text-label3">注意事項に表示中</span>
+            {m.body}
+          </p>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap text-[15px] leading-[1.65] text-label [word-break:auto-phrase]"><JpText text={m.body} /></p>
+        )}
         {(m.teeth?.length ?? 0) > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {m.teeth!.map(k => (
@@ -170,9 +177,10 @@ function MemoItem({ m, onTooth, onPin, onDelete }: { m: Memo; onTooth: (k: Tooth
 
 // ─── 入力欄 ───────────────────────────────────────────────────────────────
 function Composer({ p, initialTeeth, onDone }: { p: Patient; initialTeeth: ToothKey[]; onDone: () => void }) {
-  const { addMemo } = useStore();
+  const { addMemo, currentStaffId } = useStore();
   const toast = useToast();
-  const [staffId, setStaffId] = useState(ME_STAFF.id);
+  // 書く人の初期値はログイン中のスタッフ
+  const [staffId, setStaffId] = useState(currentStaffId);
   const [body, setBody] = useState("");
   const [next, setNext] = useState("");
   const [teeth, setTeeth] = useState<ToothKey[]>(initialTeeth);

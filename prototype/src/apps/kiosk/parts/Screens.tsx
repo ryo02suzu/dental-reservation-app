@@ -6,48 +6,56 @@ import { patientById, serviceById, staffById, type Appointment, type Patient } f
 import { minutesOfDay, now } from "@/lib/clock";
 import { hm } from "@/lib/format";
 import { useStore } from "@/lib/store";
-import { IconTile, cn, springBouncy, tapSoft, Ring } from "@/ui";
-import type { TileTone } from "@/data";
+import { cn, tapSoft, Ring } from "@/ui";
 import type { LucideIcon } from "lucide-react";
-import { DigitBoxes, KButton, KeyPad, KTitle } from "./ui";
+import { DigitBoxes, DoneMark, KButton, KeyPad, KTitle } from "./ui";
 import { demoNumber, nextForQr } from "./lookup";
 
 /* ─── 受付の方法 ───────────────────────────────────────────── */
-const METHODS: { k: "scan" | "number" | "phone"; title: string; body: string; icon: LucideIcon; tone: TileTone }[] = [
-  { k: "scan", title: "診察券のQRコードで受付", body: "診察券の裏のQRコードをかざします", icon: QrCode, tone: "sand" },
-  { k: "number", title: "診察券番号で受付", body: "6けたの診察券番号を入力します", icon: CreditCard, tone: "slate" },
-  { k: "phone", title: "お電話番号で受付", body: "お電話番号の下4けたを入力します", icon: Phone, tone: "sage" },
+// いちばん早いQRコードを先頭に、濃い面で一回り大きく。ほかの2つは白い行。アイコンは色分けしない。
+const METHODS: { k: "scan" | "number" | "phone"; title: string; body: string; icon: LucideIcon }[] = [
+  { k: "scan", title: "QRコードで受付", body: "診察券、またはスマートフォンの診察券をかざします", icon: QrCode },
+  { k: "number", title: "診察券番号で受付", body: "6けたの診察券番号を入力します", icon: CreditCard },
+  { k: "phone", title: "お電話番号で受付", body: "お電話番号の下4けたを入力します", icon: Phone },
 ];
 
 export function Method({ onPick }: { onPick: (k: "scan" | "number" | "phone") => void }) {
   return (
-    <div className="flex flex-col">
-      <KTitle title="受付の方法を選んでください" lead="診察券をお持ちでない方は、お電話番号で受付できます。" />
-      <div className="mt-8 grid gap-3 md:mt-10 md:gap-4 lg:mt-12 lg:grid-cols-3">
-        {METHODS.map((m, i) => (
-          <motion.button
-            key={m.k}
-            type="button"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 34, delay: 0.04 + i * 0.05 } }}
-            whileTap={tapSoft}
-            onClick={() => onPick(m.k)}
-            className="flex min-h-[112px] items-center gap-5 rounded-[24px] bg-surface p-5 text-left md:min-h-[136px] md:gap-6 md:p-7 lg:h-[min(340px,42vh)] lg:min-h-[260px] lg:flex-col lg:items-start lg:justify-between lg:p-7"
-          >
-            <IconTile icon={m.icon} tone={m.tone} size={56} />
-            <div className="min-w-0 flex-1 lg:flex-none">
-              <div className="text-[21px] font-semibold leading-[1.35] palt md:text-[24px]">{m.title}</div>
-              <div className="mt-1.5 text-[15px] leading-[1.6] text-label2 md:text-[17px] lg:text-[16px]">{m.body}</div>
-            </div>
-            <ChevronRight className="h-7 w-7 shrink-0 text-label3 lg:hidden" strokeWidth={2.2} />
-          </motion.button>
-        ))}
+    <div className="flex flex-col gap-8 md:gap-10 lg:flex-row lg:items-center lg:gap-16">
+      <KTitle className="lg:flex-1" title="受付の方法を選んでください" lead="診察券をお持ちでない方は、お電話番号で受付できます。" />
+      <div className="grid gap-3 md:gap-4 lg:w-[560px] lg:shrink-0">
+        {METHODS.map((m, i) => {
+          const primary = i === 0;
+          const Icon = m.icon;
+          return (
+            <motion.button
+              key={m.k}
+              type="button"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 34, delay: 0.04 + i * 0.05 } }}
+              whileTap={tapSoft}
+              onClick={() => onPick(m.k)}
+              className={cn(
+                "flex items-center gap-5 rounded-[24px] px-6 text-left md:gap-6 md:px-7",
+                primary ? "min-h-[128px] bg-ink text-onink md:min-h-[140px]" : "min-h-[104px] bg-surface md:min-h-[116px]",
+              )}
+            >
+              <Icon className={cn("h-11 w-11 shrink-0 md:h-12 md:w-12", primary ? "text-onink/85" : "text-label2")} strokeWidth={1.7} />
+              <div className="min-w-0 flex-1">
+                <div className={cn("font-semibold leading-[1.35] palt", primary ? "text-[24px] md:text-[28px]" : "text-[21px] md:text-[24px]")}>{m.title}</div>
+                <div className={cn("mt-1 text-[15px] leading-[1.55] md:text-[17px]", primary ? "text-onink/70" : "text-label2")}>{m.body}</div>
+              </div>
+              <ChevronRight className={cn("h-7 w-7 shrink-0", primary ? "text-onink/55" : "text-label3")} strokeWidth={2.2} />
+            </motion.button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/* ─── QRコードの読み取り（デモ：約2秒で読み取ったことにする） ───────── */
+/* ─── QRコードの読み取り（デモ：かざされたらすぐ読み取ったことにする） ───────── */
+// 走査線のような飾りの動きは置かない。四隅の枠だけを静かに出し、読み取れたら枠が砂色に変わってチェックが出る。
 export function Scan({ onResult, onUseNumber }: { onResult: (a: Appointment | undefined) => void; onUseNumber: () => void }) {
   const { appointments } = useStore();
   const [read, setRead] = useState(false);
@@ -56,8 +64,8 @@ export function Scan({ onResult, onUseNumber }: { onResult: (a: Appointment | un
   const apptsRef = useRef(appointments);
   apptsRef.current = appointments;
   useEffect(() => {
-    const t1 = setTimeout(() => setRead(true), 1900);
-    const t2 = setTimeout(() => cb.current(nextForQr(apptsRef.current, minutesOfDay(now()))), 2600);
+    const t1 = setTimeout(() => setRead(true), 800);
+    const t2 = setTimeout(() => cb.current(nextForQr(apptsRef.current, minutesOfDay(now()))), 1500);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
@@ -65,8 +73,8 @@ export function Scan({ onResult, onUseNumber }: { onResult: (a: Appointment | un
     <div className="flex flex-col gap-8 md:gap-10 lg:flex-row lg:items-center lg:gap-16">
       <div className="lg:flex-1">
         <KTitle
-          title={read ? "読み取りました" : <>QRコードを<br />枠に合わせてください</>}
-          lead={<>診察券の裏のQRコードを、<br />カメラに向けてかざしてください。</>}
+          title={read ? "読み取りました" : "QRコードを枠に合わせてください"}
+          lead="診察券、またはスマートフォンの診察券のQRコードを、カメラにかざしてください。"
         />
         <div className="mt-8 hidden lg:block">
           <KButton variant="secondary" size="md" icon={CreditCard} onClick={onUseNumber}>診察券番号で受付する</KButton>
@@ -79,27 +87,9 @@ export function Scan({ onResult, onUseNumber }: { onResult: (a: Appointment | un
         {/* 四隅の枠 */}
         {(["left-[14%] top-[14%] border-l-[3px] border-t-[3px] rounded-tl-[18px]", "right-[14%] top-[14%] border-r-[3px] border-t-[3px] rounded-tr-[18px]",
           "left-[14%] bottom-[14%] border-l-[3px] border-b-[3px] rounded-bl-[18px]", "right-[14%] bottom-[14%] border-r-[3px] border-b-[3px] rounded-br-[18px]"] as const).map(c => (
-          <span key={c} className={cn("absolute h-[18%] w-[18%] transition-colors duration-300", c, read ? "border-sand" : "border-white/85")} />
+          <span key={c} className={cn("absolute h-[18%] w-[18%] transition-colors duration-200", c, read ? "border-sand" : "border-white/85")} />
         ))}
-        {/* 走査線（この画面だけ・最大2秒） */}
-        {!read && (
-          <motion.span
-            className="absolute left-[16%] right-[16%] h-[2px] rounded-full bg-sand"
-            initial={{ top: "18%", opacity: 0 }}
-            animate={{ top: ["18%", "82%", "50%"], opacity: [0, 1, 1] }}
-            transition={{ duration: 1.8, ease: "easeInOut", times: [0, 0.7, 1] }}
-          />
-        )}
-        {read && (
-          <motion.span
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={springBouncy}
-            className="absolute left-1/2 top-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-sand text-onsand"
-          >
-            <Check className="h-10 w-10" strokeWidth={3} />
-          </motion.span>
-        )}
+        {read && <DoneMark size={80} delay={0} className="absolute left-1/2 top-1/2 -ml-10 -mt-10" />}
       </div>
       <div className="lg:hidden">
         <KButton variant="secondary" size="md" icon={CreditCard} onClick={onUseNumber} className="w-full">診察券番号で受付する</KButton>
@@ -204,7 +194,7 @@ export function Confirm({ appt, onConfirm, onWrong }: { appt: Appointment; onCon
   const st = staffById(appt.staffId);
   const late = minutesOfDay(now()) > appt.start + 5;
   const rows: [string, string][] = [
-    ["ご予約の時刻", `${hm(appt.start)}〜${hm(appt.end)}`],
+    ["ご予約の時刻", `${hm(appt.start)}–${hm(appt.end)}`],
     ["内容", s.name],
     ["担当", `${st.name}（${st.role === "院長" ? "院長・歯科医師" : st.role}）`],
   ];
@@ -258,7 +248,8 @@ export function Already({ appt, onHome }: { appt: Appointment; onHome: () => voi
 }
 
 /* ─── 完了 ───────────────────────────────────────────────── */
-export function Done({ appt, receipt, insurance, onHome }: { appt: Appointment; receipt: number; insurance: boolean; onHome: () => void }) {
+// マイナ保険証は毎回、顔認証付きカードリーダーで確認する（オンライン資格確認）。お持ちでない方は資格確認書。
+export function Done({ appt, onHome }: { appt: Appointment; onHome: () => void }) {
   const p = patientById(appt.patientId);
   const TOTAL = 10;
   const [left, setLeft] = useState(TOTAL);
@@ -273,37 +264,22 @@ export function Done({ appt, receipt, insurance, onHome }: { appt: Appointment; 
   return (
     <div className="flex flex-col gap-8 md:gap-10 lg:flex-row lg:items-center lg:gap-16">
       <div className="lg:flex-1">
-        <motion.span
-          initial={{ scale: 0.4, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ ...springBouncy, delay: 0.08 }}
-          className="flex h-16 w-16 items-center justify-center rounded-full bg-sand text-onsand md:h-20 md:w-20"
-        >
-          <Check className="h-8 w-8 md:h-10 md:w-10" strokeWidth={3} />
-        </motion.span>
+        <DoneMark size={72} className="md:h-20 md:w-20" />
         <h1 className="mt-6 text-[34px] font-bold leading-[1.25] palt md:text-[44px]">受付が完了しました</h1>
         <p className="mt-3 text-[18px] leading-[1.7] text-label2 md:text-[22px]">
           <span className="font-semibold text-label">{p.name} さま</span>
           <br />
-          お名前をお呼びするまで、
-          <br />
-          待合室でお待ちください。
+          お名前をお呼びするまで、待合室でお待ちください。
         </p>
-        {insurance && (
-          <div className="mt-6 flex items-start gap-4 rounded-[20px] bg-surface p-5 md:p-6">
-            <IdCard className="mt-0.5 h-8 w-8 shrink-0 text-accent" strokeWidth={1.8} />
-            <div>
-              <div className="text-[19px] font-semibold leading-[1.5] palt md:text-[21px]">保険証（マイナ保険証）を<br />受付にお出しください</div>
-              <div className="mt-1.5 text-[15px] leading-[1.6] text-label2 md:text-[17px]">{appt.firstVisit ? "はじめてのご来院のため、" : "今月はじめてのご来院のため、"}<br className="md:hidden" />確認いたします。</div>
-            </div>
-          </div>
-        )}
+        <p className="mt-2 text-[16px] leading-[1.7] text-label3 md:text-[18px]">お会計のときも、お名前でお呼びします。</p>
       </div>
-      <div className="flex w-full flex-col gap-5 lg:w-[360px] lg:shrink-0 xl:w-[400px]">
+      <div className="flex w-full flex-col gap-5 lg:w-[420px] lg:shrink-0">
         <div className="rounded-[28px] bg-surface px-7 pb-7 pt-6 md:px-8">
-          <div className="text-[17px] font-medium text-label2 md:text-[19px]">受付番号</div>
-          <div className="mt-1 text-[96px] font-bold leading-none tracking-[-0.03em] tnum md:text-[128px]">{receipt}</div>
-          <div className="mt-3 text-[15px] text-label3 md:text-[16px]">お会計のときに、この番号でお呼びします</div>
+          <IdCard className="h-9 w-9 text-accent" strokeWidth={1.7} />
+          <div className="mt-4 text-[22px] font-semibold leading-[1.45] palt md:text-[24px]">マイナ保険証を、受付横のカードリーダーにかざしてください</div>
+          <div className="mt-2 text-[16px] leading-[1.65] text-label2 md:text-[18px]">
+            資格確認書の方は、受付にお出しください。{appt.firstVisit && "問診票もお渡しします。"}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <Ring value={Math.max(0, left) / TOTAL} size={56} stroke={4} barClassName="text-label3" trackClassName="text-fill/12">
@@ -339,20 +315,16 @@ export function Help({ onCall, called, onHome }: { onCall: () => void; called: b
   return (
     <ResultLayout
       icon={
-        <motion.span
-          key={String(called)}
-          initial={called ? { scale: 0.5, opacity: 0 } : false}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={springBouncy}
-          className={cn("flex h-20 w-20 items-center justify-center rounded-full", called ? "bg-sand text-onsand" : "bg-fill/12 text-label2")}
-        >
-          {called ? <Check className="h-10 w-10" strokeWidth={3} /> : <BellRing className="h-9 w-9" strokeWidth={2} />}
-        </motion.span>
+        called ? (
+          <DoneMark size={80} delay={0} />
+        ) : (
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-fill/12 text-label2"><BellRing className="h-9 w-9" strokeWidth={2} /></span>
+        )
       }
       title={called ? "スタッフに知らせました" : "受付にお声がけください"}
       lead={
         called
-          ? "スタッフがまいります。そのまま少しお待ちください。"
+          ? "スタッフがまいります。そのまま少しお待ちください。しばらくすると、この画面は最初にもどります。"
           : <>ご予約のない方、はじめての方、診察券をお忘れの方は、<br className="hidden md:inline" />受付のスタッフがご案内します。<br />カウンターが混み合っているときは、下のボタンでお呼びください。</>
       }
     >
@@ -368,13 +340,14 @@ export function Help({ onCall, called, onHome }: { onCall: () => void; called: b
   );
 }
 
+/** 結果の画面（見つからない・受付済み・ヘルプ）。タブレットでは中央にまとめ、右半分が空かないようにする */
 function ResultLayout({ icon, title, lead, children }: { icon: React.ReactNode; title: React.ReactNode; lead: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col md:mx-auto md:max-w-[720px] md:items-center md:text-center">
       {icon}
-      <h1 className="mt-6 text-[30px] font-bold leading-[1.3] palt md:text-[40px]">{title}</h1>
+      <h1 className="mt-6 text-balance text-[30px] font-bold leading-[1.3] palt md:text-[40px]">{title}</h1>
       <p className="mt-3 text-[17px] leading-[1.75] text-label2 md:text-[20px]">{lead}</p>
-      <div className="mt-8 md:mt-10">{children}</div>
+      <div className="mt-8 flex w-full flex-col md:mt-10 md:items-center">{children}</div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { WEEKDAYS, duration, fromKey, hm, key, mdw } from "@/lib/format";
 import { useIsPhone, useIsWide } from "@/lib/media";
 import { ListRow, ListSection, Sheet, Stepper, Switch, cn, useToast } from "@/ui";
 import { useClinicUI } from "../../context";
-import { SheetField, SheetGroup, SwitchRow, inputCls, useSaved } from "./parts";
+import { SheetField, SheetGroup, SwitchRow, inputCls } from "./parts";
 import { newYearRange, upcomingHolidays } from "./dates";
 import { patch, setSettings, useSettings, type DayHours } from "./store";
 
@@ -34,25 +34,21 @@ function DayBar({ h }: { h: DayHours }) {
 const rangeText = (h: DayHours) => `${hm(h.am[0])}–${hm(h.am[1])} / ${hm(h.pm[0])}–${hm(h.pm[1])}`;
 
 // ─── 診療時間 ───────────────────────────────────────────────────────────────
+/**
+ * 曜日ごとの行。iOSの設定と同じく、行そのものを押すと編集のシートが開く（どの幅でも同じ形）。
+ * 診療する／休診のスイッチは、時間と一緒にシートの中で切り替える。
+ */
 export function HoursPage() {
   const { hours } = useSettings();
   const phone = useIsPhone();
   const bar = useIsWide();
-  const saved = useSaved();
   const { go } = useClinicUI();
   const [edit, setEdit] = useState<number | null>(null);
-  const toggle = (d: number, v: boolean) => {
-    setSettings(s => ({ ...s, hours: { ...s.hours, [d]: { ...s.hours[d], open: v } } }));
-    saved(`${WEEKDAYS[d]}曜日を${v ? "診療日" : "休診"}にしました`);
-  };
   return (
     <>
-      <ListSection
-        header="曜日ごとの診療時間"
-        footer="時間を押すと15分単位で変更できます。Web予約で選べる時間にもそのまま反映されます。"
-      >
+      <ListSection header="曜日ごとの診療時間" footer="曜日を押すと、診療するかどうかと時間（15分単位）を変更できます。">
         {bar && (
-          <div className="hairline-b flex h-8 items-center gap-4 pl-4 pr-[83px] text-[11px] text-label3 tnum">
+          <div className="hairline-b flex h-8 items-center gap-4 pl-4 pr-[46px] text-[11px] text-label3 tnum">
             <span className="w-[72px] shrink-0" />
             <div className="relative h-full flex-1">
               {[9, 12, 15, 18].map(h => (
@@ -65,21 +61,19 @@ export function HoursPage() {
         {ORDER.map((d, i) => {
           const h = hours[d];
           return (
-            <div key={d} className="relative flex min-h-[56px] items-center gap-4 pr-4 md:min-h-[52px]">
+            <div key={d} className="relative">
               <button
-                onClick={() => h.open && setEdit(d)}
-                disabled={!h.open}
-                className="flex min-w-0 flex-1 items-center gap-4 self-stretch pl-4 text-left transition-colors hover:bg-fill/[0.04] disabled:cursor-default disabled:hover:bg-transparent"
+                onClick={() => setEdit(d)}
+                className="flex min-h-[56px] w-full items-center gap-4 pl-4 pr-3 text-left transition-colors hover:bg-fill/[0.04] active:bg-fill/12 md:min-h-[52px]"
                 aria-label={`${WEEKDAYS[d]}曜日の診療時間を変更`}
               >
                 <span className={cn("w-[72px] shrink-0 text-[16px] font-medium md:text-[15px]", !h.open && "text-label2")}>{WEEKDAYS[d]}曜日</span>
                 {bar && <div className="min-w-0 flex-1"><DayBar h={h} /></div>}
-                <span className={cn("shrink-0 text-[15px] tnum md:text-[14px]", bar ? "w-[200px]" : "ml-auto", h.open ? "text-label" : "text-label3")}>
+                <span className={cn("shrink-0 text-[15px] tnum md:text-[14px]", bar ? "w-[200px] text-right" : "ml-auto", h.open ? "text-label2" : "text-label3")}>
                   {h.open ? (phone ? <span className="flex flex-col items-end leading-5"><span>{hm(h.am[0])}–{hm(h.am[1])}</span><span>{hm(h.pm[0])}–{hm(h.pm[1])}</span></span> : rangeText(h)) : "休診"}
                 </span>
-                {phone && <ChevronRight className={cn("h-[18px] w-[18px] shrink-0 text-label4", !h.open && "invisible")} strokeWidth={2.4} />}
+                <ChevronRight className="h-[18px] w-[18px] shrink-0 text-label4" strokeWidth={2.4} />
               </button>
-              <Switch checked={h.open} onChange={v => toggle(d, v)} label={`${WEEKDAYS[d]}曜日を診療日にする`} />
               {i < ORDER.length - 1 && <span aria-hidden className="pointer-events-none absolute bottom-0 left-4 right-0 h-px origin-bottom scale-y-50 bg-sep/30" />}
             </div>
           );
@@ -100,8 +94,11 @@ function HoursSheet({ day, onClose }: { day: number | null; onClose: () => void 
   useEffect(() => { if (day !== null) setD(hours[day]); }, [day]); // eslint-disable-line react-hooks/exhaustive-deps
   const done = () => {
     if (day === null || !d) return;
+    const before = hours[day];
     setSettings(s => ({ ...s, hours: { ...s.hours, [day]: d } }));
-    toast("変更を保存しました", { detail: `${WEEKDAYS[day]}曜日 ${rangeText(d)}` });
+    toast("変更を保存しました", {
+      detail: d.open ? (before.open ? `${WEEKDAYS[day]}曜日 ${rangeText(d)}` : `${WEEKDAYS[day]}曜日を診療日にしました`) : `${WEEKDAYS[day]}曜日を休診にしました`,
+    });
     onClose();
   };
   const set = (part: "am" | "pm", i: 0 | 1, v: number) => d && setD({ ...d, [part]: (part === "am" ? (i ? [d.am[0], v] : [v, d.am[1]]) : (i ? [d.pm[0], v] : [v, d.pm[1]])) as [number, number] });
@@ -109,14 +106,23 @@ function HoursSheet({ day, onClose }: { day: number | null; onClose: () => void 
     <Sheet open={day !== null} onOpenChange={o => !o && onClose()} title={day !== null ? `${WEEKDAYS[day]}曜日の診療時間` : ""} cancelLabel="キャンセル" confirmLabel="完了" onConfirm={done}>
       {d && (
         <>
-          <SheetGroup header="午前">
-            <ListRow title="開始" trailing={<Stepper value={d.am[0]} min={7 * 60} max={d.am[1] - 30} step={15} format={hm} onChange={v => set("am", 0, v)} />} />
-            <ListRow title="終了" trailing={<Stepper value={d.am[1]} min={d.am[0] + 30} max={d.pm[0]} step={15} format={hm} onChange={v => set("am", 1, v)} />} />
+          <SheetGroup footer={d.open ? undefined : "この曜日は毎週休診になります。"}>
+            <ListRow title="診療する" trailing={<Switch checked={d.open} onChange={v => setD({ ...d, open: v })} label="診療する" />} />
           </SheetGroup>
-          <SheetGroup header="午後" footer={<span className="tnum">昼休み {hm(d.am[1])}〜{hm(d.pm[0])}（{duration(d.pm[0] - d.am[1]) }）</span>}>
-            <ListRow title="開始" trailing={<Stepper value={d.pm[0]} min={d.am[1]} max={d.pm[1] - 30} step={15} format={hm} onChange={v => set("pm", 0, v)} />} />
-            <ListRow title="終了" trailing={<Stepper value={d.pm[1]} min={d.pm[0] + 30} max={21 * 60} step={15} format={hm} onChange={v => set("pm", 1, v)} />} />
-          </SheetGroup>
+          <AnimatePresence initial={false}>
+            {d.open && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
+                <SheetGroup header="午前">
+                  <ListRow title="開始" trailing={<Stepper value={d.am[0]} min={7 * 60} max={d.am[1] - 30} step={15} format={hm} onChange={v => set("am", 0, v)} />} />
+                  <ListRow title="終了" trailing={<Stepper value={d.am[1]} min={d.am[0] + 30} max={d.pm[0]} step={15} format={hm} onChange={v => set("am", 1, v)} />} />
+                </SheetGroup>
+                <SheetGroup header="午後" footer={<span className="tnum">昼休み {hm(d.am[1])}〜{hm(d.pm[0])}（{duration(d.pm[0] - d.am[1])}）</span>}>
+                  <ListRow title="開始" trailing={<Stepper value={d.pm[0]} min={d.am[1]} max={d.pm[1] - 30} step={15} format={hm} onChange={v => set("pm", 0, v)} />} />
+                  <ListRow title="終了" trailing={<Stepper value={d.pm[1]} min={d.pm[0] + 30} max={21 * 60} step={15} format={hm} onChange={v => set("pm", 1, v)} />} />
+                </SheetGroup>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
     </Sheet>
@@ -154,7 +160,7 @@ export function HolidaysPage() {
         <SwitchRow title="祝日を休診にする" subtitle={upcoming[0] ? `次の祝日：${mdw(upcoming[0].date)} ${upcoming[0].name}` : undefined} checked={holidays.national} onChange={v => patch("holidays", { national: v })} />
         <SwitchRow title="年末年始を休診にする" subtitle={<span className="tnum">{mdw(ny0)}〜{mdw(ny1)}</span>} checked={holidays.newYear} onChange={v => patch("holidays", { newYear: v })} />
       </ListSection>
-      <ListSection header="臨時休診日" footer="登録した日は、Web予約で選べなくなります。すでに入っている予約は自動では動きません。">
+      <ListSection header="臨時休診日" footer="研修・学会・設備の点検などで休む日を登録します。すでに入っている予約は自動では動かないので、予約台帳で確認してください。">
         <AnimatePresence initial={false}>
           {holidays.extra.map(x => (
             <motion.div key={x.id} layout initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} className="relative overflow-hidden">

@@ -10,6 +10,13 @@ import { addMonths } from "date-fns";
 import { Avatar, Button, IconTile, ListRow, ListSection, Segmented, Sheet, Switch, Tag, cn, useToast } from "@/ui";
 import { SheetField, SheetGroup, SwitchRow, TextRow, inputCls, useSaved } from "./parts";
 import { patch, setSettings, useSettings, type Perm } from "./store";
+import { BOOKING_URL } from "../recall/model";
+
+/** オプションの説明（リマインド・リコールの画面と同じ言い方にそろえる） */
+const ADDON_NOTE: Record<string, string> = {
+  sms_pack: "リマインドとリコールのSMSが月100通まで定額（超えた分は1通 3円）",
+  recall: "定期検診のご案内を、LINE・SMSでまとめて送れます",
+};
 
 const copy = async (text: string, toast: ReturnType<typeof useToast>, what: string) => {
   try {
@@ -24,10 +31,10 @@ const copy = async (text: string, toast: ReturnType<typeof useToast>, what: stri
 export function InfoPage() {
   const { info } = useSettings();
   const toast = useToast();
-  const url = "arche.jp/r/hidamari-dental";
+  const url = BOOKING_URL;
   return (
     <>
-      <ListSection header="基本情報" footer="患者さんのWeb予約ページと、リマインドのメッセージに表示されます。">
+      <ListSection header="基本情報" footer="リマインドとリコールのメッセージの差出人・連絡先に使われます。">
         <TextRow label="医院名" value={info.name} onCommit={v => patch("info", { name: v })} />
         <TextRow label="院長" value={info.director} onCommit={v => patch("info", { director: v })} />
         <TextRow label="電話番号" value={info.phone} inputMode="tel" onCommit={v => patch("info", { phone: v })} />
@@ -244,7 +251,7 @@ export function PlanPage() {
           <ListRow
             key={a.key}
             title={a.name}
-            subtitle={`${a.description} · ${yen(a.price)}/月`}
+            subtitle={`${ADDON_NOTE[a.key] ?? a.description} · ${yen(a.price)}/月`}
             trailing={<Switch checked={!!plan.addons[a.key]} onChange={v => { setSettings(s => ({ ...s, plan: { ...s.plan, addons: { ...s.plan.addons, [a.key]: v } } })); saved(v ? `${a.name}を追加` : `${a.name}を停止`); }} label={a.name} />}
           />
         ))}
@@ -264,7 +271,7 @@ export function PlanPage() {
             <ListRow
               key={k}
               title={PLANS[k].label}
-              subtitle={PLANS[k].price === null ? "ユニット10台以上・分院の管理" : k === "pro" ? "レポート・シフト・リコールの自動送信" : "予約台帳・Web予約・リマインド"}
+              subtitle={PLANS[k].price === null ? "ユニット10台以上・分院の管理" : k === "pro" ? "レポート・シフト・リコールのご案内" : "予約台帳・Web予約・リマインド"}
               value={PLANS[k].price === null ? "お見積もり" : `${yen(PLANS[k].price!)}/月`}
               trailing={<Check className={cn("h-5 w-5 text-accent", plan.key !== k && "invisible")} strokeWidth={2.6} />}
               onClick={() => { setSettings(s => ({ ...s, plan: { ...s.plan, key: k } })); setChoose(false); toast("プランを変更しました", { detail: `${PLANS[k].label}（翌月1日から）` }); }}
@@ -279,10 +286,10 @@ export function PlanPage() {
 // ─── ヘルプ ─────────────────────────────────────────────────────────────────
 const FAQ: [string, string][] = [
   ["Web予約を「仮予約」で受けるには", "設定 →「Web予約」→「確定の方法」で「医院が承認」を選びます。届いた予約は「今日」と「お知らせ」に承認待ちとして表示されます。"],
-  ["休診日を臨時で追加するには", "設定 →「休診日」→「臨時休診日を追加」から日付を選びます。その日はWeb予約で選べなくなります。"],
+  ["休診日を臨時で追加するには", "設定 →「休診日」→「臨時休診日を追加」から日付を選びます。すでに入っている予約は自動では動かないので、予約台帳で確認して患者さんに連絡してください。"],
   ["リマインドが届かない患者さんがいる", "LINE連携がなく、電話番号が携帯でない方にはSMSが届きません。患者の詳細でメールアドレスを登録してください。"],
   ["スタッフが退職したとき", "設定 →「スタッフとアカウント」でスタッフを選び、権限を外してください。過去の予約の担当者の記録は残ります。"],
-  ["予約台帳の印刷", "予約台帳の右上のメニューから、日ごとの一覧をPDFで書き出せます。"],
+  ["患者さんをすばやく探すには", "どの画面でも ⌘K（スマホは「患者」タブの検索）で、氏名・ふりがな・診察券番号・電話番号から探せます。"],
 ];
 export function HelpPage() {
   const [open, setOpen] = useState<number | null>(null);

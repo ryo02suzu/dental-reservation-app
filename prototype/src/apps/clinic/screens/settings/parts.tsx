@@ -1,5 +1,7 @@
 // 設定画面の行の部品。すべて「変えた瞬間に反映」して、控えめなトーストで知らせる。
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useIsDesktop } from "@/lib/media";
+import { CircleX } from "lucide-react";
 import { ListRow, Stepper, Switch, cn, useToast } from "@/ui";
 import type { LucideIcon } from "lucide-react";
 import type { TileTone } from "@/data";
@@ -10,18 +12,7 @@ export function useSaved() {
 }
 
 /** 画面幅が iPad 横（1024px）以上か */
-export function useTwoPane() {
-  const q = "(min-width: 1024px)";
-  const [m, setM] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(q);
-    const on = () => setM(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return m;
-}
+export const useTwoPane = useIsDesktop;
 
 export function SwitchRow({ title, subtitle, checked, onChange, icon, tone, disabled }: {
   title: ReactNode; subtitle?: ReactNode; checked: boolean; onChange: (v: boolean) => void; icon?: LucideIcon; tone?: TileTone; disabled?: boolean;
@@ -56,6 +47,7 @@ export function TextRow({ label, value, onCommit, placeholder, inputMode, wide, 
   label: string; value: string; onCommit: (v: string) => void; placeholder?: string; inputMode?: "text" | "tel" | "email" | "numeric"; wide?: boolean; hint?: ReactNode;
 }) {
   const [draft, setDraft] = useState(value);
+  const [focused, setFocused] = useState(false);
   const saved = useSaved();
   useEffect(() => setDraft(value), [value]);
   const commit = () => {
@@ -71,10 +63,22 @@ export function TextRow({ label, value, onCommit, placeholder, inputMode, wide, 
         inputMode={inputMode}
         placeholder={placeholder}
         onChange={e => setDraft(e.target.value)}
-        onBlur={commit}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); commit(); }}
         onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setDraft(value); (e.target as HTMLInputElement).blur(); } }}
-        className="min-w-0 flex-1 bg-transparent py-3 text-[16px] text-label2 outline-none transition-colors placeholder:text-label3 focus:text-label md:text-[15px]"
+        className="min-w-0 flex-1 bg-transparent py-3 text-right text-[16px] text-label caret-accent outline-none placeholder:text-label3 md:text-[15px]"
       />
+      {/* iOSの入力欄と同じく、入力中だけ消去ボタンを出す（押しても欄からフォーカスが外れないように mousedown で処理） */}
+      {focused && draft && (
+        <button
+          type="button"
+          aria-label={`${label}を消去`}
+          onMouseDown={e => { e.preventDefault(); setDraft(""); }}
+          className="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center text-label3 hover:text-label2"
+        >
+          <CircleX className="h-[17px] w-[17px] fill-label3 text-surface" strokeWidth={2.2} />
+        </button>
+      )}
       {hint}
       <span aria-hidden className="pointer-events-none absolute bottom-0 left-4 right-0 h-px origin-bottom scale-y-50 bg-sep/30 group-last:hidden" />
     </label>

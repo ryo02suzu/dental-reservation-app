@@ -54,9 +54,9 @@ export function ProposalSheet({ clinic, open, onClose }: { clinic: ConsoleClinic
       <SheetGroup>
         <div className="group relative flex min-h-[44px] items-center gap-3 px-4 py-2.5">
           <span className="w-[3em] shrink-0 text-[14px] text-label2">宛先</span>
-          <span className="min-w-0 flex-1 truncate text-[15px]">
-            {clinic.name} 院長
-            <span className="ml-2 text-[13px] text-label2">{emailOf(clinic)}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px]">{clinic.name} 院長</span>
+            <span className="block truncate text-[13px] text-label2">{emailOf(clinic)}</span>
           </span>
           <RowRule inset={16} />
         </div>

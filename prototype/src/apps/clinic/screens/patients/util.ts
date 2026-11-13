@@ -70,16 +70,25 @@ export function inFilter(f: FilterKey, p: Patient, m: PatientMeta): boolean {
     case "recall":
       return !!m.nextRecall && Math.abs(differenceInCalendarDays(m.nextRecall, TODAY)) <= 30;
     case "attention":
-      return alertsOf(p).length > 0 || riskOfMeta(m) >= 2;
+      // 治療の前に確認すべき医療上の注意（抗凝固薬・BP製剤・ペースメーカー・妊娠・アレルギー）だけ
+      return hasRedAlert(p);
   }
 }
 
+export const hasRedAlert = (p: Patient) => alertsOf(p).some(a => a.tone === "red");
+
 export const FILTER_NOTE: Record<FilterKey, string | undefined> = {
   all: undefined,
-  today: "今日の予約がある患者さんです（キャンセルを除く）。",
-  recall: "定期検診の時期が前後30日以内の患者さんです。",
-  attention: "注意事項がある、またはキャンセルが2回以上ある患者さんです。",
+  today: "今日の予約がある患者です（キャンセルを除く）。",
+  recall: "定期検診の時期が前後30日以内の患者です。",
+  attention: "治療の前に確認が必要な注意事項（抗凝固薬・BP製剤・ペースメーカー・妊娠中・アレルギー）がある患者です。",
 };
+
+/** キャンセルの傾向を短く（2回以上のときだけ）：「キャンセル2回・無断1回」 */
+export function cancelSummary(m: Pick<PatientMeta, "cancellations" | "noShows">): string | null {
+  if (m.cancellations + m.noShows < 2) return null;
+  return [m.cancellations > 0 && `キャンセル${m.cancellations}回`, m.noShows > 0 && `無断${m.noShows}回`].filter(Boolean).join("・");
+}
 
 // ─── 並び替えと見出し ─────────────────────────────────────────────────────
 const collator = new Intl.Collator("ja");
@@ -139,6 +148,8 @@ export function sectionize(list: Patient[], sort: SortKey, meta: Map<string, Pat
 export const ymd = (d: Date) => format(d, "yyyy年M月d日");
 /** 今年なら "11月10日（火）"、それ以外は "2025年10月27日" */
 export const dateSmart = (d: Date) => (d.getFullYear() === TODAY.getFullYear() ? mdw(d) : ymd(d));
+/** 列に並べる短い日付：今年なら "11月10日（火）"、それ以外は "2025/12/15" */
+export const dateCol = (d: Date) => (d.getFullYear() === TODAY.getFullYear() ? mdw(d) : format(d, "yyyy/M/d"));
 /** 予約の「いつ」: 今日 15:15 / 明日 9:30 / 11月18日 */
 export function whenShort(a: Appointment): string {
   const n = differenceInCalendarDays(fromKey(a.date), TODAY);

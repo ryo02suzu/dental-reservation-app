@@ -64,12 +64,19 @@ function BookingSide({ step, d }: { step: Step; d: Draft }) {
   return (
     <div>
       {step === "done" || step === "confirm" ? (
-        <BringList first={d.visit === "first"} />
+        <>
+          <h2 className="mb-2.5 px-1 text-[17px] font-semibold">ご来院のときに</h2>
+          <BringList first={d.visit === "first"} bare />
+        </>
       ) : (
         <>
           <h2 className="mb-2.5 px-1 text-[17px] font-semibold">ご予約内容</h2>
           <div className="overflow-hidden rounded-cell bg-surface">
-            <SummaryRow label="初診・再診" value={d.visit ? (d.visit === "first" ? "はじめての方（初診）" : "通院中の方（再診）") : undefined} onEdit={edit("type")} />
+            <SummaryRow
+              label="初診・再診"
+              value={d.visit ? (d.visit === "first" ? "はじめての方（初診）" : d.who === "family" ? "ご家族（再診）" : "ご本人（再診）") : undefined}
+              onEdit={edit("type")}
+            />
             <SummaryRow label="メニュー" value={sv?.name} sub={sv ? `${duration(sv.minutes)}・${priceLong(sv)}` : undefined} onEdit={edit("menu")} />
             <SummaryRow label="日時" value={when?.value} sub={when?.sub} onEdit={edit("time")} />
             <SummaryRow label="受診される方" value={n >= 3 && d.name.trim() ? `${d.name.trim()} さん` : undefined} onEdit={edit("info")} empty="未入力" />
@@ -103,14 +110,14 @@ export function ClinicHelp({ className }: { className?: string }) {
 }
 
 /** ご来院のときにお持ちいただくもの */
-export function BringList({ first, className }: { first: boolean; className?: string }) {
+export function BringList({ first, className, bare }: { first: boolean; className?: string; /** 見出しを外に置くとき */ bare?: boolean }) {
   const items = first
-    ? ["マイナ保険証または保険証", "お薬手帳（服用中のお薬がある方）", "紹介状（お持ちの方）"]
-    : ["診察券", "マイナ保険証または保険証", "お薬手帳（服用中のお薬がある方）"];
+    ? ["マイナ保険証または資格確認書", "お薬手帳（服用中のお薬がある方）", "紹介状（お持ちの方）"]
+    : ["診察券", "マイナ保険証または資格確認書", "お薬手帳（服用中のお薬がある方）"];
   return (
     <ListSection
-      header="ご来院のときにお持ちください"
-      footer={first ? "問診票をご記入いただくため、予約の10分前にお越しください。" : "保険証は月に一度確認しています。予約の5分前までにお越しください。"}
+      header={bare ? undefined : "ご来院のときにお持ちください"}
+      footer={first ? "問診票をご記入いただくため、予約の10分前にお越しください。" : "予約の5分前までにお越しください。"}
       className={cn("!mt-0", className)}
     >
       {items.map(t => (

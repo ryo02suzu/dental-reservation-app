@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Building2, LayoutGrid, Puzzle } from "lucide-react";
 import { useRoute } from "@/lib/nav";
 import { useIsPhone } from "@/lib/media";
-import { PageInsetContext, cn } from "@/ui";
+import { Avatar, PageInsetContext, cn } from "@/ui";
 import { ArcheMark } from "@/apps/launcher/ArcheMark";
 import Overview from "./screens/Overview";
 import Clinics from "./screens/Clinics";
@@ -17,6 +17,8 @@ const SCREENS: Record<string, { title: string; icon: Icon; component: ComponentT
   addons: { title: "オプション", icon: Puzzle, component: Addons },
 };
 const ORDER = ["overview", "clinics", "addons"];
+/** ログインしている運営のスタッフ（架空） */
+const OPERATOR = { name: "三浦 千尋", role: "カスタマーサクセス", tone: "sage" as const };
 
 /** 運営（Sourirette）向けコンソールの土台 */
 export default function ConsoleApp() {
@@ -59,12 +61,12 @@ export default function ConsoleApp() {
 
   return (
     <div className="flex h-full bg-bg">
-      <aside className="hairline-r flex w-[232px] shrink-0 flex-col bg-surface2/80">
-        <div className="flex items-center gap-2.5 px-4 pb-4 pt-5">
-          <ArcheMark size={30} />
-          <div>
-            <div className="text-[15px] font-semibold leading-tight tracking-[-0.01em]">Arche Console</div>
-            <div className="text-[12px] text-label2">Sourirette 合同会社</div>
+      <aside className="hairline-r flex w-[264px] shrink-0 flex-col bg-surface2/80">
+        <div className="flex items-center gap-2.5 px-[15px] pb-4 pt-5">
+          <ArcheMark size={34} />
+          <div className="min-w-0">
+            <div className="truncate text-[14px] font-semibold leading-tight">Arche</div>
+            <div className="truncate text-[12px] text-label2">運営コンソール · Sourirette</div>
           </div>
         </div>
         <nav className="flex-1 px-3">
@@ -72,7 +74,7 @@ export default function ConsoleApp() {
             const s = SCREENS[id];
             const on = key === id;
             return (
-              <button key={id} onClick={() => go(id)} className={cn("relative flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-2.5 text-[14px]", on ? "font-semibold" : "hover:bg-fill/8")}>
+              <button key={id} onClick={() => go(id)} aria-current={on ? "page" : undefined} className={cn("relative flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-[11px] text-[14px]", on ? "font-semibold" : "hover:bg-fill/8")}>
                 {on && <motion.span layoutId="console-active" className="absolute inset-0 rounded-[8px] bg-fill/14" transition={{ type: "spring", stiffness: 500, damping: 40 }} />}
                 <s.icon className={cn("relative h-[18px] w-[18px]", on ? "text-accent" : "text-label2")} strokeWidth={on ? 2.2 : 1.9} />
                 <span className="relative">{s.title}</span>
@@ -80,7 +82,16 @@ export default function ConsoleApp() {
             );
           })}
         </nav>
-        <button onClick={() => goApp("launcher")} className="hairline-t px-4 py-3 text-left text-[12px] text-label3 hover:text-label2">プロトタイプのトップへ</button>
+        <div className="hairline-t flex items-center gap-2.5 px-[17px] py-3">
+          <Avatar name={OPERATOR.name} tone={OPERATOR.tone} size={30} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-semibold leading-tight">{OPERATOR.name}</div>
+            <div className="text-[11px] text-label2">{OPERATOR.role}</div>
+          </div>
+          <button onClick={() => goApp("launcher")} className="rounded-md px-1.5 py-1 text-[11px] text-label3 hover:bg-fill/10 hover:text-label2" title="プロトタイプのトップへ">
+            トップへ
+          </button>
+        </div>
       </aside>
       <main className="relative min-w-0 flex-1">{body}</main>
     </div>

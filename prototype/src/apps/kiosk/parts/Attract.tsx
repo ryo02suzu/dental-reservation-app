@@ -20,7 +20,7 @@ export function Attract({ onStart, onExit, onHelp }: { onStart: () => void; onEx
       <header className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="truncate text-[20px] font-semibold tracking-[-0.01em] palt md:text-[24px]">{clinic.name}</div>
-          <div className="mt-0.5 text-[14px] text-label2 md:text-[15px]">受付</div>
+          <div className="mt-0.5 text-[14px] text-label2 md:text-[15px]">受付端末</div>
         </div>
         <div className="relative">
           <button
@@ -97,7 +97,7 @@ export function Attract({ onStart, onExit, onHelp }: { onStart: () => void; onEx
           )}
         </div>
         <button type="button" onClick={onHelp} className="-mx-3 h-16 rounded-[14px] px-3 text-left text-accent transition-colors hover:bg-fill/8 md:text-right">
-          ご予約のない方・はじめての方は<span className="font-semibold">受付へ</span>
+          ご予約のない方・はじめての方は、<span className="font-semibold">受付カウンターへお声がけください</span>
         </button>
       </footer>
     </div>
