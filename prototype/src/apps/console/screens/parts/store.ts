@@ -13,6 +13,7 @@ export type EventKind =
   | "addon_on" // オプション追加
   | "addon_off" // オプション解約
   | "suspend" // 利用停止
+  | "resume" // 利用を再開
   | "proposal" // 運営からアップグレードを提案
   | "guide" // 運営から初期設定の案内を送信
   | "checkin" // 運営から利用状況の確認メールを送信
@@ -150,6 +151,17 @@ export function setAddonPrice(key: string, price: number) {
     ...state,
     addons: state.addons.map(x => (x.key === key ? { ...x, price } : x)),
     events: [event({ kind: "price", addon: key, prices: [a.price, price] }), ...state.events],
+  });
+}
+
+/** 利用の停止と再開。停止中は請求が止まる（プランとオプションの契約はそのまま残す） */
+export function setActive(id: string, on: boolean) {
+  const c = state.clinics.find(x => x.id === id);
+  if (!c || c.active === on) return;
+  commit({
+    ...state,
+    clinics: mapClinic(id, x => ({ ...x, active: on })),
+    events: [event({ kind: on ? "resume" : "suspend", clinicId: id }), ...state.events],
   });
 }
 

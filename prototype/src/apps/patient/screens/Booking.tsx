@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useRoute } from "@/lib/nav";
 import { useStore } from "@/lib/store";
-import { demoDraft, isReady, isStep, useBooking, type Step } from "./parts/booking";
+import { demoDraft, hasFinishedBooking, isReady, isStep, useBooking, type Step } from "./parts/booking";
 import { StepType } from "./parts/StepType";
 import { StepMenu } from "./parts/StepMenu";
 import { StepTime } from "./parts/StepTime";
@@ -15,7 +15,7 @@ import { StepDone } from "./parts/StepDone";
  */
 export default function Booking({ param }: { param?: string }) {
   const { go } = useRoute();
-  const { draft, setDraft } = useBooking();
+  const { draft, setDraft, reset } = useBooking();
   const { appointments } = useStore();
   const step: Step = isStep(param) ? param : "type";
 
@@ -24,13 +24,27 @@ export default function Booking({ param }: { param?: string }) {
   }, [param, go]);
 
   const ready = isReady(step, draft);
+  // 確定したあとに（ブラウザの「戻る」などで）手順の画面へ戻ってきたとき。確定済みの内容を
+  // もう一度見せると二重予約の入口になるので、最初の手順なら新しい予約として始め、それ以外はホームへ。
+  const stale = step !== "done" ? !!draft.apptId : !ready && hasFinishedBooking();
+  useEffect(() => {
+    if (!stale) return;
+    if (step === "type") reset();
+    else {
+      if (step !== "done") reset();
+      go("home", undefined, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stale]);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const demo = useMemo(() => (ready ? null : demoDraft(appointments)), [ready]);
+  const demo = useMemo(() => (ready || stale ? null : demoDraft(appointments)), [ready, stale]);
   useEffect(() => {
     if (demo) setDraft(demo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demo]);
   const d = demo ? { ...draft, ...demo } : draft;
+  if (stale && step !== "type") return <div className="h-full bg-bg" />;
 
   switch (step) {
     case "type":

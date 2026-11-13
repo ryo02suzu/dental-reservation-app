@@ -116,11 +116,12 @@ export function MrrChart({ data, height = 220, className }: { data: { month: Dat
             </text>
           ) : null,
         )}
-        <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1, d: area }} transition={springSoft} fill={`url(#${gid})`} />
+        {/* 開くたびに描き直さない。値が変わったとき（プラン変更など）だけ形をなめらかに動かす */}
+        <motion.path initial={false} animate={{ d: area }} transition={springSoft} fill={`url(#${gid})`} />
         <motion.path
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1, d: line }}
-          transition={{ pathLength: { duration: 0.8, ease: [0.22, 1, 0.36, 1] }, d: springSoft }}
+          initial={false}
+          animate={{ d: line }}
+          transition={springSoft}
           fill="none"
           stroke="rgb(var(--accent))"
           strokeWidth={2}
@@ -200,7 +201,7 @@ export function WeekBars({ weeks, height = 88, className }: { weeks: { start: Da
       </div>
       <div className="mt-1.5 flex justify-between text-[11px] text-label3">
         <span>{md(weeks[0].start)}〜</span>
-        <span className="font-medium text-label2">今週</span>
+        <span className="font-medium text-label2">先週</span>
       </div>
       <AnimatePresence>
         {hover !== null && (
@@ -212,7 +213,7 @@ export function WeekBars({ weeks, height = 88, className }: { weeks: { start: Da
             style={{ left: `${((hover + 0.5) / weeks.length) * 100}%` }}
           >
             <span className="font-semibold tnum">{weeks[hover].count}件</span>
-            <span className="ml-1.5 text-label2">{hover === last ? "今週" : `${md(weeks[hover].start)}の週`}</span>
+            <span className="ml-1.5 text-label2">{hover === last ? "先週" : `${md(weeks[hover].start)}の週`}</span>
           </motion.div>
         )}
       </AnimatePresence>

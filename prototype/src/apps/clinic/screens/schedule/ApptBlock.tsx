@@ -5,7 +5,7 @@ import { Check, Globe, MessageCircle, TriangleAlert } from "lucide-react";
 import type { Appointment, Service, TileTone } from "@/data";
 import { minutesOfDay } from "@/lib/clock";
 import { hm } from "@/lib/format";
-import { STATUS, cn, tapSoft, type StatusKey } from "@/ui";
+import { STATUS, Tag, cn, tapSoft, type StatusKey } from "@/ui";
 import { alertsOf, expand, statusOf } from "../../helpers";
 import { TONE_EDGE, TONE_FILL, type ColumnMode } from "./model";
 
@@ -84,7 +84,11 @@ const SRC_LABEL = { web: "Web予約", line: "LINE" } as const;
 /** 初診の札（共有の Tag accent と同じ見た目。診療中の砂色の面の上では反転） */
 function FirstTag({ onSand }: { onSand?: boolean }) {
   return (
-    <span className={cn("shrink-0 rounded-[5px] px-[5px] py-[2px] text-[10px] font-semibold leading-none", onSand ? "bg-onsand/14 text-onsand" : "bg-sand text-onsand")}>初診</span>
+    onSand ? (
+      <span className="shrink-0 rounded-[6px] bg-onsand/14 px-1.5 py-[3px] text-[11px] font-semibold leading-none text-onsand">初診</span>
+    ) : (
+      <Tag tone="accent" className="shrink-0">初診</Tag>
+    )
   );
 }
 

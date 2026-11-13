@@ -4,22 +4,20 @@ import { addDays } from "date-fns";
 import { TODAY, TODAY_KEY, isClinicOpenDay, minutesOfDay, now } from "@/lib/clock";
 import { ago, fromKey, hm, key, matchesPatient, md, mdw } from "@/lib/format";
 import { getHolidayName } from "@/lib/holidays";
-import { availableStarts, hoursFor, staff, units, type Appointment, type ApptSource, type Patient, type Service, type Staff } from "@/data";
+import { availableStarts, hoursFor, staff, type Appointment, type ApptSource, type Patient, type Service, type Staff } from "@/data";
 
 // ─── 予約経路 ────────────────────────────────────────────────────────────────
-export const SOURCE_LABEL: Record<ApptSource, string> = { web: "Web予約", phone: "電話", line: "LINE", walkin: "飛び込み" };
-
-/** 新規予約で「来院時」（窓口で次回の予約を取った）を選んだ予約。データ上の経路は walkin */
-const deskBooked = new Set<string>();
-export const markDeskBooked = (id: string) => void deskBooked.add(id);
-export const sourceLabel = (a: Appointment) => (a.source === "walkin" && deskBooked.has(a.id) ? "来院時に予約" : SOURCE_LABEL[a.source]);
+/** walkin は「窓口」：来院したときに受付で次回の予約を取ったもの（予約なしの飛び込みではない） */
+export const SOURCE_LABEL: Record<ApptSource, string> = { web: "Web予約", phone: "電話", line: "LINE", walkin: "窓口" };
+export const sourceLabel = (a: Appointment) => SOURCE_LABEL[a.source];
 
 /** 完了にした時刻（このセッションで完了にしたものだけ分かる） */
 const completedAt = new Map<string, number>();
 export const markCompleted = (id: string) => void completedAt.set(id, minutesOfDay(now()));
 export const completedTime = (id: string) => completedAt.get(id);
 
-// ─── 生年月日が未登録の患者さん（新規登録で省略したとき） ──────────────────
+// ─── 生年月日が未登録の患者（新規登録で省略したとき） ───────────────────
+// 共有の Patient 型に「生年月日なし」を表す項目がないため、ここで覚えておく（患者画面も同じものを見る）
 const noBirth = new Set<string>();
 export const markNoBirth = (id: string) => void noBirth.add(id);
 export const birthUnknown = (p: Patient) => noBirth.has(p.id);
@@ -59,11 +57,16 @@ export function staffConflict(appts: Appointment[], staffId: string, date: strin
   return appts.find(a => a.id !== exclude && live(a) && a.staffId === staffId && overlaps(a, date, start, end));
 }
 
-/** 空いているユニットを選ぶ。prefer が空いていればそれ、なければ職種に合うユニットから */
+/** 職種ごとのユニット（ユニット1・2は歯科医師、3・4は歯科衛生士） */
+export const UNITS_FOR: Record<Service["by"], string[]> = { Dr: ["u1", "u2"], DH: ["u3", "u4"] };
+export const unitFits = (sv: Service, unitId: string) => UNITS_FOR[sv.by].includes(unitId);
+export const unitRoleLabel = (unitId: string) => (UNITS_FOR.Dr.includes(unitId) ? "歯科医師用" : "歯科衛生士用");
+
+/** 空いているユニットを選ぶ。職種に合うユニットだけが候補（prefer が空いていればそれ）。どれも埋まっていれば undefined */
 export function pickUnit(appts: Appointment[], sv: Service, date: string, start: number, end: number, prefer?: string, exclude?: string): string | undefined {
-  const free = units.filter(u => !unitBusy(appts, u.id, date, start, end, exclude)).map(u => u.id);
+  const order = UNITS_FOR[sv.by];
+  const free = order.filter(u => !unitBusy(appts, u, date, start, end, exclude));
   if (prefer && free.includes(prefer)) return prefer;
-  const order = sv.by === "Dr" ? ["u1", "u2", "u3", "u4"] : ["u3", "u4", "u1", "u2"];
   // いつもの担当がその時間に空いているユニットを優先
   const easy = order.find(u => free.includes(u) && eligibleStaff(sv).some(s => s.id === USUAL_STAFF[u]) && !staffConflict(appts, USUAL_STAFF[u], date, start, end, exclude));
   return easy ?? order.find(u => free.includes(u));
@@ -115,11 +118,16 @@ export function slotCandidates(day: Date, minutes: number): { am: number[]; pm: 
   return { am: list(h.am), pm: list(h.pm) };
 }
 
-/** 実際に予約できる開始時刻。今日は「いま」より後だけ */
-export function openStarts(day: Date, minutes: number, appts: Appointment[]): Set<number> {
+/**
+ * 実際に予約できる開始時刻。今日は「いま」より後だけ。
+ * by を渡すと、その職種のユニット（Dr=1・2、DH=3・4）に空きがある時刻だけにする
+ * （共有の availableStarts はどのユニットでも空いていれば数えるため、ここで絞り直す）。
+ */
+export function openStarts(day: Date, minutes: number, appts: Appointment[], by?: Service["by"]): Set<number> {
   const dk = key(day);
   if (dk < TODAY_KEY) return new Set();
-  const list = availableStarts(day, minutes, appts);
+  let list = availableStarts(day, minutes, appts);
+  if (by) list = list.filter(t => UNITS_FOR[by].some(u => !unitBusy(appts, u, dk, t, t + minutes)));
   const nowMin = minutesOfDay(now());
   return new Set(dk === TODAY_KEY ? list.filter(t => t >= nowMin) : list);
 }

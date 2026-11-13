@@ -1,11 +1,11 @@
 // スマホの日表示：上に週の帯（左右にスワイプで週を移動）、下に1列の予定表
 import { forwardRef, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { ChevronRight, Globe, MessageCircle, Plus } from "lucide-react";
+import { ChevronRight, Globe, MessageCircle, Plus, TriangleAlert } from "lucide-react";
 import { units as UNITS, type Appointment } from "@/data";
 import { TODAY_KEY, minutesOfDay } from "@/lib/clock";
 import { WEEKDAYS, duration, hm, key } from "@/lib/format";
-import { ListRow, ListSection, Segmented, StatusPill, Switch, cn, springSoft, tapSoft } from "@/ui";
+import { ListSection, StatusPill, Tag, cn, springSoft, tapSoft } from "@/ui";
 import type { NewPrefill } from "../../context";
 import { alertsOf, expand, isActive, statusOf } from "../../helpers";
 import { serviceLabel } from "./ApptBlock";
@@ -100,15 +100,19 @@ type Item =
   | { kind: "appt"; a: Appointment; t: number }
   | { kind: "gap"; units: string[]; start: number; end: number; t: number };
 
-export function PhoneAgenda({ date, dk, appts, now, unit, onUnit, showCancelled, onShowCancelled, dir, onOpen, onNew, onJump, nowRef }: {
+/** 時刻の列の幅（今日の「これから」・共有の ApptRow と同じ 3.25rem） */
+const ROW = "grid w-full grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-x-3 px-4";
+/** 行の区切り線の始まり（左16px＋時刻の列＋間12px） */
+const SEP = "pointer-events-none absolute bottom-0 left-[5rem] right-0 h-px origin-bottom scale-y-50 bg-sep/30 group-last:hidden";
+
+/** ユニットの絞り込みとキャンセルの表示は、右上のメニュー（PhoneSchedule）で切り替える */
+export function PhoneAgenda({ date, dk, appts, now, unit, showCancelled, dir, onOpen, onNew, onJump, nowRef }: {
   date: Date;
   dk: string;
   appts: Appointment[];
   now: Date;
   unit: string;
-  onUnit: (u: string) => void;
   showCancelled: boolean;
-  onShowCancelled: (v: boolean) => void;
   dir: number;
   onOpen: (id: string) => void;
   onNew: (p: NewPrefill) => void;
@@ -121,9 +125,11 @@ export function PhoneAgenda({ date, dk, appts, now, unit, onUnit, showCancelled,
   const isToday = dk === TODAY_KEY;
   const nowMin = minutesOfDay(now);
 
-  const { am, pm, done, counts, cancelledCount } = useMemo(() => {
+  const { am, pm, done, counts } = useMemo(() => {
     const inUnit = (a: Appointment) => unit === "all" || a.unitId === unit;
-    const list = appts.filter(a => inUnit(a) && (showCancelled || isActive(a)));
+    // 今日は、終わった予約（完了・無断キャンセル・キャンセル）をすべて「終わった予約」に畳む（今日の画面と同じ数え方）
+    const isDone = (a: Appointment) => isToday && (a.status === "completed" || a.status === "no_show" || a.status === "cancelled");
+    const list = appts.filter(a => inUnit(a) && (showCancelled || isActive(a) || isDone(a)));
     const items: Item[] = list.map(a => ({ kind: "appt", a, t: a.start }));
     // 空き（30分以上）。すべてのときは、同じ時間に空いているユニットを1行にまとめる
     const from = bookableFrom(dk, now);
@@ -143,10 +149,9 @@ export function PhoneAgenda({ date, dk, appts, now, unit, onUnit, showCancelled,
     }
     const order = (x: Item) => (x.kind === "appt" ? UNITS.findIndex(u => u.id === x.a.unitId) : 10);
     items.sort((x, y) => x.t - y.t || order(x) - order(y));
-    // 今日は、時間が過ぎて終わった予約（完了・無断キャンセル・キャンセル）を折りたたむ
-    const isDone = (x: Item) => isToday && x.kind === "appt" && x.a.start < nowMin && (x.a.status === "completed" || x.a.status === "no_show" || x.a.status === "cancelled");
-    const done = items.filter(isDone);
-    const visible = showDone ? items : items.filter(x => !isDone(x));
+    const doneItem = (x: Item) => x.kind === "appt" && isDone(x.a);
+    const done = items.filter(doneItem);
+    const visible = showDone ? items : items.filter(x => !doneItem(x));
     const split = sessions[0]?.[1] ?? 780;
     return {
       am: visible.filter(x => x.t < split),
@@ -156,18 +161,8 @@ export function PhoneAgenda({ date, dk, appts, now, unit, onUnit, showCancelled,
         am: list.filter(a => isActive(a) && a.start < split).length,
         pm: list.filter(a => isActive(a) && a.start >= split).length,
       },
-      cancelledCount: appts.filter(a => inUnit(a) && !isActive(a)).length,
     };
-  }, [appts, unit, showCancelled, dk, now, sessions, isToday, nowMin, showDone]);
-
-  const filter = (
-    <Segmented
-      full
-      value={unit}
-      onChange={onUnit}
-      options={[{ value: "all", label: "すべて" }, ...UNITS.map(u => ({ value: u.id, label: u.short }))]}
-    />
-  );
+  }, [appts, unit, showCancelled, dk, now, sessions, isToday, showDone]);
 
   if (closed) {
     return (
@@ -185,7 +180,7 @@ export function PhoneAgenda({ date, dk, appts, now, unit, onUnit, showCancelled,
     let marked = nowIn !== section;
     const marker = <NowMarker key="now" ref={nowRef} label={hm(nowMin)} />;
     if (section === "am" && done.length > 0) {
-      rows.push(<DoneToggle key="done" n={done.length} open={showDone} from={(done[0] as { a: Appointment }).a.start} onToggle={() => setShowDone(v => !v)} />);
+      rows.push(<DoneToggle key="done" n={done.length} open={showDone} onToggle={() => setShowDone(v => !v)} />);
     }
     for (const it of list) {
       if (!marked && it.t > nowMin) { rows.push(marker); marked = true; }
@@ -200,33 +195,25 @@ export function PhoneAgenda({ date, dk, appts, now, unit, onUnit, showCancelled,
 
   return (
     <div>
-      <div className="mt-3">{filter}</div>
       <motion.div
         key={`${dk}:${unit}`}
         initial={{ opacity: 0, x: dir * 18 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: "spring", stiffness: 420, damping: 40 }}
       >
-        <ListSection header={`午前　${hm(s0[0])}–${hm(s0[1])}`} aside={<span className="text-footnote text-label3 tnum">{counts.am}件</span>} className="mt-4">
+        <ListSection header={<span className="tnum">午前 {hm(s0[0])}〜{hm(s0[1])}</span>} aside={<span className="text-footnote text-label3 tnum">{counts.am}件</span>} className="mt-4">
           {renderItems(am, "am")}
         </ListSection>
         <div className="hatch mt-3 flex h-9 items-center justify-center gap-2 rounded-[10px]">
           <span className="rounded-full bg-bg px-2.5 py-[3px] text-[12px] font-medium leading-4 text-label2 tnum">
-            昼休み　{hm(s0[1])}–{hm(s1[0])}
+            昼休み {hm(s0[1])}〜{hm(s1[0])}
           </span>
           {nowIn === "lunch" && (
             <div ref={nowRef} className="rounded-full bg-red px-2 py-[3px] text-[12px] font-semibold leading-4 text-white tnum">{hm(nowMin)}</div>
           )}
         </div>
-        <ListSection header={`午後　${hm(s1[0])}–${hm(s1[1])}`} aside={<span className="text-footnote text-label3 tnum">{counts.pm}件</span>} className="mt-3">
+        <ListSection header={<span className="tnum">午後 {hm(s1[0])}〜{hm(s1[1])}</span>} aside={<span className="text-footnote text-label3 tnum">{counts.pm}件</span>} className="mt-3">
           {renderItems(pm, "pm")}
-        </ListSection>
-        <ListSection className="mt-6" footer="キャンセル・無断キャンセルは、取り消し線付きで時刻の位置に表示します。">
-          <ListRow
-            title="キャンセルを表示"
-            value={cancelledCount ? `${cancelledCount}件` : undefined}
-            trailing={<Switch checked={showCancelled} onChange={onShowCancelled} label="キャンセルを表示" />}
-          />
         </ListSection>
       </motion.div>
     </div>
@@ -235,20 +222,20 @@ export function PhoneAgenda({ date, dk, appts, now, unit, onUnit, showCancelled,
 
 const SRC = { web: Globe, line: MessageCircle } as const;
 
-/** 予約1件の行（時刻｜ユニットの札＋氏名・メニュー｜状態） */
+/** 予約1件の行（時刻｜ユニットの札＋氏名・メニュー｜状態）。確定済みの「予約」には札を付けない（今日の「これから」と同じ） */
 function AgendaRow({ a, now, onOpen }: { a: Appointment; now: Date; onOpen: (id: string) => void }) {
   const { patient, service, staff, unit } = expand(a);
   const sk = statusOf(a, now);
   const muted = sk === "completed" || sk === "cancelled" || sk === "no_show";
   const gone = sk === "cancelled" || sk === "no_show";
-  const red = alertsOf(patient).some(x => x.tone === "red");
+  const red = alertsOf(patient).filter(x => x.tone === "red");
   const Src = a.source === "web" || a.source === "line" ? SRC[a.source] : null;
   return (
     <motion.button
       whileTap={tapSoft}
       transition={{ type: "spring", stiffness: 600, damping: 34 }}
       onClick={() => onOpen(a.id)}
-      className="group relative grid w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2.5 text-left transition-colors active:bg-fill/12"
+      className={cn(ROW, "group relative min-h-[60px] py-2.5 text-left transition-colors active:bg-fill/12")}
     >
       <span className={cn("leading-tight tnum", muted && "opacity-55")}>
         <span className="block text-[16px] font-semibold">{hm(a.start)}</span>
@@ -259,8 +246,10 @@ function AgendaRow({ a, now, onOpen }: { a: Appointment; now: Date; onOpen: (id:
         <span className="min-w-0">
           <span className="flex min-w-0 items-center gap-1.5">
             <span className={cn("truncate text-[16px] font-medium", gone && "line-through decoration-red/50")}>{patient.name}</span>
-            {a.firstVisit && !gone && <span className="shrink-0 rounded-[5px] bg-sand px-1.5 py-[2px] text-[10px] font-semibold leading-none text-onsand">初診</span>}
-            {red && !muted && <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-red" aria-label="注意事項あり" />}
+            {a.firstVisit && !gone && <Tag tone="accent" className="shrink-0">初診</Tag>}
+            {red.length > 0 && !muted && (
+              <TriangleAlert className="h-[13px] w-[13px] shrink-0 text-red" strokeWidth={2.4} aria-label={`注意：${red.map(x => x.label).join("、")}`} />
+            )}
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[13px] text-label2">
             <span className="truncate">{serviceLabel(a, service)}</span>
@@ -270,8 +259,8 @@ function AgendaRow({ a, now, onOpen }: { a: Appointment; now: Date; onOpen: (id:
           </span>
         </span>
       </span>
-      <StatusPill status={sk} compact />
-      <span aria-hidden className="pointer-events-none absolute bottom-0 left-[4.5rem] right-0 h-px origin-bottom scale-y-50 bg-sep/30 group-last:hidden" />
+      {sk !== "confirmed" ? <StatusPill status={sk} compact /> : <span />}
+      <span aria-hidden className={SEP} />
     </motion.button>
   );
 }
@@ -285,14 +274,14 @@ function FreeRow({ g, onNew }: { g: { units: string[]; start: number; end: numbe
       transition={{ type: "spring", stiffness: 600, damping: 34 }}
       onClick={onNew}
       aria-label={`空き ${hm(g.start)}から${hm(g.end)} ${names.join("・")} に予約を追加`}
-      className="group relative grid w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2 text-left transition-colors active:bg-fill/12"
+      className={cn(ROW, "group relative py-2 text-left transition-colors active:bg-fill/12")}
     >
       <span className="text-[13px] text-label3 tnum">{hm(g.start)}</span>
       <span className="flex min-w-0 items-center gap-3">
         <UnitChip label={names.length > 1 ? `${names.length}台` : names[0]} dashed />
         <span className="min-w-0">
           <span className="block truncate text-[15px] text-label2">
-            空き <span className="text-label tnum">{hm(g.start)}–{hm(g.end)}</span>
+            空き <span className="text-label tnum">{hm(g.start)}〜{hm(g.end)}</span>
           </span>
           <span className="block truncate text-[12px] text-label3 tnum">{names.join("・")} · {duration(g.end - g.start)}</span>
         </span>
@@ -300,7 +289,7 @@ function FreeRow({ g, onNew }: { g: { units: string[]; start: number; end: numbe
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sand/25 text-accent">
         <Plus className="h-4 w-4" strokeWidth={2.4} />
       </span>
-      <span aria-hidden className="pointer-events-none absolute bottom-0 left-[4.5rem] right-0 h-px origin-bottom scale-y-50 bg-sep/30 group-last:hidden" />
+      <span aria-hidden className={SEP} />
     </motion.button>
   );
 }
@@ -308,7 +297,7 @@ function FreeRow({ g, onNew }: { g: { units: string[]; start: number; end: numbe
 /** いまの位置（赤い線） */
 const NowMarker = forwardRef<HTMLDivElement, { label: string }>(function NowMarker({ label }, ref) {
   return (
-    <div ref={ref} className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-x-3 px-4 py-1" aria-label={`現在時刻 ${label}`}>
+    <div ref={ref} className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-x-3 px-4 py-1" aria-label={`現在時刻 ${label}`}>
       <span className="text-[12px] font-semibold leading-4 text-red tnum">{label}</span>
       <span className="relative -mr-4 h-[1.5px] bg-red">
         <span className="absolute -left-[3px] top-1/2 h-[8px] w-[8px] -translate-y-1/2 rounded-full bg-red" />
@@ -317,13 +306,12 @@ const NowMarker = forwardRef<HTMLDivElement, { label: string }>(function NowMark
   );
 });
 
-/** 今日の、時間が過ぎて終わった予約をまとめた行 */
-function DoneToggle({ n, open, from, onToggle }: { n: number; open: boolean; from: number; onToggle: () => void }) {
+/** 今日の、終わった予約（完了・無断キャンセル・キャンセル）をまとめた行。呼び方と数え方は今日の画面と同じ */
+function DoneToggle({ n, open, onToggle }: { n: number; open: boolean; onToggle: () => void }) {
   return (
-    <button onClick={onToggle} aria-expanded={open} className="group relative grid min-h-[44px] w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2 text-left transition-colors active:bg-fill/12">
-      <span className="text-[13px] text-label3 tnum">{hm(from)}〜</span>
-      <span className="text-[15px] text-label2">
-        終了した予約 <span className="text-label3 tnum">{n}件</span>
+    <button onClick={onToggle} aria-expanded={open} className="group relative flex min-h-[44px] w-full items-center gap-x-3 px-4 py-2 text-left transition-colors active:bg-fill/12">
+      <span className="flex-1 text-[15px] text-label2">
+        終わった予約 <span className="text-label3 tnum">{n}件</span>
       </span>
       <motion.span animate={{ rotate: open ? 90 : 0 }} transition={springSoft} className="text-label3">
         <ChevronRight className="h-[18px] w-[18px]" strokeWidth={2.4} />

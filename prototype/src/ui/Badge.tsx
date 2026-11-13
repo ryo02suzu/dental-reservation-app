@@ -41,7 +41,7 @@ export const STATUS: Record<StatusKey, { label: string; cls: string }> = {
   in_progress: { label: "診療中", cls: "bg-sand text-onsand" },
   completed: { label: "完了", cls: "bg-fill/12 text-label2" },
   cancelled: { label: "キャンセル", cls: "bg-red/10 text-red" },
-  no_show: { label: "無断キャンセル", cls: "bg-red text-white" },
+  no_show: { label: "無断キャンセル", cls: "bg-red/14 text-red" },
 };
 
 export function StatusPill({ status, className, compact }: { status: StatusKey; className?: string; compact?: boolean }) {

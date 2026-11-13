@@ -631,8 +631,11 @@ export const initialMemos: Memo[] = (() => {
 })();
 
 // ─── Web予約の空き枠 ─────────────────────────────────────────────────────────
-/** その日に、指定の長さで予約できる開始時刻（分）。30分刻み */
-export function availableStarts(day: Date, minutes: number, appts: Appointment[]): number[] {
+/** 職種ごとに使うユニット（歯科医師＝ユニット1・2、歯科衛生士＝ユニット3・4） */
+export const UNITS_BY_ROLE: Record<"Dr" | "DH", string[]> = { Dr: ["u1", "u2"], DH: ["u3", "u4"] };
+
+/** その日に、指定の長さで予約できる開始時刻（分）。30分刻み。role を渡すと、その職種のユニットだけで空きを数える */
+export function availableStarts(day: Date, minutes: number, appts: Appointment[], role?: "Dr" | "DH"): number[] {
   const h = hoursFor(day);
   if (!h) return [];
   const dk = key(day);
@@ -640,7 +643,7 @@ export function availableStarts(day: Date, minutes: number, appts: Appointment[]
   const res: number[] = [];
   for (const [ws, we] of [h.am, h.pm]) {
     for (let t = ws; t + minutes <= we; t += 30) {
-      const free = units.some(u => !busy.some(a => a.unitId === u.id && a.start < t + minutes && a.end > t));
+      const free = units.some(u => (!role || UNITS_BY_ROLE[role].includes(u.id)) && !busy.some(a => a.unitId === u.id && a.start < t + minutes && a.end > t));
       if (free) res.push(t);
     }
   }

@@ -7,7 +7,7 @@ import { staffById } from "@/data";
 import { useIsPhone } from "@/lib/media";
 import { Page, Segmented, useToast } from "@/ui";
 import { useClinicUI } from "../context";
-import { ME_ID, MonthTable, PunchCard, TodayList, applyPunch, type Punch, type PunchKind } from "./staff/AttendanceView";
+import { ME_ID, MonthTable, PunchCard, TodayList, applyPunch, type AbsenceAction, type Punch, type PunchKind } from "./staff/AttendanceView";
 import { Requests, ShiftDayList, ShiftGrid, ShiftSheet, WeekNav, type Edits } from "./staff/ShiftView";
 import { baseCell, cellKey, initialRequests, weekDays, type Cell, type LeaveRequest } from "./staff/model";
 
@@ -57,6 +57,20 @@ export default function StaffScreen({ param }: { param?: string }) {
     setRows(rs => rs.map(r => (r.staffId === ME_ID ? prev : r)));
     toast("打刻を取り消しました");
   };
+  // まだ来ていない人への対応（受付が代わりに記録）
+  const act = (staffId: string, a: AbsenceAction) => {
+    const name = staffById(staffId).name;
+    const at = minutesOfDay(now());
+    setRows(rs => rs.map(r => {
+      if (r.staffId !== staffId) return r;
+      if (a === "proxyIn") return { ...applyPunch(r, "in", at), proxy: true };
+      if (a === "absent") return { ...r, state: "休み", note: "欠勤" };
+      return { ...r, note: "遅刻の連絡あり" };
+    }));
+    toast(a === "proxyIn" ? "出勤を記録しました" : a === "absent" ? "欠勤にしました" : "遅刻の連絡ありにしました", {
+      detail: a === "proxyIn" ? `${name}さん · ${hm(at)}` : `${name}さん`,
+    });
+  };
   const saveCell = (c: Cell) => setEdits(e => ({ ...e, [cellKey(c.staffId, c.date)]: { start: c.start, end: c.end, off: c.off, note: c.note } }));
 
   const seg = (
@@ -73,7 +87,6 @@ export default function StaffScreen({ param }: { param?: string }) {
     <Page
       title="シフト・勤怠"
       back={ui.back}
-      wide={!phone && tab === "shift"}
       accessory={phone ? seg : (
         <div className="flex flex-wrap items-center justify-between gap-3">
           {seg}
@@ -90,23 +103,23 @@ export default function StaffScreen({ param }: { param?: string }) {
                 <div className="mt-5"><Requests items={requests} onDecide={decide} /></div>
               </>
             ) : (
-              <div className="mx-auto max-w-[1240px]">
+              <>
                 <ShiftGrid offset={offset} edits={edits} onEdit={setEditing} />
-                <p className="px-4 pt-2 text-footnote text-label2">枠を押すと出勤・退勤の時刻や休みを変更できます。週の時間は昼休み（13:00〜14:30）を除いた時間です。</p>
+                <p className="px-4 pt-2 text-footnote text-label2">枠を押すと出勤・退勤の時刻や休みを変更できます。週の時間は昼休みを除いた時間です。</p>
                 <div className="mt-5 max-w-[720px]"><Requests items={requests} onDecide={decide} /></div>
-              </div>
+              </>
             )
           ) : phone ? (
             <>
               <PunchCard me={me} onPunch={punch} onUndo={undo} canUndo={history.length > 0} />
-              <TodayList rows={rows} />
+              <TodayList rows={rows} onAct={act} />
               <MonthTable />
             </>
           ) : (
             <>
               <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
                 <PunchCard me={me} onPunch={punch} onUndo={undo} canUndo={history.length > 0} />
-                <TodayList rows={rows} flush />
+                <TodayList rows={rows} flush onAct={act} />
               </div>
               <MonthTable />
             </>

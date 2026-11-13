@@ -19,7 +19,7 @@ export function Surface({ children, className, onClick, padded = true }: { child
 }
 
 /** 数字の指標。delta は前期比（正で上向き矢印）。good は「上がると良い」かどうか */
-export function Stat({ label, value, unit, delta, deltaLabel, compareLabel = "前月比", good = true, icon: Icon, children, className }: {
+export function Stat({ label, value, unit, delta, deltaLabel, compareLabel = "前月比", good = true, quietBelow = 0.01, icon: Icon, children, className }: {
   label: string;
   value: ReactNode;
   unit?: string;
@@ -27,6 +27,8 @@ export function Stat({ label, value, unit, delta, deltaLabel, compareLabel = "�
   deltaLabel?: string;
   /** 比べている期間（「前月比」「先週比」「前の30日比」など） */
   compareLabel?: string;
+  /** この大きさ未満の増減は、色を付けずに灰色で出す（既定 0.01＝1%・1ポイント） */
+  quietBelow?: number;
   good?: boolean;
   icon?: LucideIcon;
   children?: ReactNode;
@@ -34,6 +36,7 @@ export function Stat({ label, value, unit, delta, deltaLabel, compareLabel = "�
 }) {
   const up = (delta ?? 0) >= 0;
   const positive = up === good;
+  const quiet = Math.abs(delta ?? 0) < quietBelow;
   return (
     <div className={cn("flex flex-col", className)}>
       <div className="flex items-center gap-1.5 text-[13px] font-medium text-label2">
@@ -45,7 +48,7 @@ export function Stat({ label, value, unit, delta, deltaLabel, compareLabel = "�
         {unit && <span className="text-[14px] font-medium text-label2">{unit}</span>}
       </div>
       {delta !== undefined && (
-        <div className={cn("mt-1.5 inline-flex items-center gap-0.5 text-[12px] font-semibold tnum", positive ? "text-accent" : "text-red")}>
+        <div className={cn("mt-1.5 inline-flex items-center gap-0.5 text-[12px] font-semibold tnum", quiet ? "text-label2" : positive ? "text-accent" : "text-red")}>
           {up ? <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.6} /> : <ArrowDownRight className="h-3.5 w-3.5" strokeWidth={2.6} />}
           {deltaLabel ?? `${Math.abs(delta * 100).toFixed(1)}%`}
           <span className="ml-1 font-medium text-label3">{compareLabel}</span>

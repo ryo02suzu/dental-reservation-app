@@ -61,7 +61,7 @@
 
 ### 歯科の現場として正しく
 
-- 用語：初診／再診、保険診療／自費診療、定期検診・クリーニング、PMTC、スケーリング、SRP（歯周病治療）、むし歯治療（CR充填・インレー）、根管治療、抜歯、被せ物（クラウン）・詰め物、入れ歯（義歯）、ホワイトニング、インプラント相談、矯正相談、小児歯科（フッ素塗布・シーラント）、問診票、保険証／マイナ保険証の確認、会計、次回予約、リコール（3・4・6か月ごとの定期検診のご案内）、ユニット（診療台）、歯科医師（Dr）、歯科衛生士（DH）、歯科助手、受付。
+- 用語：初診／再診、保険診療／自費診療、定期検診・クリーニング、PMTC、スケーリング、SRP（歯周病治療）、むし歯治療（CR充填・インレー）、根管治療、抜歯、被せ物（クラウン）・詰め物、入れ歯（義歯）、ホワイトニング、インプラント相談、矯正相談、小児歯科（フッ素塗布・シーラント）、問診票、オンライン資格確認（マイナ保険証を受付のカードリーダーで毎回読み取る。持っていない人は資格確認書を提示。紙の保険証は2025年12月で廃止）、会計、次回予約、リコール（3・4・6か月ごとの定期検診のご案内）、ユニット（診療台）、歯科医師（Dr）、歯科衛生士（DH）、歯科助手、受付。
 - 歯の呼び方は「右下6番」（データでは `LR6`。`UR`=右上 `UL`=左上 `LR`=右下 `LL`=左下、患者さんから見た左右）。乳歯は A〜E。
 - 歯式の記号（`ToothState`）：`C` むし歯／`CR` CR充填／`In` インレー／`Cr` クラウン／`RCT` 根管治療済み／`M` 欠損／`Imp` インプラント／`Br` ブリッジ／`観察` 要観察。
 - 治療前に必ず目に入るべき注意事項：抗凝固薬（ワーファリン等）、BP製剤（骨粗しょう症の薬）、ペースメーカー、妊娠中、アレルギー（ラテックス、ペニシリン系、局所麻酔）。`alertsOf(p)` が返す。
@@ -96,13 +96,13 @@ Tailwind のクラスは `prototype/tailwind.config.cjs` に定義したもの�
 | `ListSection` / `ListRow` / `IconTile` | iOSのグループ化リスト。行は `icon`+`tone` か `leading`（アバター等）、`title` `subtitle` `value` `trailing` `chevron` `onClick` `destructive` `selected` |
 | `Button` / `IconButton` | `variant`: filled（黒/白）・sand・tinted・gray・plain・destructive・destructiveTinted、`size`: sm・md・lg、`icon`、`full` |
 | `Segmented` | セグメントコントロール（選択の背景がなめらかに移動）。`count` で件数も出せる |
-| `Sheet` | スマホは下から出るシート、PCは中央のダイアログ（`variant="inspector"` で右の詳細パネル）。`confirmLabel` `onConfirm` `footer` `size` |
+| `Sheet` | スマホは下から出るシート、PCは中央のダイアログ（`variant="inspector"` で右の詳細パネル。背景を暗くせず後ろも操作でき、別の予約を開くと中身が入れ替わる）。`confirmLabel` `onConfirm` `footer` `size` |
 | `Tag` / `StatusPill` / `STATUS` / `CountBadge` | 小さなラベル、予約の状態（仮予約・予約・未来院・来院済・診療中・完了・キャンセル・無断キャンセル）、件数 |
 | `Avatar` / `toneOf` | 頭文字のアバター（写真は使わない） |
 | `SearchField` / `Switch` / `Stepper` / `FieldRow` | 入力部品 |
-| `useToast` | `const toast = useToast(); toast("予約を登録しました", { detail: "11月20日（金）15:30" })` |
+| `useToast` | `const toast = useToast(); toast("予約を登録しました", { detail: "11月20日（金）15:30", action: { label: "取り消す", onClick: undo } })`。PCは上、スマホはタブバーの上に出る。取り返しのつきにくい操作（完了・受付・無断キャンセル・解約など）には action で「取り消す」を付ける |
 | `Sparkline` / `Bars` / `Ring` | 小さなグラフ |
-| `Surface` / `Stat` / `EmptyState` | 面、数字の指標（`compareLabel` で「先週比」なども）、空のときの表示 |
+| `Surface` / `Stat` / `EmptyState` | 面、数字の指標（`compareLabel` で「先週比」なども。1%未満の増減は色を付けない＝`quietBelow`）、空のときの表示 |
 | `Menu` / `MenuItem` / `MenuSeparator` | ポップアップメニュー |
 | `spring` `springSoft` `springBouncy` `springPush` `easeOut` `tap` `tapSoft` `listItem` | 動きの共通値 |
 | `cn` | クラス名の結合 |
@@ -116,13 +116,14 @@ Tailwind のクラスは `prototype/tailwind.config.cjs` に定義したもの�
   - `clinic`（医院情報）、`HOURS` / `hoursFor(d)`（診療時間）、`clinicPhase(now)`（午前の診療中・昼休み などの時間帯）、`staff` `units` `services` `patients`、`ME`（患者アプリでログインしている本人：田中 美咲）
   - `patientById` `serviceById` `staffById` `unitById`
   - `visitsOf(p)`：**42日より前**の来院記録（`WINDOW_START` より前）。それ以降の来院はストアの予約（`completed`）から出す。
-  - `availableStarts(day, minutes, appointments)`：その日に予約できる開始時刻（30分刻み、空きユニットがある時刻）
+  - `availableStarts(day, minutes, appointments, role?)`：その日に予約できる開始時刻（30分刻み、空きユニットがある時刻）。`role`（`"Dr"` / `"DH"`）を渡すと、その職種のユニット（`UNITS_BY_ROLE`：歯科医師＝ユニット1・2、歯科衛生士＝3・4）だけで数える。予約を作るときは必ず職種に合うユニットに入れる
   - レポート用（すべて予約データからの集計）：`weekly`（先週までの12週。最後が先週）、`kpis`（直近30日とその前の30日）、`HEATMAP_DAYS` `HEATMAP_HOURS` `heatmap`（直近8週の稼働率）、`summarize(from, to)`（任意の期間の集計）、`WEEK_START`（今週の月曜）
   - スタッフ用：`shiftWeek` `attendanceToday`
   - 運営用：`PLANS` `addons` `consoleClinics` `consoleMonthly`
   - `initialAppointments` `recalls` `notices` `initialMemos` は**直接使わず、ストアから読む**。
 - **`useStore()`**（`@/lib/store`）：`appointments` `recalls` `notices` `patients` `memos` と、変更用の
   `setStatus(id, status)` `addAppointment(a)` `updateAppointment(id, patch)` `removeAppointment(id)` `setRecall(patientId, status)`
+  予約には受付端末の受付番号 `receiptNo` を持てる。
   `readNotice(id)` `readAllNotices()` `addNotice(n)` `addPatient(p)` `updatePatient(id, patch)` `addMemo(m)` `updateMemo(id, patch)` `removeMemo(id)`、
   いま使っているスタッフ `currentStaffId` と `setCurrentStaff(id)`（ログインで選んだ人。既定は受付の石井 真央）。
   - **画面をまたいで反映させたい変更は必ずストアで。** 例：受付端末で受付 → 医院の「今日」で来院済になる。患者さんがWeb予約 → 医院の「今日」「予約台帳」に仮予約が現れ、「お知らせ」に通知が届く。
@@ -151,7 +152,7 @@ Tailwind のクラスは `prototype/tailwind.config.cjs` に定義したもの�
 - 幅：スマホ `< 768px`（`useIsPhone()`）、タブレット 768〜1179px、`≥ 1024px`（`useIsDesktop()`）、ワイド `≥ 1180px`（`useIsWide()`）、任意の幅は `useMinWidth(px)`。Tailwind の `md:`=768、`lg:`=1024、`xl:`=1280。
 - **390×844（iPhone）、1024×768 または 820×1180（iPad）、1440×900（Mac）** で正しく見えること。ページ全体が横にスクロールしないこと（台帳や表のように横に長いものは、それ自身の `overflow-x-auto` の中で）。
 - すべての画面の一番外は `<Page>`（例外：ログインと受付端末は全画面の専用レイアウト）。医院アプリでは、外側（サイドバー／タブバー、下の余白）はシェルが用意している。`Page` と競合するスクロール領域を外側に作らない。
-- PCでは段組み（一覧＋詳細、本文＋右カラム）を積極的に使う。最大幅は 1080px（`wide` で解除）。
+- PCでは段組み（一覧＋詳細、本文＋右カラム）を積極的に使う。最大幅は 1080px（`wide` で解除）。一覧＋詳細の2段組みは `useIsDesktop()`（1024px以上）からにそろえる。
 - スマホのタップ領域は 44px 以上。入力欄の文字は 16px 以上（iOSで拡大されないように）。
 - 行の中の名前には `min-w-0` と `truncate`。長い名前・0件・大量の件数でも崩れないこと。
 - 固定のバーは `safe-b` / `safe-t` で端末の余白を避ける。

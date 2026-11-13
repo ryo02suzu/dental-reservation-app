@@ -126,16 +126,36 @@ function CenterSheet({ open, onOpenChange, title, children, cancelLabel, confirm
   );
 }
 
+/**
+ * PCの右側の詳細パネル（Macのインスペクタ）。背景は暗くせず、後ろの画面もそのまま操作できる。
+ * 外を押したとき、その操作で別の予約やシートが開いた（# が変わった）ならそのまま、何も起きなければ閉じる。
+ */
 function Inspector({ open, onOpenChange, title, children, cancelLabel, confirmLabel, onConfirm, confirmDisabled, footer }: SheetProps) {
+  const closeIfNothingOpened = () => {
+    const before = window.location.hash;
+    const done = () => {
+      window.removeEventListener("pointerup", done, true);
+      setTimeout(() => {
+        if (window.location.hash === before) onOpenChange(false);
+      }, 80);
+    };
+    window.addEventListener("pointerup", done, true);
+  };
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={onOpenChange} modal={false}>
       <AnimatePresence>
         {open && (
           <Dialog.Portal forceMount>
-            <Dialog.Overlay asChild forceMount>
-              <motion.div className="fixed inset-0 z-[60] bg-black/10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }} />
-            </Dialog.Overlay>
-            <Dialog.Content asChild forceMount aria-describedby={undefined}>
+            <Dialog.Content
+              asChild
+              forceMount
+              aria-describedby={undefined}
+              onPointerDownOutside={e => {
+                e.preventDefault();
+                closeIfNothingOpened();
+              }}
+              onFocusOutside={e => e.preventDefault()}
+            >
               <motion.div
                 className="fixed bottom-3 right-3 top-3 z-[61] flex w-[420px] flex-col overflow-hidden rounded-[20px] bg-elevated shadow-pop outline-none"
                 initial={{ opacity: 0, x: 28 }}

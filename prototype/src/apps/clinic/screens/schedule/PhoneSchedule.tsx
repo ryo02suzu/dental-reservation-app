@@ -3,16 +3,18 @@
 // 画面が入れ替わらないように）。# の param は開いたときの日付として使う。
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ListFilter, Plus } from "lucide-react";
+import { units as UNITS } from "@/data";
 import { TODAY_KEY, useNow } from "@/lib/clock";
 import { fromKey, key, relDay } from "@/lib/format";
-import { Button, IconButton, Page, Segmented, cn, tap } from "@/ui";
+import { Button, IconButton, Menu, MenuItem, MenuSeparator, Page, Segmented, cn, tap } from "@/ui";
 import { useClinicUI } from "../../context";
+import { isActive } from "../../helpers";
 import { scheduleMemory } from "./memory";
 import { PhoneAgenda, WeekStrip } from "./PhoneDay";
 import { PhoneMonth, PhoneWeek } from "./PhoneViews";
 import { StatLine } from "./parts";
-import { closedInfo, isDateKey, periodTitle, shiftDate, useByDate, usePeriodStats, type View } from "./model";
+import { closedInfo, isDateKey, nextOpenDay, periodTitle, shiftDate, useByDate, usePeriodStats, type View } from "./model";
 
 const EMPTY: never[] = [];
 
@@ -86,6 +88,41 @@ export function PhoneSchedule({ param }: { param?: string }) {
     />
   );
   const unitLabel = view === "month" ? "月" : "週";
+  const dayAppts = byDate.get(dk) ?? EMPTY;
+  const cancelledCount = dayAppts.filter(a => !isActive(a) && (unit === "all" || a.unitId === unit)).length;
+  // 休診日を表示しているときは、次の診療日で新規予約を開く
+  const newDate = view === "day" ? (closed ? key(nextOpenDay(date)) : dk) : undefined;
+  const unitShort = UNITS.find(u => u.id === unit)?.short;
+
+  // ユニットの絞り込みとキャンセルの表示（iOS のカレンダーの「表示」メニューと同じく、右上にまとめる）
+  const filterMenu = view === "day" && !closed && (
+    <Menu
+      trigger={
+        <motion.button
+          whileTap={tap}
+          aria-label={unitShort ? `表示の絞り込み（${unitShort}）` : "表示の絞り込み"}
+          className={cn(
+            "flex h-11 items-center justify-center gap-1 rounded-full text-accent",
+            unitShort || showCancelled ? "px-1" : "w-11",
+          )}
+        >
+          <span className={cn("flex items-center gap-1", (unitShort || showCancelled) && "h-[30px] rounded-full bg-sand/25 px-2.5")}>
+            <ListFilter className="h-[20px] w-[20px]" strokeWidth={2.1} />
+            {unitShort && <span className="text-[15px] font-semibold tnum">{unitShort}</span>}
+          </span>
+        </motion.button>
+      }
+    >
+      <MenuItem icon={unit === "all" ? Check : undefined} onSelect={() => setUnit("all")}>すべてのユニット</MenuItem>
+      {UNITS.map(u => (
+        <MenuItem key={u.id} icon={unit === u.id ? Check : undefined} onSelect={() => setUnit(u.id)}>{u.name}</MenuItem>
+      ))}
+      <MenuSeparator />
+      <MenuItem icon={showCancelled ? Check : undefined} onSelect={() => setShowCancelled(!showCancelled)}>
+        キャンセルを表示{cancelledCount ? `（${cancelledCount}件）` : ""}
+      </MenuItem>
+    </Menu>
+  );
 
   return (
     <Page
@@ -95,7 +132,8 @@ export function PhoneSchedule({ param }: { param?: string }) {
       actions={
         <>
           <Button variant="plain" size="sm" className="px-2.5 text-[17px] font-normal" onClick={toToday}>今日</Button>
-          <IconButton icon={Plus} label="予約を追加" variant="plain" className="h-11 w-11" onClick={() => ui.openNew({ date: view === "day" ? dk : undefined })} />
+          {filterMenu}
+          <IconButton icon={Plus} label="新規予約" variant="plain" className="h-11 w-11" onClick={() => ui.openNew({ date: newDate })} />
         </>
       }
       accessory={
@@ -125,12 +163,10 @@ export function PhoneSchedule({ param }: { param?: string }) {
             <PhoneAgenda
               date={date}
               dk={dk}
-              appts={byDate.get(dk) ?? EMPTY}
+              appts={dayAppts}
               now={now}
               unit={unit}
-              onUnit={setUnit}
               showCancelled={showCancelled}
-              onShowCancelled={setShowCancelled}
               dir={dir}
               onOpen={ui.openAppointment}
               onNew={p => ui.openNew(p)}

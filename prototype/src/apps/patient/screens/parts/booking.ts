@@ -15,7 +15,11 @@ type Store = ReturnType<typeof useStore>;
 // （setDraft は中身をそのまま重ねるだけなので、追加の項目も画面をまたいで残る）。
 export type Visit = "first" | "return";
 export type Sex = "女性" | "男性";
+/** 再診のとき、ログイン中の本人か、ご家族か */
+export type Who = "me" | "family";
 export interface Draft extends BookingDraft {
+  who?: Who; // 再診のみ
+
   birth?: string; // yyyy-MM-dd（初診）
   sex?: Sex; // 初診
   apptId?: string; // 登録した予約（完了画面で一度だけ作る）
@@ -32,7 +36,7 @@ export const isStep = (s?: string): s is Step => !!s && (s === "done" || (STEPS 
 export const stepNo = (s: Step) => (s === "done" ? STEPS.length : STEPS.indexOf(s));
 
 export const STEP_TITLE: Record<Step, string> = {
-  type: "受診は初めてですか？",
+  type: "どなたのご予約ですか？",
   menu: "ご予約のメニュー",
   time: "ご希望の日時",
   info: "お名前とご連絡先",
@@ -41,7 +45,7 @@ export const STEP_TITLE: Record<Step, string> = {
 };
 /** 戻るボタンや要約に出す短い名前 */
 export const STEP_SHORT: Record<Step, string> = {
-  type: "初診・再診",
+  type: "受診される方",
   menu: "メニュー",
   time: "日時",
   info: "ご連絡先",
@@ -134,7 +138,7 @@ export function demoDraft(appts: Appointment[]): Draft {
       break;
     }
   }
-  return { visit: "return", serviceId: sv.id, date, start, ...mePrefill(), note: "" };
+  return { visit: "return", who: "me", serviceId: sv.id, date, start, ...mePrefill(), note: "" };
 }
 
 /** その手順を表示するのに必要な内容がそろっているか */
@@ -170,6 +174,10 @@ export function formatPhone(raw: string): string {
 }
 
 export const emailRequired = (d: Draft) => d.visit === "first";
+/** 再診で、ログイン中の本人の予約か */
+export const isMe = (d: Draft) => d.visit === "return" && d.who !== "family";
+/** 生年月日・性別を入力してもらうか（初診と、ご家族の再診） */
+export const asksProfile = (d: Draft) => d.visit === "first" || (d.visit === "return" && d.who === "family");
 
 export function validate(d: Draft): Partial<Record<FieldKey, string>> {
   const e: Partial<Record<FieldKey, string>> = {};
@@ -189,7 +197,7 @@ export function validate(d: Draft): Partial<Record<FieldKey, string>> {
     const no = digitsOf(d.number);
     if (no && !/^\d{6}$/.test(no)) e.number = "診察券番号は6桁の数字で入力してください";
   }
-  if (d.visit === "first") {
+  if (asksProfile(d)) {
     if (!d.birth) e.birth = "生年月日を選んでください";
     if (!d.sex) e.sex = "性別を選んでください";
   }
@@ -251,25 +259,45 @@ function insuranceFor(age: number): InsuranceType {
   return "社保本人";
 }
 
-/** 再診で入力された人を台帳から探す（診察券番号 → お名前）。見つからなければ本人 */
-function findReturning(d: Draft, list: Patient[]): Patient {
+const bareName = (s: string) => s.replace(/[\s　]/g, "");
+/**
+ * 再診で入力された人を台帳から探す。本人の予約はログイン中の本人。
+ * ご家族は「診察券番号＋お名前」か「お名前＋生年月日」が一致したときだけ。見つからなければ undefined
+ * （本人に寄せない。医院で確認する仮予約にする）。
+ */
+export function resolveReturning(d: Draft, list: Patient[]): Patient | undefined {
+  if (d.visit !== "return") return undefined;
+  if (d.who !== "family") return ME;
   const no = digitsOf(d.number);
-  const name = cleanSpaces(d.name).replace(/ /g, "");
-  return (no && list.find(p => p.number === no)) || list.find(p => p.name.replace(/\s/g, "") === name) || ME;
+  const name = bareName(cleanSpaces(d.name));
+  const byNo = no ? list.find(p => p.number === no) : undefined;
+  if (byNo && bareName(byNo.name) === name) return byNo;
+  if (d.birth) return list.find(p => bareName(p.name) === name && key(p.birth) === d.birth);
+  return undefined;
 }
 
 /**
  * 予約を確定する（完了画面に入ったときに一度だけ）。
  * 初診は患者を登録してから「仮予約」で入れ、医院の「お知らせ」に届ける。
  */
+/** 確定すると「仮予約」（医院の確認待ち）になるか。初診と、台帳で確認できなかったご家族 */
+export const willBePending = (d: Draft, list: Patient[]) => d.visit === "first" || !resolveReturning(d, list);
+
+/** この端末で一度でも予約を確定したか（完了画面へ「戻る」で来たときに、二重に登録しないため） */
+let finished = false;
+export const hasFinishedBooking = () => finished;
+
 export function commitBooking(d: Draft, store: Store): { appt: Appointment; receipt: string; patient: Patient } {
   const sv = serviceById(d.serviceId!);
   const first = d.visit === "first";
   const date = d.date!;
   const start = d.start!;
   const end = start + sv.minutes;
+  const found = first ? undefined : resolveReturning(d, store.patients);
+  // 初診と、台帳で確認できなかったご家族は、患者を仮登録して「仮予約」にする
+  const provisional = !found;
   let patient: Patient;
-  if (first) {
+  if (!found) {
     const birth = fromKey(d.birth!);
     patient = store.addPatient({
       name: cleanSpaces(d.name),
@@ -279,7 +307,7 @@ export function commitBooking(d: Draft, store: Store): { appt: Appointment; rece
       phone: formatPhone(d.phone),
       email: toHalf(d.email).trim() || undefined,
       insurance: insuranceFor(differenceInYears(TODAY, birth)),
-      firstVisit: fromKey(date),
+      firstVisit: first ? fromKey(date) : TODAY,
       lastVisit: undefined,
       visits: 0,
       recallMonths: 3,
@@ -290,23 +318,25 @@ export function commitBooking(d: Draft, store: Store): { appt: Appointment; rece
       allergies: [],
       conditions: [],
       teeth: {},
+      memo: first ? undefined : `Web予約で再診として登録（診察券番号${digitsOf(d.number) ? ` ${digitsOf(d.number)}` : "の入力なし"}）。既存のカルテと照合してください。`,
     });
   } else {
-    patient = findReturning(d, store.patients);
+    patient = found;
   }
   const { unitId, staffId } = assignUnit(date, start, end, sv, store.appointments);
   const appt = store.addAppointment({
     date, start, end, patientId: patient.id, serviceId: sv.id, staffId, unitId,
-    status: first ? "pending" : "confirmed",
+    status: provisional ? "pending" : "confirmed",
     source: "web",
     firstVisit: first,
-    note: d.note.trim() || undefined,
+    note: [d.note.trim(), !first && provisional ? "診察券番号の確認が必要（Web予約で再診）" : ""].filter(Boolean).join("\n") || undefined,
   });
+  finished = true;
   rememberBooking(appt.id);
   store.addNotice({
     kind: "web",
-    title: first ? "Web予約のリクエストが届きました" : "Web予約が入りました",
-    body: `${patient.name}さん・${mdw(fromKey(date))} ${hm(start)} ${sv.name}${first ? "（承認待ち）" : ""}`,
+    title: provisional ? "Web予約のリクエストが届きました" : "Web予約が入りました",
+    body: `${patient.name}さん・${mdw(fromKey(date))} ${hm(start)} ${sv.name}${provisional ? (first ? "（承認待ち）" : "（再診・診察券番号の確認待ち）") : ""}`,
     apptId: appt.id,
   });
   return { appt, receipt: receiptOf(appt), patient };
@@ -321,5 +351,9 @@ export function deadlineOf(dateKey: string): Date {
   return d;
 }
 export const deadlineLabel = (dateKey: string) => `${mdw(deadlineOf(dateKey))} 18:00`;
+/** Webでの変更・キャンセルの締め切りを過ぎているか（当日・前日18時以降の予約） */
+export const pastDeadline = (dateKey: string) => now() >= deadlineOf(dateKey);
+/** 前日のリマインドを送る時刻（変更の締め切りより前に届くように） */
+export const REMIND_LABEL = "前日の12時ごろ";
 
 export const CANCEL_REASONS = ["体調不良のため", "仕事の都合", "日程の変更希望", "家庭の事情", "その他"];

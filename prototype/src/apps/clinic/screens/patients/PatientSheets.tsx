@@ -1,13 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, UserPlus, UserRoundPen } from "lucide-react";
-import { parse, isValid } from "date-fns";
 import { useStore } from "@/lib/store";
 import { TODAY } from "@/lib/clock";
 import { age, toKatakana } from "@/lib/format";
 import type { InsuranceType, Patient } from "@/data";
-import { FieldRow, ListRow, ListSection, Segmented, Sheet, Switch, useToast } from "@/ui";
+import { Button, FieldRow, ListRow, ListSection, Sheet, Switch, useToast } from "@/ui";
+import { Chip } from "../../sheets/parts";
+import { INSURANCES, NewPatientFields, checkDraft, emptyDraft, parseBirth, type PatientDraft } from "./NewPatientFields";
 
-const INSURANCES: InsuranceType[] = ["社保本人", "社保家族", "国保", "後期高齢者", "子ども医療証"];
+const ymdSlash = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 const ALLERGY_OPTIONS = ["ペニシリン系", "ラテックス", "局所麻酔（リドカイン）", "金属（ニッケル）", "アスピリン"];
 const CONDITION_OPTIONS = ["抗凝固薬（ワーファリン）服用中", "骨粗しょう症（BP製剤服用中）", "心疾患（ペースメーカー）", "妊娠中", "高血圧", "糖尿病", "喘息"];
 
@@ -31,6 +32,10 @@ function Error({ text }: { text: string | null }) {
 export function EditPatientSheet({ p, open, onClose }: { p: Patient; open: boolean; onClose: () => void }) {
   const { updatePatient } = useStore();
   const toast = useToast();
+  const [name, setName] = useState(p.name);
+  const [kana, setKana] = useState(p.kana);
+  const [birth, setBirth] = useState(ymdSlash(p.birth));
+  const [sex, setSex] = useState<Patient["sex"]>(p.sex);
   const [phone, setPhone] = useState(p.phone);
   const [email, setEmail] = useState(p.email ?? "");
   const [line, setLine] = useState(p.line);
@@ -42,6 +47,10 @@ export function EditPatientSheet({ p, open, onClose }: { p: Patient; open: boole
 
   useEffect(() => {
     if (!open) return;
+    setName(p.name);
+    setKana(p.kana);
+    setBirth(ymdSlash(p.birth));
+    setSex(p.sex);
     setPhone(p.phone);
     setEmail(p.email ?? "");
     setLine(p.line);
@@ -52,19 +61,51 @@ export function EditPatientSheet({ p, open, onClose }: { p: Patient; open: boole
     setError(null);
   }, [open, p]);
 
+  const born = parseBirth(birth);
   const save = () => {
+    const nm = name.replace(/　/g, " ").replace(/\s+/g, " ").trim();
+    const kn = toKatakana(kana).replace(/　/g, " ").replace(/\s+/g, " ").trim();
+    if (!nm) return setError("氏名を入力してください");
+    if (!kn || !/^[ァ-ヺー ・]+$/.test(kn)) return setError("ふりがなは、ひらがなかカタカナで入力してください");
+    if (!born) return setError("生年月日は「1985/4/12」か「S60.4.12」の形で入力してください");
     const ph = half(phone).trim();
     if (!PHONE.test(ph)) return setError("電話番号は数字とハイフンで入力してください（例：090-1234-5678）");
     const em = email.trim();
     if (em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return setError("メールアドレスの形式を確認してください（例：name@example.jp）");
-    updatePatient(p.id, { phone: ph, email: em || undefined, line, insurance, allergies, conditions, memo: memo.trim() || undefined });
-    toast("患者情報を更新しました", { icon: UserRoundPen, detail: `${p.name}さん` });
+    updatePatient(p.id, { name: nm, kana: kn, birth: born, sex, phone: ph, email: em || undefined, line, insurance, allergies, conditions, memo: memo.trim() || undefined });
+    toast("患者情報を更新しました", { icon: UserRoundPen, detail: `${nm}さん` });
     onClose();
   };
 
   return (
     <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }} title="患者情報を編集" cancelLabel="キャンセル" confirmLabel="保存" onConfirm={save} size="lg">
       <Form>
+        <ListSection header="氏名・ふりがな">
+          <FieldRow label="氏名" value={name} onChange={v => { setName(v); setError(null); }} />
+          <FieldRow label="ふりがな" value={kana} onChange={v => { setKana(v); setError(null); }} />
+        </ListSection>
+        <ListSection header="生年月日・性別">
+          <label className="group relative flex min-h-[48px] items-center gap-3 px-4">
+            <span className="w-[6.5em] shrink-0 text-[16px] md:text-[15px]">生年月日</span>
+            <input
+              value={birth}
+              inputMode="numeric"
+              onChange={e => { setBirth(e.target.value); setError(null); }}
+              placeholder="1985/4/12・S60.4.12"
+              className="min-w-0 flex-1 bg-transparent py-3 text-[16px] tnum outline-none placeholder:text-label3 md:text-[15px]"
+            />
+            {born && <span className="shrink-0 text-[13px] font-medium text-label2 tnum">{age(born, TODAY)}歳</span>}
+            <span aria-hidden className="pointer-events-none absolute bottom-0 left-4 right-0 h-px origin-bottom scale-y-50 bg-sep/30" />
+          </label>
+          <div className="flex min-h-[52px] items-center gap-3 px-4 py-2">
+            <span className="w-[6.5em] shrink-0 text-[16px] md:text-[15px]">性別</span>
+            <div className="flex gap-2">
+              {(["女性", "男性"] as const).map(x => (
+                <Chip key={x} selected={sex === x} onClick={() => setSex(x)} className="min-w-[4.5rem]">{x}</Chip>
+              ))}
+            </div>
+          </div>
+        </ListSection>
         <ListSection header="連絡先">
           <FieldRow label="電話番号" value={phone} onChange={v => { setPhone(v); setError(null); }} type="tel" inputMode="tel" />
           <FieldRow label="メール" value={email} onChange={v => { setEmail(v); setError(null); }} type="email" inputMode="email" placeholder="登録なし" />
@@ -95,66 +136,44 @@ export function EditPatientSheet({ p, open, onClose }: { p: Patient; open: boole
 }
 
 // ─── 新しい患者を登録 ─────────────────────────────────────────────────────
-export function AddPatientSheet({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (p: Patient) => void }) {
-  const { addPatient } = useStore();
+export function AddPatientSheet({ open, onClose, onAdded, onPickExisting }: {
+  open: boolean; onClose: () => void; onAdded: (p: Patient) => void; onPickExisting?: (id: string) => void;
+}) {
+  const { addPatient, patients } = useStore();
   const toast = useToast();
-  const [name, setName] = useState("");
-  const [kana, setKana] = useState("");
-  const [birth, setBirth] = useState("");
-  const [sex, setSex] = useState<Patient["sex"]>("女性");
-  const [phone, setPhone] = useState("");
-  const [insurance, setInsurance] = useState<InsuranceType | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<PatientDraft>(emptyDraft);
+  const [tried, setTried] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setName(""); setKana(""); setBirth(""); setSex("女性"); setPhone(""); setInsurance(null); setError(null);
+    setDraft(emptyDraft());
+    setTried(false);
   }, [open]);
 
-  const birthDate = birth ? parse(birth, "yyyy-MM-dd", new Date()) : null;
-  const years = birthDate && isValid(birthDate) ? age(birthDate, TODAY) : null;
-  const suggested: InsuranceType = years !== null && years < 15 ? "子ども医療証" : years !== null && years >= 75 ? "後期高齢者" : "社保本人";
-  const ins = insurance ?? suggested;
-
+  const check = checkDraft(draft, patients);
   const save = () => {
-    const nm = name.replace(/　/g, " ").replace(/\s+/g, " ").trim();
-    const kn = toKatakana(kana).replace(/　/g, " ").replace(/\s+/g, " ").trim();
-    const ph = half(phone).trim();
-    if (!nm) return setError("氏名を入力してください");
-    if (!kn || !/^[ァ-ヶー ]+$/.test(kn)) return setError("ふりがなは、ひらがなかカタカナで入力してください");
-    if (!birthDate || !isValid(birthDate) || birthDate > TODAY) return setError("生年月日を入力してください");
-    if (!PHONE.test(ph)) return setError("電話番号は数字とハイフンで入力してください（例：090-1234-5678）");
-    const p = addPatient({
-      name: nm, kana: kn, sex, birth: birthDate, phone: ph, insurance: ins, firstVisit: TODAY, visits: 0, recallMonths: 3,
-      cancellations: 0, noShows: 0, line: false, allergies: [], conditions: [], teeth: {},
-    });
-    toast("患者を登録しました", { icon: UserPlus, detail: `${p.name}さん・診察券番号 ${p.number}` });
+    setTried(true);
+    if (!check.value) return;
+    const p = addPatient(check.value);
+    toast("患者を登録しました", { icon: UserPlus, detail: `${p.name}さん・診察券 ${p.number}` });
     onAdded(p);
   };
 
   return (
-    <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }} title="新しい患者" cancelLabel="キャンセル" confirmLabel="登録" onConfirm={save} confirmDisabled={!name.trim() || !kana.trim()}>
+    <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }} title="新しい患者を登録" cancelLabel="キャンセル" confirmLabel="登録" onConfirm={save} confirmDisabled={!draft.name.trim() || !draft.kana.trim()}>
       <Form>
-        <ListSection header="氏名">
-          <FieldRow label="氏名" value={name} onChange={v => { setName(v); setError(null); }} placeholder="山田 花子" />
-          <FieldRow label="ふりがな" value={kana} onChange={v => { setKana(v); setError(null); }} placeholder="やまだ はなこ" />
+        <ListSection footer="診察券番号は登録すると自動で付きます。保険は生年月日からの目安です。保険証で確認してください。">
+          <NewPatientFields draft={draft} onChange={x => { setDraft(d => ({ ...d, ...x })); setTried(false); }} check={check} />
         </ListSection>
-        <ListSection header="生年月日・性別">
-          <FieldRow label="生年月日" value={birth} onChange={v => { setBirth(v); setError(null); }} type="date" />
-          <div className="flex min-h-[48px] items-center gap-3 px-4">
-            <span className="w-[6.5em] shrink-0 text-[16px] md:text-[15px]">性別</span>
-            <Segmented value={sex} onChange={setSex} options={[{ value: "女性", label: "女性" }, { value: "男性", label: "男性" }]} size="sm" />
+        {check.dup && (
+          <div className="mt-3 flex items-center gap-3 rounded-card bg-sand/20 px-4 py-3">
+            <p className="min-w-0 flex-1 text-footnote leading-[1.6] text-label">
+              {check.dup.why}：<span className="font-semibold">{check.dup.p.name}</span>（診察券 {check.dup.p.number}）
+            </p>
+            {onPickExisting && <Button size="sm" variant="tinted" onClick={() => onPickExisting(check.dup!.p.id)}>この患者を開く</Button>}
           </div>
-        </ListSection>
-        <ListSection header="連絡先" footer="診察券番号は登録すると自動で付きます。">
-          <FieldRow label="電話番号" value={phone} onChange={v => { setPhone(v); setError(null); }} type="tel" inputMode="tel" placeholder="090-1234-5678" />
-        </ListSection>
-        <Error text={error} />
-        <ListSection header="保険" footer={insurance ? undefined : "生年月日から目安を選んでいます。保険証で確認してください。"}>
-          {INSURANCES.map(x => (
-            <ListRow key={x} title={x} onClick={() => setInsurance(x)} trailing={ins === x ? <Check className="h-[18px] w-[18px] text-accent" strokeWidth={2.6} /> : undefined} />
-          ))}
-        </ListSection>
+        )}
+        <Error text={tried ? check.error : null} />
       </Form>
     </Sheet>
   );

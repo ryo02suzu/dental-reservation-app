@@ -25,6 +25,7 @@
   --on-ink: 255 255 255;
   --red: 217 58 63;
   --material: 249 249 251;
+  --switch: 132 105 76;
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
     "Noto Sans JP", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
   color-scheme: light;
@@ -51,6 +52,7 @@
     --on-ink: 0 0 0;
     --red: 255 92 87;
     --material: 30 30 32;
+    --switch: 150 120 82;
     color-scheme: dark;
   }
 }
@@ -75,6 +77,7 @@
   --on-ink: 0 0 0;
   --red: 255 92 87;
   --material: 30 30 32;
+  --switch: 150 120 82;
   color-scheme: dark;
 }
 

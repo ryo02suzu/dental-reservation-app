@@ -31,6 +31,7 @@ module.exports = {
       onink: v("on-ink"),
       red: v("red"),
       material: v("material"),
+      switch: v("switch"),
       // 設定アイコンのタイルやグラフの系列に使う、彩度を抑えた補助色（両テーマ共通）
       tile: {
         sand: "#A88F6E",

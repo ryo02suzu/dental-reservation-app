@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Coffee, LogIn, LogOut, Play, RotateCcw } from "lucide-react";
+import { Coffee, Ellipsis, LogIn, LogOut, MessageSquareText, Play, RotateCcw, UserX } from "lucide-react";
 import { staff, staffById, type AttendanceRow } from "@/data";
 import { TODAY, minutesOfDay, useNow } from "@/lib/clock";
 import { hm, mdw } from "@/lib/format";
-import { Avatar, Button, ListRow, ListSection, cn, useToast } from "@/ui";
+import { Avatar, Button, IconButton, ListRow, ListSection, Menu, MenuItem, MenuSeparator, cn } from "@/ui";
 import { baseCell, hours, monthSummary } from "./model";
 
 export const ME_ID = "s6";
-export type Punch = AttendanceRow & { breaks: { start: number; end?: number }[] };
+export type Punch = AttendanceRow & {
+  breaks: { start: number; end?: number }[];
+  /** 受付が残した連絡（遅刻の連絡・欠勤）と、代わりに打刻したか */
+  note?: "遅刻の連絡あり" | "欠勤";
+  proxy?: boolean;
+};
+/** まだ来ていない人への対応（受付が代わりに記録する） */
+export type AbsenceAction = "lateNotice" | "absent" | "proxyIn";
 type State = AttendanceRow["state"];
 
 /** 打刻の行動 */
@@ -39,7 +46,7 @@ const breakText = (r: Punch) => {
 
 /** 予定の出勤時刻を過ぎても打刻がない */
 function isLate(r: Punch, nowMin: number) {
-  if (r.state !== "未出勤") return false;
+  if (r.state !== "未出勤" || r.note) return false;
   const c = baseCell(r.staffId, TODAY);
   return !c.off && c.start !== undefined && nowMin > c.start + 10;
 }
@@ -56,14 +63,14 @@ function StatePill({ r, nowMin }: { r: Punch; nowMin: number }) {
   return (
     <AnimatePresence mode="popLayout" initial={false}>
       <motion.span
-        key={r.state}
+        key={`${r.state}-${r.note ?? ""}`}
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
         transition={{ type: "spring", stiffness: 500, damping: 32 }}
-        className={cn("inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold", cls[r.state])}
+        className={cn("inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full px-2.5 text-[12px] font-semibold", r.note === "欠勤" ? "bg-fill/12 text-label2" : cls[r.state])}
       >
-        {r.state}
+        {r.note === "欠勤" ? "欠勤" : r.note === "遅刻の連絡あり" && r.state === "未出勤" ? "遅刻の連絡あり" : r.state}
       </motion.span>
     </AnimatePresence>
   );
@@ -71,11 +78,11 @@ function StatePill({ r, nowMin }: { r: Punch; nowMin: number }) {
 
 // ─── 打刻 ───────────────────────────────────────────────────────────────────
 export function PunchCard({ me, onPunch, onUndo, canUndo }: { me: Punch; onPunch: (k: PunchKind) => void; onUndo: () => void; canUndo: boolean }) {
-  const now = useNow(1000);
+  // 秒は出さない（打刻に秒は要らず、1秒ごとに数字が変わり続けると落ち着かない）
+  const now = useNow(10_000);
   const s = staffById(ME_ID);
   const shift = baseCell(ME_ID, TODAY);
   const nowMin = minutesOfDay(now);
-  const sec = String(now.getSeconds()).padStart(2, "0");
   const enabled: Record<PunchKind, boolean> = {
     in: me.state === "未出勤" || me.state === "休み",
     breakStart: me.state === "勤務中",
@@ -108,7 +115,7 @@ export function PunchCard({ me, onPunch, onUndo, canUndo }: { me: Punch; onPunch
       <div className="mt-6 text-center">
         <div className="text-[13px] text-label2 tnum">{mdw(TODAY)}</div>
         <div className="mt-1 text-[52px] font-semibold leading-none tracking-[-0.03em] tnum" aria-live="off">
-          {hm(nowMin)}<span className="text-label3">:{sec}</span>
+          {hm(nowMin)}
         </div>
       </div>
 
@@ -161,7 +168,22 @@ function useNarrow() {
 }
 
 // ─── 今日の出勤状況 ─────────────────────────────────────────────────────────
-export function TodayList({ rows, flush }: { rows: Punch[]; flush?: boolean }) {
+/** 予定の時刻を過ぎて来ていない人（と、遅刻の連絡があった人）には、受付が代わりに記録できるようにする */
+const canAct = (r: Punch, nowMin: number) => r.state === "未出勤" && (r.note === "遅刻の連絡あり" || isLate(r, nowMin));
+
+function AbsenceMenu({ r, onAct }: { r: Punch; onAct: (staffId: string, a: AbsenceAction) => void }) {
+  const s = staffById(r.staffId);
+  return (
+    <Menu trigger={<IconButton icon={Ellipsis} label={`${s.name}さんの対応`} variant="plain" size="sm" className="text-label2" />}>
+      <MenuItem icon={LogIn} onSelect={() => onAct(r.staffId, "proxyIn")}>代わりに出勤を記録</MenuItem>
+      {r.note !== "遅刻の連絡あり" && <MenuItem icon={MessageSquareText} onSelect={() => onAct(r.staffId, "lateNotice")}>遅刻の連絡あり</MenuItem>}
+      <MenuSeparator />
+      <MenuItem icon={UserX} onSelect={() => onAct(r.staffId, "absent")}>欠勤にする</MenuItem>
+    </Menu>
+  );
+}
+
+export function TodayList({ rows, flush, onAct }: { rows: Punch[]; flush?: boolean; onAct: (staffId: string, a: AbsenceAction) => void }) {
   const phone = useNarrow();
   const now = useNow(20_000);
   const nowMin = minutesOfDay(now);
@@ -175,7 +197,8 @@ export function TodayList({ rows, flush }: { rows: Punch[]; flush?: boolean }) {
           const late = isLate(r, nowMin);
           const c = baseCell(r.staffId, TODAY);
           const brMin = r.breaks.reduce((a, b) => a + ((b.end ?? b.start) - b.start), 0);
-          const parts = r.state === "休み" ? ["本日は休み"]
+          const parts = r.note === "欠勤" ? [`欠勤 · 予定 ${c.start !== undefined ? hm(c.start) : "—"}`]
+            : r.state === "休み" ? ["本日は休み"]
             : r.clockIn === undefined ? [`予定 ${c.start !== undefined ? hm(c.start) : "—"}`]
             : r.clockOut !== undefined ? [`${hm(r.clockIn)}–${hm(r.clockOut)}`, brMin > 0 && `休憩 ${hours(brMin)}`]
             : [`出勤 ${hm(r.clockIn)}`, breakText(r) && `休憩 ${breakText(r)}`];
@@ -185,21 +208,26 @@ export function TodayList({ rows, flush }: { rows: Punch[]; flush?: boolean }) {
               leading={<Avatar name={s.name} tone={s.tone} size={36} />}
               inset={64}
               title={<>{s.name}<span className="ml-1.5 text-[13px] text-label2">{s.role}</span></>}
-              subtitle={<span className={cn("tnum", late && "text-red")}>{parts.filter(Boolean).join(" · ")}</span>}
-              trailing={<StatePill r={r} nowMin={nowMin} />}
+              subtitle={<span className="tnum">{parts.filter(Boolean).join(" · ")}</span>}
+              trailing={
+                <span className="flex items-center gap-1">
+                  <StatePill r={r} nowMin={nowMin} />
+                  {canAct(r, nowMin) && <AbsenceMenu r={r} onAct={onAct} />}
+                </span>
+              }
             />
           );
         })}
       </ListSection>
     );
   }
-  const cols = "minmax(180px,1.6fr) 96px repeat(3, minmax(64px,0.7fr)) minmax(84px,0.8fr)";
+  const cols = "minmax(180px,1.6fr) 120px repeat(3, minmax(64px,0.7fr)) minmax(84px,0.8fr) 32px";
   return (
     <section>
       <h3 className="px-4 pb-1.5 text-footnote font-medium text-label2">{header}</h3>
       <div className="overflow-hidden rounded-cell bg-surface">
         <div className="hairline-b grid h-9 items-center px-4 text-[12px] font-medium text-label2" style={{ gridTemplateColumns: cols }}>
-          <span>スタッフ</span><span>状態</span><span>出勤</span><span>休憩</span><span>退勤</span><span className="text-right">勤務時間</span>
+          <span>スタッフ</span><span>状態</span><span>出勤</span><span>休憩</span><span>退勤</span><span className="text-right">勤務時間</span><span />
         </div>
         {rows.map(r => {
           const s = staffById(r.staffId);
@@ -210,17 +238,18 @@ export function TodayList({ rows, flush }: { rows: Punch[]; flush?: boolean }) {
               <div className="flex min-w-0 items-center gap-2.5">
                 <Avatar name={s.name} tone={s.tone} size={32} />
                 <div className="min-w-0">
-                  <div className="truncate font-semibold leading-5">{s.name}{r.staffId === ME_ID && <span className="ml-1.5 text-[12px] font-normal text-label3">自分</span>}</div>
+                  <div className="truncate font-semibold leading-5">{s.name}{r.staffId === ME_ID && <span className="ml-1.5 text-[12px] font-normal text-label3">自分</span>}{r.proxy && <span className="ml-1.5 text-[12px] font-normal text-label3">代理で打刻</span>}</div>
                   <div className="truncate text-[12px] leading-4 text-label2">{s.role}</div>
                 </div>
               </div>
               <div><StatePill r={r} nowMin={nowMin} /></div>
-              <span className={cn(r.clockIn === undefined && (late ? "text-red" : "text-label3"))}>
-                {r.clockIn !== undefined ? hm(r.clockIn) : r.state === "休み" ? "—" : `予定 ${hm(c.start ?? 525)}`}
+              <span className={cn(r.clockIn === undefined && (late ? "text-label" : "text-label3"))}>
+                {r.clockIn !== undefined ? hm(r.clockIn) : r.state === "休み" && r.note !== "欠勤" ? "—" : `予定 ${hm(c.start ?? 525)}`}
               </span>
               <span className={cn(!breakText(r) && "text-label3")}>{breakText(r) ?? "—"}</span>
               <span className={cn(r.clockOut === undefined && "text-label3")}>{r.clockOut !== undefined ? hm(r.clockOut) : "—"}</span>
               <span className={cn("text-right", r.clockIn === undefined && "text-label3")}>{r.clockIn !== undefined ? hours(worked(r, nowMin)) : "—"}</span>
+              <span className="flex justify-end">{canAct(r, nowMin) && <AbsenceMenu r={r} onAct={onAct} />}</span>
             </div>
           );
         })}

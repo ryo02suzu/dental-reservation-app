@@ -89,6 +89,8 @@ export interface Appointment {
   arrivedAt?: number; // 来院した時刻（分）
   startedAt?: number; // 診療開始（分）
   cancelReason?: string;
+  /** 受付端末で受付したときの受付番号 */
+  receiptNo?: number;
 }
 
 export interface VisitRecord {

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMinWidth } from "@/lib/media";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { staff, staffById, type Staff } from "@/data";
@@ -49,76 +50,126 @@ function OffChip({ c }: { c: Cell }) {
 }
 
 // ─── PC・iPad：週の表 ────────────────────────────────────────────────────────
+/**
+ * 週の表。休診日の列は細く・平らにして（中身がないので）、営業日の列に幅を回す。
+ * iPad縦（1024px未満）は時刻を2行（8:45 / 19:15）にして、7日分と週の時間が1画面に収まるようにする。
+ */
 export function ShiftGrid({ offset, edits, onEdit }: { offset: number; edits: Edits; onEdit: (c: Cell) => void }) {
   const { days, grid, totals, counts } = useWeek(offset, edits);
-  const cols = "minmax(168px,1.5fr) repeat(7, minmax(92px,1fr)) 116px";
+  const compact = !useMinWidth(1024);
+  const dayCol = (di: number) => (grid[0][di].closed ? (compact ? "minmax(36px,0.4fr)" : "minmax(48px,0.45fr)") : compact ? "minmax(64px,1fr)" : "minmax(92px,1fr)");
+  const cols = `${compact ? "132px" : "minmax(168px,1.5fr)"} ${days.map((_, di) => dayCol(di)).join(" ")} ${compact ? "68px" : "112px"}`;
+  const todayIdx = days.findIndex(d => key(d) === TODAY_KEY);
+  const scroller = useRef<HTMLDivElement>(null);
+  const todayRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+  // 表が枠からはみ出すときだけ：今日の列が見える位置まで送り、右端を薄くして続きがあることを示す
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const check = () => setOverflow(el.scrollWidth - el.clientWidth > 2 && el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+    if (el.scrollWidth > el.clientWidth && todayRef.current) {
+      const t = todayRef.current;
+      el.scrollLeft = Math.max(0, t.offsetLeft + t.offsetWidth - el.clientWidth + 24);
+    }
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      el.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [offset, compact]);
+  const time = (c: Cell) =>
+    compact ? (
+      <span className="flex flex-col items-center leading-[17px]">
+        <span>{hm(c.start!)}</span>
+        <span className="text-label2">{hm(c.end!)}</span>
+      </span>
+    ) : (
+      `${hm(c.start!)}–${hm(c.end!)}`
+    );
   return (
-    <div className="overflow-x-auto rounded-card bg-surface">
-      <div className="min-w-[940px]">
-        <div className="hairline-b grid" style={{ gridTemplateColumns: cols }}>
-          <div className="hairline-b sticky left-0 z-10 flex items-end bg-surface px-4 pb-2.5 text-[12px] font-medium text-label2">スタッフ</div>
-          {days.map(d => {
-            const k = key(d);
-            const today = k === TODAY_KEY;
-            const closed = grid[0][days.indexOf(d)].closed;
-            return (
-              <div key={k} className={cn("flex flex-col items-center pb-2 pt-3", today && "bg-sand/12", closed && "hatch")}>
-                <span className={cn("text-[12px] font-medium", closed ? "text-label3" : today ? "text-accent" : "text-label2")}>{WEEKDAYS[d.getDay()]}</span>
-                <span className={cn("mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[17px] font-semibold tnum", today ? "bg-accent text-surface" : closed ? "text-label3" : "text-label")}>{d.getDate()}</span>
-              </div>
-            );
-          })}
-          <div className="flex items-end justify-end whitespace-nowrap px-4 pb-2.5 text-[12px] font-medium text-label2">週の時間</div>
-        </div>
-        {staff.map((s, si) => (
-          <div key={s.id} className="hairline-b grid" style={{ gridTemplateColumns: cols }}>
-            <div className="hairline-b sticky left-0 z-10 flex min-w-0 items-center gap-2.5 bg-surface px-4 py-2.5">
-              <Avatar name={s.name} tone={s.tone} size={32} />
-              <div className="min-w-0">
-                <div className="truncate text-[14px] font-semibold leading-5">{s.name}</div>
-                <div className="truncate text-[12px] leading-4 text-label2">{s.role}</div>
-              </div>
-            </div>
-            {grid[si].map((c, di) => {
-              const today = c.date === TODAY_KEY;
-              if (c.closed) {
-                return (
-                  <div key={c.date} className="hatch flex items-center justify-center text-[12px] text-label3">
-                    {si === 0 ? (c.closed.endsWith("曜") ? "休診" : c.closed) : ""}
-                  </div>
-                );
-              }
+    <div className="relative overflow-hidden rounded-card bg-surface">
+      <div ref={scroller} className="overflow-x-auto no-scrollbar">
+        <div className={compact ? "min-w-[620px]" : "min-w-[820px]"}>
+          <div className="hairline-b grid" style={{ gridTemplateColumns: cols }}>
+            <div className={cn("hairline-b sticky left-0 z-10 flex items-end bg-surface pb-2.5 text-[12px] font-medium text-label2", compact ? "px-3" : "px-4")}>スタッフ</div>
+            {days.map((d, di) => {
+              const k = key(d);
+              const today = di === todayIdx;
+              const closed = grid[0][di].closed;
               return (
-                <div key={c.date} className={cn("p-1", today && "bg-sand/12")}>
-                  <motion.button
-                    whileTap={tap}
-                    onClick={() => onEdit(c)}
-                    aria-label={`${s.name} ${mdw(days[di])}のシフトを編集`}
-                    className="flex h-12 w-full items-center justify-center rounded-[10px] text-[13px] font-medium tnum transition-colors hover:bg-fill/8"
-                  >
-                    <AnimatePresence mode="popLayout" initial={false}>
-                      <motion.span key={c.off ? `off-${c.note}` : `${c.start}-${c.end}`} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-                        {c.off ? <OffChip c={c} /> : `${hm(c.start!)}–${hm(c.end!)}`}
-                      </motion.span>
-                    </AnimatePresence>
-                  </motion.button>
+                <div key={k} ref={today ? todayRef : undefined} className={cn("flex flex-col items-center pb-2 pt-3", today && "bg-sand/12", closed && "bg-fill/6")}>
+                  <span className={cn("text-[12px] font-medium", closed ? "text-label3" : today ? "text-accent" : "text-label2")}>{WEEKDAYS[d.getDay()]}</span>
+                  <span className={cn("mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-[17px] font-semibold tnum", today ? "bg-accent text-surface" : closed ? "text-label3" : "text-label")}>{d.getDate()}</span>
+                  {closed && <span className="mt-0.5 whitespace-nowrap text-[11px] leading-[13px] text-label3">{closed.endsWith("曜") ? "休診" : closed.length > 3 && compact ? "祝日" : closed}</span>}
                 </div>
               );
             })}
-            <div className="flex items-center justify-end whitespace-nowrap px-4 text-[14px] font-semibold tnum">{hours(totals[si])}</div>
+            <div className={cn("flex items-end justify-end whitespace-nowrap pb-2.5 text-[12px] font-medium text-label2", compact ? "px-3" : "px-4")}>週の時間</div>
           </div>
-        ))}
-        <div className="grid" style={{ gridTemplateColumns: cols }}>
-          <div className="sticky left-0 z-10 bg-surface px-4 py-3 text-[12px] font-medium text-label2">出勤する人数</div>
-          {counts.map((n, di) => (
-            <div key={di} className={cn("flex items-center justify-center text-[13px] tnum", grid[0][di].closed ? "hatch text-label3" : "text-label2", days[di] && key(days[di]) === TODAY_KEY && "bg-sand/12")}>
-              {grid[0][di].closed ? "" : `${n}人`}
+          {staff.map((s, si) => (
+            <div key={s.id} className="hairline-b grid" style={{ gridTemplateColumns: cols }}>
+              <div className={cn("hairline-b sticky left-0 z-10 flex min-w-0 items-center bg-surface py-2.5", compact ? "gap-2 px-3" : "gap-2.5 px-4")}>
+                <Avatar name={s.name} tone={s.tone} size={compact ? 28 : 32} />
+                <div className="min-w-0">
+                  <div className="truncate text-[14px] font-semibold leading-5">{s.name}</div>
+                  <div className="truncate text-[12px] leading-4 text-label2">{s.role}</div>
+                </div>
+              </div>
+              {grid[si].map((c, di) => {
+                const today = di === todayIdx;
+                if (c.closed) return <div key={c.date} className="bg-fill/6" />;
+                return (
+                  <div key={c.date} className={cn(compact ? "p-0.5" : "p-1", today && "bg-sand/12")}>
+                    <motion.button
+                      whileTap={tap}
+                      onClick={() => onEdit(c)}
+                      aria-label={`${s.name} ${mdw(days[di])}のシフトを${c.date < TODAY_KEY ? "見る" : "編集"}`}
+                      className={cn("flex w-full items-center justify-center rounded-[10px] font-medium tnum transition-colors hover:bg-fill/8", compact ? "h-[52px] text-[13px]" : "h-12 text-[13px]", c.date < TODAY_KEY && "text-label2")}
+                    >
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        <motion.span key={c.off ? `off-${c.note}` : `${c.start}-${c.end}`} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+                          {c.off ? <OffChip c={c} /> : time(c)}
+                        </motion.span>
+                      </AnimatePresence>
+                    </motion.button>
+                  </div>
+                );
+              })}
+              <div className={cn("flex items-center justify-end whitespace-nowrap font-semibold tnum", compact ? "px-3 text-[13px]" : "px-4 text-[14px]")}>{compact ? hoursShort(totals[si]) : hours(totals[si])}</div>
             </div>
           ))}
-          <div />
+          <div className="grid" style={{ gridTemplateColumns: cols }}>
+            <div className={cn("sticky left-0 z-10 bg-surface py-3 text-[12px] font-medium text-label2", compact ? "px-3" : "px-4")}>出勤する人数</div>
+            {counts.map((n, di) => (
+              <div key={di} className={cn("flex items-center justify-center text-[13px] tnum", grid[0][di].closed ? "bg-fill/6" : "text-label2", di === todayIdx && "bg-sand/12")}>
+                {grid[0][di].closed ? "" : `${n}人`}
+              </div>
+            ))}
+            <div />
+          </div>
         </div>
       </div>
+      <AnimatePresence>
+        {overflow && (
+          <motion.div aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface to-transparent" />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+/** 表の狭い列用：「43時間」「30分」を2行に */
+function hoursShort(min: number) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return (
+    <span className="flex flex-col items-end leading-[17px]">
+      <span>{h}時間</span>
+      {m > 0 && <span className="font-medium text-label2">{m}分</span>}
+    </span>
   );
 }
 
@@ -174,7 +225,7 @@ export function ShiftDayList({ offset, edits, onEdit, onWeek }: { offset: number
         </ListSection>
       )}
 
-      <ListSection header="今週の勤務時間" footer="昼休み（13:00〜14:30）を除いた時間です。">
+      <ListSection header="この週の勤務時間" footer="昼休みを除いた時間です。">
         {staff.map((s, si) => (
           <ListRow key={s.id} leading={<Avatar name={s.name} tone={s.tone} size={28} />} inset={56} title={s.name} value={<span className="tnum">{hours(totals[si])}</span>} />
         ))}
@@ -243,8 +294,17 @@ export function ShiftSheet({ cell, onClose, onSave }: { cell: Cell | null; onClo
     toast("シフトを変更しました", { detail: `${s.name} · ${mdw(d)} ${next.off ? next.note : `${hm(next.start!)}–${hm(next.end!)}`}` });
     onClose();
   };
+  // 過ぎた日は予定を書き換えられない（実際の時刻は勤怠の打刻が正）
+  const past = !!draft && draft.date < TODAY_KEY;
   return (
-    <Sheet open={!!cell} onOpenChange={o => !o && onClose()} title="シフトを編集" cancelLabel="キャンセル" confirmLabel="保存" onConfirm={save}>
+    <Sheet
+      open={!!cell}
+      onOpenChange={o => !o && onClose()}
+      title={past ? "シフト" : "シフトを編集"}
+      cancelLabel={past ? "閉じる" : "キャンセル"}
+      confirmLabel={past ? undefined : "保存"}
+      onConfirm={past ? undefined : save}
+    >
       {draft && s && d && (
         <>
           <div className="flex items-center gap-3 px-1 pb-1 pt-2">
@@ -254,19 +314,35 @@ export function ShiftSheet({ cell, onClose, onSave }: { cell: Cell | null; onClo
               <div className="text-[14px] text-label2 tnum">{s.role} · {mdw(d)}</div>
             </div>
           </div>
-          <SheetGroup className="mt-5">
-            <ListRow title="休み" trailing={<Switch checked={!!draft.off} onChange={v => setDraft({ ...draft, off: v, note: v ? (cell?.note ?? "休み") : undefined })} label="休み" />} />
-          </SheetGroup>
-          <AnimatePresence initial={false}>
-            {!draft.off && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
-                <SheetGroup className="mt-5" footer={`勤務 ${hours(workMinutes(draft))}（昼休みを除く）· 15分単位で変更できます`}>
-                  <ListRow title="出勤" trailing={<Stepper value={draft.start!} min={420} max={draft.end! - 60} step={15} format={hm} onChange={v => setDraft({ ...draft, start: v })} />} />
-                  <ListRow title="退勤" trailing={<Stepper value={draft.end!} min={draft.start! + 60} max={1260} step={15} format={hm} onChange={v => setDraft({ ...draft, end: v })} />} />
-                </SheetGroup>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {past ? (
+            <SheetGroup className="mt-5" footer="過ぎた日のシフトは変更できません。実際の出勤・退勤の時刻は「勤怠」で確認できます。">
+              {draft.off ? (
+                <ListRow title="休み" value={draft.note ?? "休み"} />
+              ) : (
+                <>
+                  <ListRow title="出勤" value={<span className="tnum">{hm(draft.start!)}</span>} />
+                  <ListRow title="退勤" value={<span className="tnum">{hm(draft.end!)}</span>} />
+                  <ListRow title="勤務" value={<span className="tnum">{hours(workMinutes(draft))}</span>} />
+                </>
+              )}
+            </SheetGroup>
+          ) : (
+            <>
+              <SheetGroup className="mt-5">
+                <ListRow title="休み" trailing={<Switch checked={!!draft.off} onChange={v => setDraft({ ...draft, off: v, note: v ? (cell?.note ?? "休み") : undefined })} label="休み" />} />
+              </SheetGroup>
+              <AnimatePresence initial={false}>
+                {!draft.off && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden">
+                    <SheetGroup className="mt-5" footer={`勤務 ${hours(workMinutes(draft))}（昼休みを除く）· 15分単位で変更できます`}>
+                      <ListRow title="出勤" trailing={<Stepper value={draft.start!} min={420} max={draft.end! - 60} step={15} format={hm} onChange={v => setDraft({ ...draft, start: v })} />} />
+                      <ListRow title="退勤" trailing={<Stepper value={draft.end!} min={draft.start! + 60} max={1260} step={15} format={hm} onChange={v => setDraft({ ...draft, end: v })} />} />
+                    </SheetGroup>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          )}
         </>
       )}
     </Sheet>

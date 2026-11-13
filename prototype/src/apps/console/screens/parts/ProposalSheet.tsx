@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import type { ConsoleClinic, PlanKey } from "@/data";
 import { yen } from "@/lib/format";
 import { Segmented, Sheet, useToast } from "@/ui";
-import { daysSince, planLabel, planPrice } from "./model";
+import { daysSince, emailOf, planLabel, planPrice, sinceSignup } from "./model";
 import { sendProposal } from "./store";
-import { SheetGroup } from "./ui";
+import { RowRule, SheetGroup } from "./ui";
 
 const CHOICES: PlanKey[] = ["standard", "pro"];
+const subject = (p: PlanKey) => `${planLabel(p)}プランのご案内（Arche）`;
 const PITCH: Partial<Record<PlanKey, string>> = {
   standard: "スタッフを10名まで登録できるスタンダードプラン",
   pro: "スタッフ数の上限がなく、経営レポートも使えるプロプラン",
@@ -18,7 +19,7 @@ function draft(c: ConsoleClinic, plan: PlanKey) {
     `${c.name} ご担当者様`,
     "",
     "いつもArcheをご利用いただき、ありがとうございます。",
-    `ご登録から${days}日で、ご予約が${c.appts30d}件になりました。`,
+    `ご登録から${days}日で、予約が${sinceSignup(c)}件になりました。`,
     `予約が増えてきた医院には、${PITCH[plan] ?? `${planLabel(plan)}プラン`}（月額${yen(planPrice(plan))}）をおすすめしています。`,
     "ご不明な点は、このメールにご返信ください。",
     "",
@@ -50,10 +51,18 @@ export function ProposalSheet({ clinic, open, onClose }: { clinic: ConsoleClinic
   };
   return (
     <Sheet open={open} onOpenChange={o => !o && onClose()} title="アップグレードを提案" cancelLabel="キャンセル" confirmLabel="送信" onConfirm={send} confirmDisabled={!body.trim()}>
-      <SheetGroup header="宛先">
-        <div className="flex min-h-[48px] items-center justify-between gap-3 px-4 py-2.5">
-          <span className="min-w-0 truncate text-[16px] md:text-[15px]">{clinic.name}</span>
-          <span className="shrink-0 text-[13px] text-label2">登録時のメールアドレス</span>
+      <SheetGroup>
+        <div className="group relative flex min-h-[44px] items-center gap-3 px-4 py-2.5">
+          <span className="w-[3em] shrink-0 text-[14px] text-label2">宛先</span>
+          <span className="min-w-0 flex-1 truncate text-[15px]">
+            {clinic.name} 院長
+            <span className="ml-2 text-[13px] text-label2">{emailOf(clinic)}</span>
+          </span>
+          <RowRule inset={16} />
+        </div>
+        <div className="flex min-h-[44px] items-center gap-3 px-4 py-2.5">
+          <span className="w-[3em] shrink-0 text-[14px] text-label2">件名</span>
+          <span className="min-w-0 flex-1 truncate text-[15px]">{subject(plan)}</span>
         </div>
       </SheetGroup>
       <SheetGroup header="提案するプラン">
@@ -66,7 +75,7 @@ export function ProposalSheet({ clinic, open, onClose }: { clinic: ConsoleClinic
           />
         </div>
       </SheetGroup>
-      <SheetGroup header="メッセージ" footer="送信すると、概要の「対応が必要」に提案済みと表示されます。">
+      <SheetGroup header="メッセージ" footer="院長あてに送信します。返信はサポートの受信箱に届きます。">
         <textarea
           value={body}
           onChange={e => {
