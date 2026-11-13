@@ -45,7 +45,7 @@ function WaitingRow({ r, t, unit, asking, onAsk }: { r: Row; t: Today; unit: Uni
 
   const start = () => {
     setStatus(a.id, "in_progress");
-    toast("診療を開始しました", { detail: `${unit.unit.name}・${patient.name}さん` });
+    toast("診療を開始しました", { detail: `${unit.unit.name} · ${patient.name}さん` });
   };
 
   return (
@@ -71,7 +71,7 @@ function WaitingRow({ r, t, unit, asking, onAsk }: { r: Row; t: Today; unit: Uni
                 icon={Undo2}
                 onSelect={() => {
                   setStatus(a.id, "confirmed");
-                  toast("受付を取り消しました", { icon: Undo2, detail: `${patient.name}さん・${hm(a.start)}の予約` });
+                  toast("受付を取り消しました", { icon: Undo2, detail: `${patient.name}さん · ${hm(a.start)}の予約` });
                 }}
               >
                 受付を取り消す
@@ -90,7 +90,7 @@ function WaitingRow({ r, t, unit, asking, onAsk }: { r: Row; t: Today; unit: Uni
         </div>
         {busy && (
           <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label3 tnum">
-            {unit.unit.name}は使用中・{left > 0 ? `あと${mins(left)}` : "終了予定を過ぎています"}
+            {unit.unit.name}は使用中 · {left > 0 ? `あと${mins(left)}` : "終了予定を過ぎています"}
           </div>
         )}
       </RowShell>
@@ -106,13 +106,18 @@ function WaitingRow({ r, t, unit, asking, onAsk }: { r: Row; t: Today; unit: Uni
             <div className="pb-3.5 pl-[60px] pr-4">
               <div className="rounded-[10px] bg-fill/8 px-3 py-2.5">
                 <p className="text-[13px] leading-[19px] text-label">
-                  {unit.unit.name}は<span className="whitespace-nowrap">{busy.patient.name}さん</span>が診療中です。
-                  <span className="mt-0.5 block text-label2">前の診療を完了にしてから始めますか？</span>
+                  {unit.unit.name}は<span className="whitespace-nowrap">{busy.patient.name}さん</span>が診療中です
+                  <span className="tnum">（{left > 0 ? `あと${mins(left)}` : "終了予定を過ぎています"}）</span>。
+                  <span className="mt-0.5 block text-label2">診療の完了は、ユニットで担当が記録します。</span>
                 </p>
+                {/* 受付から他の患者さんの診療を完了にしないよう、待つ方を主な操作にする */}
                 <div className="mt-2.5 flex flex-wrap gap-2">
+                  <Button size="sm" variant="filled" className={hit} onClick={() => onAsk(false)}>
+                    終わるまで待つ
+                  </Button>
                   <Button
                     size="sm"
-                    variant="filled"
+                    variant="gray"
                     className={hit}
                     onClick={() => {
                       setStatus(busy.a.id, "completed");
@@ -121,9 +126,6 @@ function WaitingRow({ r, t, unit, asking, onAsk }: { r: Row; t: Today; unit: Uni
                     }}
                   >
                     完了にして開始
-                  </Button>
-                  <Button size="sm" variant="gray" className={hit} onClick={() => onAsk(false)}>
-                    やめる
                   </Button>
                 </div>
               </div>

@@ -4,7 +4,8 @@ import { useIsPhone } from "@/lib/media";
 import type { RecallItem } from "@/data";
 import { Avatar, Button, Sheet, cn } from "@/ui";
 import { CHANNEL_ICON } from "./RecallRowView";
-import { TEMPLATE, fillTemplate, type RecallRow } from "./model";
+import { BOOKING_URL, fillTemplate, makeTemplate, type RecallRow } from "./model";
+import { useSettings } from "../settings/store";
 
 const ORDER: RecallItem["channel"][] = ["LINE", "SMS", "メール", "電話"];
 
@@ -17,10 +18,12 @@ export function SendSheet({ open, rows, resend, onClose, onSend }: {
   onSend: (targets: RecallRow[]) => void;
 }) {
   const phone = useIsPhone();
+  const { info } = useSettings();
+  const TEMPLATE = makeTemplate(info);
   const [text, setText] = useState(TEMPLATE);
   useEffect(() => {
     if (open) setText(TEMPLATE);
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const targets = rows.filter(x => x.r.channel !== "電話");
   const callers = rows.filter(x => x.r.channel === "電話");
@@ -90,7 +93,7 @@ export function SendSheet({ open, rows, resend, onClose, onSend }: {
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          rows={phone ? 6 : 4}
+          rows={phone ? 8 : 6}
           aria-label="メッセージ"
           className="block w-full resize-none rounded-cell bg-fill/8 px-4 py-3 text-[16px] leading-[1.65] text-label outline-none placeholder:text-label3 focus:shadow-[inset_0_0_0_1.5px_rgb(var(--accent)/0.5)] md:text-[15px]"
         />
@@ -105,7 +108,13 @@ export function SendSheet({ open, rows, resend, onClose, onSend }: {
           <h3 className="px-1 pb-1.5 text-footnote font-medium text-label2">{sample.p.name}さんへの表示</h3>
           <div className="rounded-cell bg-fill/8 p-4">
             <div className="max-w-[440px] rounded-[18px] rounded-tl-[6px] bg-surface px-4 py-3 text-[15px] leading-[1.65] text-label shadow-[0_0_0_0.5px_rgb(var(--separator)/0.3)] whitespace-pre-wrap">
-              {preview || <span className="text-label3">（本文がありません）</span>}
+              {preview ? (
+                preview.split("\n").map((line, i) => (
+                  <span key={i} className={cn("block min-h-[1em]", line.trim() === BOOKING_URL && "text-accent")}>{line}</span>
+                ))
+              ) : (
+                <span className="text-label3">（本文がありません）</span>
+              )}
             </div>
             <div className="mt-2 text-[12px] text-label3">{sample.r.channel}で届きます</div>
           </div>

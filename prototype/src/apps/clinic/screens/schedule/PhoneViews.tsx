@@ -30,7 +30,7 @@ export function PhoneWeek({ date, byDate, now, dir, onOpenDay }: {
   const days = weekDays(date);
   return (
     <motion.div key={key(days[0])} initial={{ opacity: 0, x: dir * 18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: "spring", stiffness: 420, damping: 40 }}>
-      <ListSection className="mt-2" footer="日付を押すと、その日の予定表を開きます。">
+      <ListSection className="mt-2">
         {days.map(d => {
           const dk = key(d);
           const closed = closedInfo(d);
@@ -53,7 +53,7 @@ export function PhoneWeek({ date, byDate, now, dir, onOpenDay }: {
                 </span>
               )}
               subtitle={closed ? (closed.holiday ? `${closed.holiday}（祝日）` : `${WEEKDAYS[d.getDay()]}曜日は定休日`) : (
-                <span className="tnum">{past ? `稼働率 ${pct}%` : `空き ${st.free}枠 · 稼働率 ${pct}%`}{today ? " · 今日" : ""}</span>
+                <span className="tnum">{past ? `稼働率 ${pct}%` : `空き ${st.free}枠 · 稼働率 ${pct}%`}</span>
               )}
               trailing={closed ? undefined : <OccBar util={st.util} muted={past} className="w-12 shrink-0" />}
               chevron

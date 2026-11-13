@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarCheck, Inbox, PauseCircle, Send } from "lucide-react";
+import { CalendarCheck, Inbox, PauseCircle, Phone, Send } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { useIsPhone } from "@/lib/media";
+import { useIsPhone, useMinWidth } from "@/lib/media";
 import { Button, EmptyState, Page, Segmented, cn, spring, useToast } from "@/ui";
 import { useClinicUI } from "../context";
-import { useMinWidth } from "./notifications/util";
-import { STATUSES, useRecallRows, type RecallRow, type RecallStatus } from "./recall/model";
+import { STATUSES, STATUS_LABEL, useRecallRows, type RecallRow, type RecallStatus } from "./recall/model";
 import { RecallRowView, TABLE_COLS, type RowActions } from "./recall/RecallRowView";
 import { RecallSummary } from "./recall/Summary";
 import { SendSheet } from "./recall/SendSheet";
@@ -23,7 +22,7 @@ function SegLabel({ text, n }: { text: string; n?: number }) {
 
 const EMPTY: Record<RecallStatus, { title: string; message: string }> = {
   未連絡: { title: "未連絡の方はいません", message: "定期検診の時期が近い方には、すべて連絡済みです。" },
-  送信済み: { title: "返事待ちの方はいません", message: "送ったリコールから予約が入ると「予約済み」に移ります。" },
+  送信済み: { title: "連絡済みで返事待ちの方はいません", message: "ご案内を送った方・電話した方から予約が入ると「予約済み」に移ります。" },
   予約済み: { title: "まだ予約はありません", message: "リコールから予約が入ると、ここに表示されます。" },
   保留: { title: "保留の方はいません", message: "治療中・転居予定などで連絡を控える方を、ここに分けておけます。" },
 };
@@ -48,6 +47,8 @@ export default function RecallScreen({ param }: { param?: string }) {
   const shown = useMemo(() => rows.filter(x => x.r.status === tab), [rows, tab]);
   const canSelect = tab !== "予約済み" && shown.length > 0;
   const selected = shown.filter(x => picked.has(x.p.id));
+  const sendable = selected.filter(x => x.r.channel !== "電話").length;
+  const callers = selected.length - sendable;
 
   useEffect(() => {
     if (!canSelect) setSelecting(false);
@@ -77,6 +78,11 @@ export default function RecallScreen({ param }: { param?: string }) {
     resend: x => {
       setRecall(x.p.id, "送信済み");
       toast(`${x.r.channel}で再送しました`, { icon: Send, detail: `${x.p.name}さん` });
+    },
+    // 電話の方は「送る」ものがないので、かけ直したことだけを残す
+    calledAgain: x => {
+      setRecall(x.p.id, "送信済み");
+      toast("電話で連絡済みにしました", { icon: Phone, detail: `${x.p.name}さん` });
     },
     called: x => {
       setRecall(x.p.id, "送信済み");
@@ -126,7 +132,7 @@ export default function RecallScreen({ param }: { param?: string }) {
           onChange={changeTab}
           full={phone}
           className={phone ? undefined : "w-[440px]"}
-          options={STATUSES.map(s => ({ value: s, label: <SegLabel text={s} n={counts[s]} /> }))}
+          options={STATUSES.map(s => ({ value: s, label: <SegLabel text={STATUS_LABEL[s]} n={counts[s]} /> }))}
         />
       </div>
 
@@ -175,6 +181,8 @@ export default function RecallScreen({ param }: { param?: string }) {
             className="rounded-cell bg-surface"
           />
         )}
+        {/* スマホでは浮いているバーの下に最後の行が隠れないよう、同じ高さだけ空ける */}
+        {selecting && phone && <div aria-hidden className="h-[76px]" />}
         {!selecting && tab === "未連絡" && shown.length > 0 && (
           <p className="px-4 pt-1.5 text-footnote leading-[1.6] text-label2 [word-break:auto-phrase]">
             「選択」から、まとめて文面を確認して送れます。
@@ -196,9 +204,10 @@ export default function RecallScreen({ param }: { param?: string }) {
             <div className={cn("material-thick flex items-center gap-3 rounded-full py-2 pl-5 pr-2 shadow-float", !phone && "min-w-[420px]")}>
               <span className="min-w-0 flex-1 truncate text-[15px] font-medium tnum">
                 {selected.length ? `${selected.length}人を選択中` : "送る人を選んでください"}
+                {callers > 0 && <span className="font-normal text-label2">（電話 {callers}人）</span>}
               </span>
-              <Button variant="filled" size="md" icon={Send} disabled={!selected.length} onClick={() => setSheet(true)}>
-                {selected.length ? `${selected.length}人に${tab === "送信済み" ? "再送" : "送る"}` : "送る"}
+              <Button variant="filled" size="md" icon={Send} disabled={!sendable} onClick={() => setSheet(true)}>
+                {sendable ? `${sendable}人に${tab === "送信済み" ? "再送" : "送る"}` : "送る"}
               </Button>
             </div>
           </motion.div>

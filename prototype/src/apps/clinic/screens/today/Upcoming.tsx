@@ -52,10 +52,9 @@ export function UpcomingList({ t, showDone, onToggleDone }: { t: Today; showDone
 
   return (
     <div>
-      {t.finished.length > 0 && <Finished t={t} open={showDone} onToggle={onToggleDone} />}
       {am.length > 0 && (
         <>
-          <SubHeader first={t.finished.length === 0}>午前</SubHeader>
+          <SubHeader first>午前</SubHeader>
           {group(am, "am")}
         </>
       )}
@@ -67,15 +66,17 @@ export function UpcomingList({ t, showDone, onToggleDone }: { t: Today; showDone
       )}
       {pm.length > 0 && (
         <>
-          <SubHeader first={t.finished.length === 0 && am.length === 0}>午後</SubHeader>
+          <SubHeader first={am.length === 0}>午後</SubHeader>
           {group(pm, "pm")}
         </>
       )}
       {t.upcoming.length === 0 && (
-        <Group className={cn(t.finished.length > 0 && "mt-3")}>
+        <Group>
           <div className="px-4 py-3.5 text-[15px] leading-5 text-label2">このあと来院予定の予約はありません</div>
         </Group>
       )}
+      {/* 終わった予約は一覧の最後に（リマインダーの「実行済みを表示」と同じ位置） */}
+      {t.finished.length > 0 && <Finished t={t} open={showDone} onToggle={onToggleDone} />}
     </div>
   );
 }
@@ -95,9 +96,9 @@ function NowMarker({ t }: { t: Today }) {
       role="separator"
       aria-label={`現在 ${hm(t.nowMin)}`}
     >
-      <span className="w-[3.25rem] text-[12px] font-semibold leading-none text-accent tnum">{hm(t.nowMin)}</span>
-      <span className="relative h-[1.5px] flex-1 rounded-full bg-accent/60">
-        <span className="absolute -left-[3px] -top-[2.25px] h-1.5 w-1.5 rounded-full bg-accent" />
+      <span className="w-[3.25rem] text-[12px] font-semibold leading-none text-red tnum">{hm(t.nowMin)}</span>
+      <span className="relative h-[1.5px] flex-1 rounded-full bg-red">
+        <span className="absolute -left-[3px] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-red" />
       </span>
     </motion.div>
   );
@@ -136,7 +137,7 @@ export function TimeRow({ r, t, muted }: { r: Row; t: Today; muted?: boolean }) 
             className={hit}
             onClick={() => {
               setStatus(a.id, "arrived");
-              toast("受付しました", { detail: `${patient.name}さん・${hm(a.start)}の予約` });
+              toast("受付しました", { detail: `${patient.name}さん · ${hm(a.start)}の予約` });
             }}
           >
             受付する
@@ -169,7 +170,7 @@ function Finished({ t, open, onToggle }: { t: Today; open: boolean; onToggle: ()
   const n = (s: string) => t.finished.filter(r => r.a.status === s).length;
   const parts = [n("completed") && `完了 ${n("completed")}`, n("no_show") && `無断キャンセル ${n("no_show")}`, n("cancelled") && `キャンセル ${n("cancelled")}`].filter(Boolean);
   return (
-    <Group className="mb-1">
+    <Group className="mt-3 scroll-mt-16" id="today-finished">
       <button
         type="button"
         onClick={onToggle}
@@ -180,7 +181,7 @@ function Finished({ t, open, onToggle }: { t: Today; open: boolean; onToggle: ()
           <div className="text-[16px] leading-[21px] md:text-[15px] md:leading-5">
             終わった予約 <span className="tnum text-label2">{t.finished.length}件</span>
           </div>
-          <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2 tnum">{parts.join("・")}</div>
+          <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2 tnum">{parts.join(" · ")}</div>
         </div>
         <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.25, ease: easeOut }} className="flex shrink-0">
           <ChevronRight className="h-[18px] w-[18px] text-label3" strokeWidth={2.4} />

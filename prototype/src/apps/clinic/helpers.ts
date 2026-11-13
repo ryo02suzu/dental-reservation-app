@@ -7,9 +7,12 @@ import type { StatusKey } from "@/ui";
 
 export const LATE_GRACE = 5; // 予約開始からこの分数を過ぎても来院記録がなければ「未来院」
 
-/** 表示上の状態。今日の予約で、開始を過ぎても来院していないものは late */
+/**
+ * 表示上の状態。今日の予約で、開始＋LATE_GRACE を過ぎても来院記録がないものは late（未来院）。
+ * 受付・無断キャンセル・日時の変更など、ステータスが変わるまで当日中は未来院のまま（判定はここだけで行う）。
+ */
 export function statusOf(a: Appointment, now: Date): StatusKey {
-  if ((a.status === "confirmed" || a.status === "pending") && a.date === format(now, "yyyy-MM-dd") && minutesOfDay(now) >= a.start + LATE_GRACE && minutesOfDay(now) < a.end + 30) return "late";
+  if ((a.status === "confirmed" || a.status === "pending") && a.date === format(now, "yyyy-MM-dd") && minutesOfDay(now) >= a.start + LATE_GRACE) return "late";
   return a.status;
 }
 

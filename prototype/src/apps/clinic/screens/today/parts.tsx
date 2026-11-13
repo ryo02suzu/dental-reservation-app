@@ -27,8 +27,8 @@ export function Section({ title, count, aside, children, className, id }: {
 }
 
 /** 角丸の白い面にまとめた行のグループ */
-export function Group({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("overflow-hidden rounded-cell bg-surface", className)}>{children}</div>;
+export function Group({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
+  return <div id={id} className={cn("overflow-hidden rounded-cell bg-surface", className)}>{children}</div>;
 }
 
 /** 数字が変わったときだけ、縦にすっと入れ替える */

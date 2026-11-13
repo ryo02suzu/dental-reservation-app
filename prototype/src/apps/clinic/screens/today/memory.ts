@@ -9,11 +9,13 @@ export interface Memory {
   formSent: Record<string, true>;
   /** 保険証を確認した予約 */
   insurance: Record<string, true>;
+  /** 未来院の患者さんへの連絡（at は分、result は 不在／向かっている） */
+  contacted: Record<string, { at: number; result: "absent" | "coming"; eta?: number }>;
   /** ユニットごとの「さっき完了した予約」。次回予約の案内をしばらく出す（at はデモ時計のミリ秒） */
   done: Record<string, { apptId: string; at: number }>;
 }
 
-let state: Memory = { handedOff: {}, formSent: {}, insurance: {}, done: {} };
+let state: Memory = { handedOff: {}, formSent: {}, insurance: {}, contacted: {}, done: {} };
 const subs = new Set<() => void>();
 
 const subscribe = (cb: () => void) => {

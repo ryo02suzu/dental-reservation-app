@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { createContext, useContext, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { AnimatePresence, PresenceContext, motion, useIsPresent } from "framer-motion";
 import { useRoute } from "@/lib/nav";
 import { springPush } from "@/ui";
 import Home from "./screens/Home";
@@ -51,30 +51,49 @@ const STEPS = ["type", "menu", "time", "info", "confirm", "done"];
 const stepIndex = (p?: string) => Math.max(0, STEPS.indexOf(p ?? ""));
 
 function Stack({ k, order, children }: { k: string; order: number; children: ReactNode }) {
-  const last = useRef(order);
-  const dir = Math.sign(order - last.current);
-  useEffect(() => { last.current = order; }, [order]);
+  // 向き（進む＝1／戻る＝-1）は、画面（k）が変わった描画でだけ決める。
+  // 抜けていく途中で再描画されても向きが 0 に戻らないようにするため。
+  const [state, setState] = useState({ k, order, dir: 0 });
+  let dir = state.dir;
+  if (state.k !== k) {
+    dir = Math.sign(order - state.order);
+    setState({ k, order, dir });
+  }
   return (
     <div className="relative h-full overflow-hidden bg-bg">
       <AnimatePresence initial={false} custom={dir}>
-        <motion.div
-          key={k}
-          custom={dir}
-          variants={{
-            enter: (d: number) => (d > 0 ? { x: "100%" } : d < 0 ? { x: "-28%", opacity: 0.9 } : { opacity: 0 }),
-            center: { x: 0, opacity: 1 },
-            exit: (d: number) => (d > 0 ? { x: "-28%", opacity: 0.9 } : d < 0 ? { x: "100%" } : { opacity: 0 }),
-          }}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          transition={dir === 0 ? { duration: 0.15 } : springPush}
-          className="absolute inset-0 bg-bg"
-          style={{ zIndex: dir >= 0 ? 2 : 1 }}
-        >
+        <Layer key={k} dir={dir}>
           {children}
-        </motion.div>
+        </Layer>
       </AnimatePresence>
     </div>
+  );
+}
+
+const layerVariants = {
+  enter: (d: number) => (d > 0 ? { x: "100%" } : d < 0 ? { x: "-28%", opacity: 0.9 } : { opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (d: number) => (d > 0 ? { x: "-28%", opacity: 0.9 } : d < 0 ? { x: "100%" } : { opacity: 0 }),
+};
+
+/** 積み重ねの1枚。抜けていく面は操作を受けない（万一残っても下の画面をふさがない） */
+function Layer({ dir, children }: { dir: number; children: ReactNode }) {
+  const present = useIsPresent();
+  // 抜けていく面には、AnimatePresence が「いまの」向きを渡してくれる
+  const presence = useContext(PresenceContext);
+  const d = present ? dir : typeof presence?.custom === "number" ? presence.custom : dir;
+  return (
+    <motion.div
+      custom={d}
+      variants={layerVariants}
+      initial="enter"
+      animate="center"
+      exit="exit"
+      transition={d === 0 ? { duration: 0.15 } : springPush}
+      className="absolute inset-0 bg-bg"
+      style={{ zIndex: present ? 2 : d > 0 ? 1 : 3, pointerEvents: present ? "auto" : "none" }}
+    >
+      {children}
+    </motion.div>
   );
 }

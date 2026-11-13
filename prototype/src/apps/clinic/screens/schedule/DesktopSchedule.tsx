@@ -14,7 +14,7 @@ import { MonthGrid } from "./MonthGrid";
 import { Pager, StatLine, ToggleChip } from "./parts";
 import { WeekGrid } from "./WeekGrid";
 import {
-  PERIOD_UNIT, closedInfo, isDateKey, periodTitle, shiftDate, useByDate, usePeriodStats, type ColumnMode, type View,
+  PERIOD_UNIT, closedInfo, isDateKey, nextOpenDay, periodTitle, shiftDate, useByDate, usePeriodStats, type ColumnMode, type View,
 } from "./model";
 import { scheduleMemory } from "./memory";
 
@@ -87,6 +87,8 @@ export function DesktopSchedule({ param }: { param?: string }) {
 
   const isCurrent = view === "day" ? dk === TODAY_KEY : periodTitle(view, date) === periodTitle(view, fromKey(TODAY_KEY));
   const onNew = (p: NewPrefill) => ui.openNew(p);
+  // 休診日を表示しているときは、次の診療日で新規予約を開く
+  const newDate = view === "day" ? (closed ? key(nextOpenDay(date)) : dk) : undefined;
   const cancelledCount = dayAppts.length - dayAppts.filter(a => a.status !== "cancelled" && a.status !== "no_show").length;
 
   return (
@@ -106,11 +108,11 @@ export function DesktopSchedule({ param }: { param?: string }) {
             isCurrent={isCurrent}
           />
           {wide ? (
-            <Button size="sm" icon={Plus} className="ml-1.5" onClick={() => ui.openNew({ date: view === "day" ? dk : undefined })}>
-              予約を追加
+            <Button size="sm" icon={Plus} className="ml-1.5" onClick={() => ui.openNew({ date: newDate })}>
+              新規予約
             </Button>
           ) : (
-            <IconButton icon={Plus} label="予約を追加" variant="filled" size="sm" className="ml-1" onClick={() => ui.openNew({ date: view === "day" ? dk : undefined })} />
+            <IconButton icon={Plus} label="新規予約" variant="filled" size="sm" className="ml-1" onClick={() => ui.openNew({ date: newDate })} />
           )}
         </>
       }

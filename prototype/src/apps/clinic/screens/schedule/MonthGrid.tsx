@@ -53,22 +53,23 @@ export function MonthGrid({ date, byDate, now, dir, onOpenDay }: {
               onClick={() => onOpenDay(d)}
               className={cn(
                 "group relative flex min-w-0 flex-col px-2.5 pb-2.5 pt-2 text-left transition-colors hover:bg-fill/6",
-                closed && "hatch",
                 dk === selected && !today && "bg-fill/6",
                 today && "ring-[1.5px] ring-inset ring-accent/70",
               )}
               style={{ height: cellH }}
-              title={closed ? `${d.getMonth() + 1}月${d.getDate()}日　${closed.reason}` : `${d.getMonth() + 1}月${d.getDate()}日　予約 ${stat.count}件・稼働率 ${Math.round(stat.util * 100)}%`}
+              title={closed ? `${d.getMonth() + 1}月${d.getDate()}日 · ${closed.reason}` : `${d.getMonth() + 1}月${d.getDate()}日 · 予約 ${stat.count}件 · 稼働率 ${Math.round(stat.util * 100)}%`}
             >
+              {/* 休診日の斜線は薄く敷く（ダークでも月の中でいちばん目立たないように） */}
+              {closed && <span aria-hidden className="hatch pointer-events-none absolute inset-0 opacity-40" />}
               {!lastCol && <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-px origin-right scale-x-50 bg-sep/25" />}
               <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-px origin-bottom scale-y-50 bg-sep/25" />
-              <span className={cn("flex min-w-0 items-baseline gap-1.5", out && "opacity-40")}>
+              <span className={cn("relative flex min-w-0 items-baseline gap-1.5", out && "opacity-40")}>
                 <span className={cn("shrink-0 text-[15px] font-semibold tnum", today ? "text-accent" : closed ? "text-label3" : "text-label")}>
                   {d.getDate() === 1 ? `${d.getMonth() + 1}月1日` : d.getDate()}
                 </span>
                 {today && <span className="ml-auto shrink-0 text-[11px] font-semibold text-accent">今日</span>}
               </span>
-              <span className={cn("mt-auto min-w-0", out && "opacity-40")}>
+              <span className={cn("relative mt-auto min-w-0", out && "opacity-40")}>
                 {closed ? (
                   closed.holiday ? (
                     <span className="block truncate text-[12px] font-medium text-label2">{closed.holiday}</span>

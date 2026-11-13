@@ -14,6 +14,7 @@ export const CHANNEL_ICON: Record<RecallItem["channel"], LucideIcon> = { LINE: M
 export interface RowActions {
   send: (x: RecallRow) => void;
   resend: (x: RecallRow) => void;
+  calledAgain: (x: RecallRow) => void;
   called: (x: RecallRow) => void;
   hold: (x: RecallRow) => void;
   restore: (x: RecallRow) => void;
@@ -36,7 +37,13 @@ export const RecallRowView = forwardRef<HTMLDivElement, {
 }>(function RecallRowView({ x, table, selecting, checked, onToggle, act }, ref) {
   const { r, p } = x;
   const due = dueLabel(x);
-  const attention = due.overdue && r.status === "未連絡";
+  // 期限切れは赤にしない（「いま注意が必要」ではない）。超過の日数だけ太くして目に留まるようにする
+  const dueNode = (
+    <>
+      {due.date}
+      <span className={cn(due.overdue && r.status === "未連絡" ? "font-semibold text-label" : "text-label2")}>・{due.rest}</span>
+    </>
+  );
   const Ch = CHANNEL_ICON[r.channel];
   const lastText = md(x.lastCheckup);
   const sentText = r.sentAt ? `${md(r.sentAt)}に${r.channel === "電話" ? "連絡" : "送信"}` : undefined;
@@ -49,7 +56,9 @@ export const RecallRowView = forwardRef<HTMLDivElement, {
       ? <Button variant="tinted" size="sm" icon={ic ? Phone : undefined} onClick={() => act.called(x)}>電話した</Button>
       : <Button variant="tinted" size="sm" icon={ic ? Send : undefined} onClick={() => act.send(x)}>送る</Button>
   ) : r.status === "送信済み" ? (
-    <Button variant="gray" size="sm" icon={ic ? RotateCcw : undefined} onClick={() => act.resend(x)}>再送</Button>
+    r.channel === "電話"
+      ? <Button variant="gray" size="sm" icon={ic ? Phone : undefined} onClick={() => act.calledAgain(x)}>電話した</Button>
+      : <Button variant="gray" size="sm" icon={ic ? RotateCcw : undefined} onClick={() => act.resend(x)}>再送</Button>
   ) : r.status === "保留" ? (
     <Button variant="gray" size="sm" icon={ic ? Undo2 : undefined} onClick={() => act.restore(x)}>戻す</Button>
   ) : table && x.booked ? (
@@ -65,7 +74,7 @@ export const RecallRowView = forwardRef<HTMLDivElement, {
       {(r.status === "未連絡" || r.status === "送信済み") && (
         <>
           <MenuSeparator />
-          {!(r.status === "未連絡" && r.channel === "電話") && <MenuItem icon={Phone} onSelect={() => act.called(x)}>電話した</MenuItem>}
+          {r.channel !== "電話" && <MenuItem icon={Phone} onSelect={() => act.called(x)}>電話した</MenuItem>}
           {r.status === "送信済み" && <MenuItem icon={Undo2} onSelect={() => act.restore(x)}>未連絡に戻す</MenuItem>}
           <MenuItem icon={Pause} onSelect={() => act.hold(x)}>保留にする</MenuItem>
         </>
@@ -97,14 +106,14 @@ export const RecallRowView = forwardRef<HTMLDivElement, {
           <div className="truncate text-[12px] leading-4 text-label3">{p.kana}</div>
         ) : (
           <>
-            <div className={cn("mt-0.5 truncate text-[13px] leading-[18px] tnum", r.status === "予約済み" ? "text-label" : attention ? "text-red" : "text-label2")}>
-              {r.status === "予約済み" ? (bookedText ? `予約 ${bookedText}` : "予約済み") : `期限 ${due.text}`}
+            <div className={cn("mt-0.5 truncate text-[13px] leading-[18px] tnum", "text-label")}>
+              {r.status === "予約済み" ? (bookedText ? `予約 ${bookedText}` : "予約済み") : <>期限 {dueNode}</>}
             </div>
             <div className="mt-px flex min-w-0 items-center gap-1 truncate text-[12px] leading-4 text-label3 tnum">
               <Ch className="h-3 w-3 shrink-0" strokeWidth={2.2} />
               <span className="truncate">
                 {r.channel}
-                {r.status === "予約済み" || r.status === "送信済み" ? (sentText ? `・${sentText}` : "") : `・${p.recallMonths}か月ごと・前回 ${lastText}`}
+                {r.status === "予約済み" || r.status === "送信済み" ? (sentText ? `・${sentText}` : "") : `・前回 ${lastText}`}
               </span>
             </div>
           </>
@@ -116,8 +125,8 @@ export const RecallRowView = forwardRef<HTMLDivElement, {
   const body = table ? (
     <div className={cn("grid min-h-[56px] items-center gap-x-4 py-2 pl-4 pr-3", TABLE_COLS)}>
       <div className="flex min-w-0 items-center gap-3">{identity}</div>
-      <div className={cn("truncate text-[14px] tnum", r.status === "予約済み" ? "text-label" : attention ? "text-red" : "text-label")}>
-        {r.status === "予約済み" ? bookedText ?? "予約済み" : due.text}
+      <div className="truncate text-[14px] tnum text-label">
+        {r.status === "予約済み" ? bookedText ?? "予約済み" : dueNode}
         {r.status === "予約済み" && <div className="truncate text-[12px] text-label3">期限 {md(r.due)}</div>}
       </div>
       <div className="truncate text-[14px] text-label2 tnum">{lastText}</div>

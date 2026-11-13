@@ -27,12 +27,13 @@ export function Overview({ t, layout, onJump }: { t: Today; layout: "phone" | "t
             <AnimatedNumber value={it.value} className={cn("mt-1 text-[24px] font-semibold leading-7 tracking-[-0.01em]", it.red ? "text-red" : it.value === 0 ? "text-label3" : "text-label")} />
           </>
         );
-        return onJump && !row ? (
+        return onJump ? (
           <button
             key={it.label}
             type="button"
             onClick={() => onJump(it.to)}
-            className="flex flex-col items-start rounded-[10px] px-1.5 py-1 text-left transition-colors hover:bg-fill/6 active:bg-fill/12"
+            aria-label={`${it.label} ${it.value}件`}
+            className={cn("flex flex-col items-start rounded-[10px] py-1 text-left transition-colors hover:bg-fill/6 active:bg-fill/12", row ? "px-0.5" : "px-1.5")}
           >
             {body}
           </button>
@@ -75,7 +76,7 @@ function DayMap({ t, hourStep, className }: { t: Today; hourStep: number; classN
         <div className="relative h-4 flex-1">
           {showNow && (
             <span
-              className="absolute bottom-[5px] whitespace-nowrap text-[11px] font-semibold leading-none text-label tnum"
+              className="absolute bottom-[5px] whitespace-nowrap text-[11px] font-semibold leading-none text-red tnum"
               style={{ left: `${nowPct}%`, transform: `translateX(${nowPct < 6 ? "0" : nowPct > 94 ? "-100%" : "-50%"})` }}
             >
               {hm(t.nowMin)}
@@ -84,8 +85,8 @@ function DayMap({ t, hourStep, className }: { t: Today; hourStep: number; classN
         </div>
       </div>
       <div className="flex">
-        <div className="flex w-6 shrink-0 flex-col gap-[5px] text-[10px] font-medium leading-[6px] text-label3 tnum">
-          {units.map(u => <span key={u.id} className="h-[6px]">{u.short}</span>)}
+        <div className="flex w-6 shrink-0 flex-col gap-[6px] text-[11px] font-medium leading-[7px] text-label3 tnum">
+          {units.map(u => <span key={u.id} className="h-[7px]">{u.short}</span>)}
         </div>
         <div className="relative flex-1">
           {/* 昼休み */}
@@ -94,9 +95,9 @@ function DayMap({ t, hourStep, className }: { t: Today; hourStep: number; classN
             className="hatch absolute -bottom-1 -top-1 rounded-[3px]"
             style={{ left: `${pct(h.am[1])}%`, width: `${pct(h.pm[0]) - pct(h.am[1])}%` }}
           />
-          <div className="relative flex flex-col gap-[5px]">
+          <div className="relative flex flex-col gap-[6px]">
             {units.map(u => (
-              <div key={u.id} className="relative h-[6px]">
+              <div key={u.id} className="relative h-[7px]">
                 {t.rows
                   .filter(r => r.a.unitId === u.id && r.a.status !== "cancelled")
                   .map(r => {
@@ -126,7 +127,7 @@ function DayMap({ t, hourStep, className }: { t: Today; hourStep: number; classN
             ))}
           </div>
           {showNow && (
-            <span aria-hidden className="absolute -bottom-1 -top-1 w-[1.5px] -translate-x-1/2 rounded-full bg-label motion-safe:transition-[left] motion-safe:duration-700" style={{ left: `${nowPct}%` }} />
+            <span aria-hidden className="absolute -bottom-1 -top-1 w-[1.5px] -translate-x-1/2 rounded-full bg-red motion-safe:transition-[left] motion-safe:duration-700" style={{ left: `${nowPct}%` }} />
           )}
         </div>
       </div>
@@ -136,10 +137,10 @@ function DayMap({ t, hourStep, className }: { t: Today; hourStep: number; classN
           {hours.map((m, i) => (
             <span
               key={m}
-              className="absolute top-0 whitespace-nowrap text-[10px] leading-3 text-label3 tnum"
+              className="absolute top-0 whitespace-nowrap text-[11px] leading-3 text-label3 tnum"
               style={{ left: `${pct(m)}%`, transform: `translateX(${i === 0 ? "0" : i === hours.length - 1 ? "-100%" : "-50%"})` }}
             >
-              {`${Math.floor(m / 60)}時`}
+              {hm(m)}
             </span>
           ))}
         </div>

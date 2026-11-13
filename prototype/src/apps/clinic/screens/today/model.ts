@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { TODAY, TODAY_KEY, minutesOfDay, useNow } from "@/lib/clock";
 import { hoursFor, staffById, units, type Appointment, type Notice, type Staff, type Unit } from "@/data";
-import { LATE_GRACE, alertsOf, expand, isActive, useDay, type Expanded } from "../../helpers";
+import { alertsOf, expand, isActive, statusOf, useDay, type Expanded } from "../../helpers";
 import { useMemory, type Memory } from "./memory";
 
 /** 今日の予約1件と、画面で使う派生値 */
@@ -27,7 +27,8 @@ export interface UnitState {
 
 export type Attention =
   | { kind: "late"; key: string; row: Row }
-  | { kind: "alert"; key: string; row: Row; labels: string[]; prep?: string }
+  /** urgent：開始60分以内か外科処置。それ以外の申し送りは1行にまとめて畳む */
+  | { kind: "alert"; key: string; row: Row; labels: string[]; prep?: string; urgent: boolean }
   | { kind: "pending"; key: string; row: Row; requested?: Date }
   | { kind: "first"; key: string; row: Row; step: "form" | "insurance" };
 
@@ -48,6 +49,10 @@ export interface Today {
 export const DONE_WINDOW = 10 * 60_000;
 /** 注意事項を「対応が必要」に出すのは、予約の何分前から */
 export const ALERT_WINDOW = 120;
+/** そのうち、個別の行で出すのは何分前から（それより先は「注意事項の申し送り」に畳む） */
+export const ALERT_URGENT = 60;
+/** 対応が必要の並び：未来院 → 承認待ち → 初診の準備 → 申し送り。同じ種類の中は時刻順 */
+const RANK: Record<Attention["kind"], number> = { late: 0, pending: 1, first: 2, alert: 3 };
 /** 「受付する」をすぐ押せるようにするのは、予約の何分前から */
 export const CHECKIN_WINDOW = 30;
 
@@ -89,7 +94,8 @@ function staffOfUnit(unitId: string, rows: Row[]): Staff {
 function derive(day: Appointment[], now: Date, all: Appointment[], notices: Notice[], mem: Memory): Today {
   const nowMin = minutesOfDay(now);
   const rows: Row[] = day.map(a => {
-    const late = (a.status === "confirmed" || a.status === "pending") && nowMin >= a.start + LATE_GRACE;
+    // 未来院の判定は台帳・ApptRow と同じ statusOf に任せる
+    const late = statusOf(a, now) === "late";
     return { ...expand(a), late, overdue: late ? nowMin - a.start : 0 };
   });
 
@@ -127,7 +133,8 @@ function derive(day: Appointment[], now: Date, all: Appointment[], notices: Noti
     if (!labels.length) continue;
     const surgical = r.service.category === "外科";
     if (r.a.start - nowMin > ALERT_WINDOW && !surgical) continue;
-    attention.push({ kind: "alert", key: `alert-${r.a.id}`, row: r, labels, prep: surgical && r.a.note ? r.a.note : prepFor(labels, surgical) });
+    const urgent = surgical || r.a.status === "arrived" || r.a.start - nowMin <= ALERT_URGENT;
+    attention.push({ kind: "alert", key: `alert-${r.a.id}`, row: r, labels, prep: surgical && r.a.note ? r.a.note : prepFor(labels, surgical), urgent });
   }
   for (const r of rows) {
     if (r.a.status !== "pending" || r.late) continue;
@@ -138,6 +145,7 @@ function derive(day: Appointment[], now: Date, all: Appointment[], notices: Noti
     if (r.a.status === "confirmed" && !formAnswered(r.a.id) && !mem.formSent[r.a.id]) attention.push({ kind: "first", key: `first-${r.a.id}`, row: r, step: "form" });
     else if (r.a.status === "arrived" && !mem.insurance[r.a.id]) attention.push({ kind: "first", key: `first-${r.a.id}`, row: r, step: "insurance" });
   }
+  attention.sort((x, y) => RANK[x.kind] - RANK[y.kind] || x.row.a.start - y.row.a.start || x.row.a.unitId.localeCompare(y.row.a.unitId));
 
   return {
     now,
@@ -178,7 +186,7 @@ export function progressOf(r: Row, nowMin: number) {
 /** 経過時間の言い方 "12分" / "1時間5分" */
 export const mins = (m: number) => (m < 60 ? `${m}分` : `${Math.floor(m / 60)}時間${m % 60 ? `${m % 60}分` : ""}`);
 
-/** キャンセル歴の短い言い方 "キャンセル2回・無断1回" */
+/** キャンセル歴の短い言い方 "キャンセル2回・無断1回"（語の並列なので「・」） */
 export function riskText(c: number, n: number) {
   return [c ? `キャンセル${c}回` : "", n ? `無断${n}回` : ""].filter(Boolean).join("・");
 }

@@ -73,7 +73,7 @@ function UnitTile({ u, t }: { u: UnitState; t: Today }) {
               <Busy u={u} t={t} onDone={() => {
                 setStatus(busy.a.id, "completed");
                 remember(m => ({ done: { ...m.done, [u.unit.id]: { apptId: busy.a.id, at: t.now.getTime() } } }));
-                toast("診療を完了しました", { detail: `${u.unit.name}・${busy.patient.name}さん` });
+                toast("診療を完了しました", { detail: `${u.unit.name} · ${busy.patient.name}さん` });
               }} />
             ) : u.done ? (
               <Done
@@ -82,7 +82,15 @@ function UnitTile({ u, t }: { u: UnitState; t: Today }) {
                 onOpenNext={() => u.doneNext && ui.openAppointment(u.doneNext.id)}
               />
             ) : (
-              <Idle u={u} />
+              <Idle
+                u={u}
+                t={t}
+                onStart={() => {
+                  const nx = u.next!;
+                  setStatus(nx.a.id, "in_progress");
+                  toast("診療を開始しました", { detail: `${u.unit.name} · ${nx.patient.name}さん` });
+                }}
+              />
             )}
           </motion.div>
         </AnimatePresence>
@@ -152,8 +160,10 @@ function Done({ u, onBook, onOpenNext }: { u: UnitState; onBook: () => void; onO
   );
 }
 
-function Idle({ u }: { u: UnitState }) {
+function Idle({ u, t, onStart }: { u: UnitState; t: Today; onStart: () => void }) {
   const nx = u.next;
+  const here = nx?.a.status === "arrived";
+  const wait = here ? Math.max(0, t.nowMin - (nx!.a.arrivedAt ?? t.nowMin)) : 0;
   return (
     <>
       <div className="mt-2.5 text-[16px] font-semibold leading-[21px] text-label2 md:text-[15px] md:leading-5">空き</div>
@@ -163,8 +173,17 @@ function Idle({ u }: { u: UnitState }) {
             <div className="text-[12px] leading-4 text-label3 tnum">次は {hm(nx.a.start)}</div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[13px] font-medium leading-[18px] text-label">{nx.patient.name}さん</span>
-              {nx.a.status === "arrived" && <Tag className="shrink-0">待合</Tag>}
+              {here && <Tag className="shrink-0">来院済</Tag>}
             </div>
+            {/* 次の患者さんがもう来ていれば、ここから呼び入れられる（待合まで目を移さなくてよい） */}
+            {here && (
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="whitespace-nowrap text-[13px] font-medium leading-[18px] text-label tnum">{wait < 1 ? "いま来院" : `${mins(wait)}待ち`}</span>
+                <Button size="sm" variant="tinted" className={cn(hit, "pointer-events-auto -my-1 h-7 px-3")} onClick={onStart}>
+                  診療を開始
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <div className="text-[13px] leading-[18px] text-label3">本日の予約はありません</div>

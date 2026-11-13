@@ -1,5 +1,5 @@
 // 予約台帳の中だけで使う小さな部品
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import type { TileTone } from "@/data";
@@ -144,4 +144,19 @@ export function Dotted({ parts, className }: { parts: ReactNode[]; className?: s
       ))}
     </span>
   );
+}
+
+/** 要素の幅（ResizeObserver で追従）。台帳の列やレーンの幅から、中身の詰め方を決める */
+export function useWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [w, setW] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setW(el.clientWidth);
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
 }

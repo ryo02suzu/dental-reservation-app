@@ -19,7 +19,7 @@ import { useMinWidth, useStickyTop } from "./today/layout";
 /**
  * 今日（受付のホーム）。ひと目で「誰が来ていて、次は誰か、誰が遅れているか、どのユニットが空いているか、
  * いま何をすればよいか」がわかるように、優先順に並べる。
- * スマホ・iPad縦：上から優先順の1列 / 1024px以上：左に「対応が必要・これから」、右にユニットと待合（右は画面に貼り付く）
+ * スマホ・iPad縦：上から優先順の1列（待合 → 対応が必要 → ユニット → これから） / 1024px以上：左に「対応が必要・これから」、右にユニットと待合（右は画面に貼り付く）
  */
 export default function TodayScreen({ param }: { param?: string }) {
   void param;
@@ -35,7 +35,7 @@ export default function TodayScreen({ param }: { param?: string }) {
 
   const jump = useCallback((to: JumpTarget) => {
     if (to === "finished") setShowDone(true);
-    const id = to === "finished" ? "today-upcoming" : `today-${to}`;
+    const id = `today-${to}`;
     requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }, []);
 
@@ -45,7 +45,7 @@ export default function TodayScreen({ param }: { param?: string }) {
       <span className="whitespace-nowrap tnum">
         <span className="mr-2 text-label4" aria-hidden>·</span>
         {phase.label}
-        {phase.detail ? `・${phase.detail}` : ""}
+        {phase.detail ? ` · ${phase.detail}` : ""}
       </span>
     </span>
   );
@@ -96,7 +96,7 @@ export default function TodayScreen({ param }: { param?: string }) {
       <LayoutGroup id="today">
         {desktop ? (
           <>
-            <Overview t={t} layout={wide ? "wide" : "desktop"} />
+            <Overview t={t} layout={wide ? "wide" : "desktop"} onJump={jump} />
             <div className={cn("mt-8 grid items-start", wide ? "grid-cols-[minmax(0,1fr)_340px] gap-8" : "grid-cols-[minmax(0,1fr)_316px] gap-6")}>
               <div className="space-y-9">
                 {attention}
@@ -109,10 +109,11 @@ export default function TodayScreen({ param }: { param?: string }) {
             </div>
           </>
         ) : (
+          // 1列のときは、いま待っている人 → 対応 → ユニット → これから の順
           <div className="space-y-8">
             <Overview t={t} layout={phone ? "phone" : "tablet"} onJump={jump} />
-            {attention}
             {waiting}
+            {attention}
             {unitsBlock}
             {upcoming}
           </div>

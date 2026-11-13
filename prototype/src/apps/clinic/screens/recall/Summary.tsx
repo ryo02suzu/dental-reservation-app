@@ -1,19 +1,20 @@
 import { Ring, cn } from "@/ui";
 import type { RecallRow } from "./model";
 
-/** 上の要約：対象・連絡済み・予約済みと予約率のリング（事実だけを並べる） */
+/** 上の要約：対象・未連絡・返事待ち・予約済みと予約率のリング（事実だけを並べる） */
 export function RecallSummary({ rows, compact }: { rows: RecallRow[]; compact: boolean }) {
   const total = rows.length;
   const booked = rows.filter(x => x.r.status === "予約済み").length;
-  const contacted = rows.filter(x => x.r.status === "送信済み" || x.r.status === "予約済み").length;
+  const waitingReply = rows.filter(x => x.r.status === "送信済み").length;
   const waiting = rows.filter(x => x.r.status === "未連絡").length;
   const overdue = rows.filter(x => x.r.status === "未連絡" && x.days < 0).length;
   const rate = total ? booked / total : 0;
+  // スマホは3つに絞る（対象の人数はリングの予約率の分母として読める）
   const stats = [
-    { label: "対象", value: total },
-    { label: "連絡済み", value: contacted },
+    ...(compact ? [] : [{ label: "対象", value: total }]),
+    { label: "未連絡", value: waiting },
+    { label: "返事待ち", value: waitingReply },
     { label: "予約済み", value: booked },
-    ...(compact ? [] : [{ label: "未連絡", value: waiting }]),
   ];
   return (
     <div className="rounded-card bg-surface">
@@ -40,9 +41,8 @@ export function RecallSummary({ rows, compact }: { rows: RecallRow[]; compact: b
         </div>
       </div>
       {overdue > 0 && (
-        <div className={cn("hairline-t flex items-center gap-2 text-[13px] text-label2", compact ? "px-4 py-2.5" : "px-6 py-3")}>
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red" aria-hidden />
-          <span className="[word-break:auto-phrase]">期限を過ぎて未連絡の方が<span className="font-semibold text-red tnum">{overdue}人</span>います</span>
+        <div className={cn("hairline-t text-[13px] text-label2", compact ? "px-4 py-2.5" : "px-6 py-3")}>
+          <span className="[word-break:auto-phrase]">{compact ? `対象 ${total}人のうち、` : ""}期限を過ぎて未連絡の方が<span className="font-semibold text-label tnum">{overdue}人</span>います</span>
         </div>
       )}
     </div>

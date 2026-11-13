@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  BarChart3, Bell, BellRing, CalendarClock, CalendarDays, Ellipsis, NotebookPen, Search, Settings, Sun, Users,
+  BarChart3, Bell, BellRing, CalendarClock, CalendarDays, Ellipsis, NotebookPen, PanelLeft, Search, Settings, Sun, Users,
 } from "lucide-react";
 import { useRoute, type AppId } from "@/lib/nav";
-import { useIsPhone } from "@/lib/media";
+import { useIsPhone, useIsWide } from "@/lib/media";
 import { useStore } from "@/lib/store";
 import { TODAY_KEY, useNow } from "@/lib/clock";
-import { clinic, staff } from "@/data";
+import { hm } from "@/lib/format";
+import { clinic, hoursFor, staff } from "@/data";
 import { Avatar, PageInsetContext, cn, springPush } from "@/ui";
 import { ArcheMark } from "@/apps/launcher/ArcheMark";
 import { ClinicUICtx, type ClinicUI, type NewPrefill } from "./context";
@@ -158,10 +159,19 @@ function TabBar({ active, onTab }: { active: string; onTab: (t: string) => void 
 }
 
 // ─── PC：サイドバー＋本文 ───────────────────────────────────────────────────
+/** サイドバーの幅。畳むとアイコンだけの細い列になる（iPad幅では最初から畳む） */
+const SIDEBAR_W = 264;
+const RAIL_W = 64;
+
 function DesktopLayout({ screenKey, def, param, onNav, onSearch, onExit }: {
   screenKey: string; def: ScreenDef; param?: string; onNav: (s: string) => void; onSearch: () => void; onExit: () => void;
 }) {
   const Screen = def.component;
+  const wide = useIsWide();
+  // 利用者が切り替えたらそれを優先。幅の段階が変わったら既定（広い画面は開く、iPad幅は畳む）に戻す
+  const [override, setOverride] = useState<boolean | null>(null);
+  useEffect(() => setOverride(null), [wide]);
+  const collapsed = override ?? !wide;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); onSearch(); }
@@ -171,7 +181,7 @@ function DesktopLayout({ screenKey, def, param, onNav, onSearch, onExit }: {
   }, [onSearch]);
   return (
     <div className="flex h-full bg-bg">
-      <Sidebar active={screenKey} onNav={onNav} onSearch={onSearch} onExit={onExit} />
+      <Sidebar active={screenKey} collapsed={collapsed} onToggle={() => setOverride(!collapsed)} onNav={onNav} onSearch={onSearch} onExit={onExit} />
       <main className="relative min-w-0 flex-1">
         <AnimatePresence initial={false} mode="popLayout">
           <motion.div
@@ -190,68 +200,114 @@ function DesktopLayout({ screenKey, def, param, onNav, onSearch, onExit }: {
   );
 }
 
-function Sidebar({ active, onNav, onSearch, onExit }: { active: string; onNav: (s: string) => void; onSearch: () => void; onExit: () => void }) {
+function Sidebar({ active, collapsed, onToggle, onNav, onSearch, onExit }: {
+  active: string; collapsed: boolean; onToggle: () => void; onNav: (s: string) => void; onSearch: () => void; onExit: () => void;
+}) {
   const { notices, recalls, currentStaffId } = useStore();
-  // 件数は「対応が必要なもの」だけに出す（未読のお知らせ・未連絡のリコール）
+  const now = useNow(60_000);
+  // 件数は「対応が必要なもの」だけに出す（未読のお知らせ・未連絡のリコール）。赤はスマホのタブバーのバッジだけに使う
   const counts: Record<string, number | undefined> = {
     notifications: notices.filter(n => !n.read).length || undefined,
     recall: recalls.filter(r => r.status === "未連絡").length || undefined,
   };
   const me = staff.find(s => s.id === currentStaffId) ?? staff.find(s => s.role === "受付")!;
+  const h = hoursFor(now);
+  const hours = h ? `本日 ${hm(h.am[0])}〜${hm(h.pm[1])}` : "本日は休診日";
+  const fade = cn("transition-opacity duration-200", collapsed && "pointer-events-none opacity-0");
   return (
-    <aside className="hairline-r flex w-[248px] shrink-0 flex-col bg-surface2/80 lg:w-[264px]">
-      <div className="flex items-center gap-2.5 px-4 pb-3 pt-5">
-        <ArcheMark size={34} />
-        <div className="min-w-0">
-          <div className="truncate text-[14px] font-semibold leading-tight">{clinic.name}</div>
-          <div className="text-[12px] text-label2">プロプラン · ユニット4台</div>
+    <motion.aside
+      initial={false}
+      animate={{ width: collapsed ? RAIL_W : SIDEBAR_W }}
+      transition={{ type: "spring", stiffness: 420, damping: 42 }}
+      className="hairline-r relative shrink-0 overflow-hidden bg-surface2/80"
+      aria-label="メインメニュー"
+    >
+      {/* 中身は開いたときの幅で固定し、畳むと右側が隠れる（アイコンの位置は動かない） */}
+      <div className="flex h-full flex-col" style={{ width: SIDEBAR_W }}>
+        <div className="flex h-[52px] shrink-0 items-center px-3.5">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={collapsed ? "サイドバーを開く" : "サイドバーを畳む"}
+            aria-expanded={!collapsed}
+            title={collapsed ? "サイドバーを開く" : "サイドバーを畳む"}
+            className="flex h-9 w-9 items-center justify-center rounded-[9px] text-label2 transition-colors hover:bg-fill/10 hover:text-label active:bg-fill/16"
+          >
+            <PanelLeft className="h-[19px] w-[19px]" strokeWidth={1.9} />
+          </button>
         </div>
-      </div>
-      <div className="px-3 pb-2">
-        <button onClick={onSearch} className="flex h-8 w-full items-center gap-2 rounded-[9px] bg-fill/12 px-2.5 text-[13px] text-label2 transition-colors hover:bg-fill/16">
-          <Search className="h-[15px] w-[15px]" strokeWidth={2.2} />
-          患者・予約を検索
-          <kbd className="ml-auto rounded-[5px] bg-surface px-1.5 py-px font-sans text-[11px] text-label3 shadow-[0_0_0_0.5px_rgb(var(--separator)/0.4)]">⌘K</kbd>
-        </button>
-      </div>
-      <nav className="no-scrollbar flex-1 overflow-y-auto px-3 pb-4">
-        {SIDEBAR.map((g, gi) => (
-          <div key={gi} className={cn(gi > 0 && "mt-4")}>
-            {g.header && <div className="px-2.5 pb-1 text-[11px] font-semibold text-label3">{g.header}</div>}
-            {g.items.map(id => {
-              const d = CLINIC_SCREENS[id];
-              const on = active === id;
-              const Icon = d.icon;
-              const n = counts[id];
-              return (
-                <button
-                  key={id}
-                  onClick={() => onNav(id)}
-                  aria-current={on ? "page" : undefined}
-                  className={cn("relative flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-2.5 text-[14px] transition-colors", on ? "font-semibold text-label" : "text-label hover:bg-fill/8")}
-                >
-                  {on && <motion.span layoutId="sidebar-active" className="absolute inset-0 rounded-[8px] bg-fill/14" transition={{ type: "spring", stiffness: 500, damping: 40 }} />}
-                  <Icon className={cn("relative h-[18px] w-[18px]", on ? "text-accent" : "text-label2")} strokeWidth={on ? 2.2 : 1.9} />
-                  <span className="relative">{d.title}</span>
-                  {n !== undefined && (
-                    <span className={cn("relative ml-auto text-[12px] font-semibold tnum", id === "notifications" ? "rounded-full bg-red px-1.5 text-white" : "text-label3")}>{n}</span>
-                  )}
-                </button>
-              );
-            })}
+        <div className="flex items-center gap-2.5 px-[15px] pb-3">
+          <ArcheMark size={34} />
+          <div className={cn("min-w-0", fade)}>
+            <div className="truncate text-[14px] font-semibold leading-tight">{clinic.name}</div>
+            <div className="text-[12px] text-label2 tnum">{hours}</div>
           </div>
-        ))}
-      </nav>
-      <div className="hairline-t flex items-center gap-2.5 px-4 py-3">
-        <Avatar name={me.name} tone={me.tone} size={30} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold leading-tight">{me.name}</div>
-          <div className="text-[11px] text-label2">{me.role}</div>
         </div>
-        <button onClick={onExit} className="rounded-md px-1.5 py-1 text-[11px] text-label3 hover:bg-fill/10 hover:text-label2" title="プロトタイプのトップへ">
-          トップへ
-        </button>
+        <div className="px-3 pb-2">
+          <button
+            onClick={onSearch}
+            title="患者・予約を検索（⌘K）"
+            className={cn("flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap rounded-[9px] bg-fill/12 px-[11px] text-[13px] text-label2 transition-[width,background-color] hover:bg-fill/16", collapsed ? "w-10" : "w-full")}
+          >
+            <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={2.2} />
+            <span className={fade}>患者・予約を検索</span>
+            <kbd className={cn("ml-auto rounded-[5px] bg-surface px-1.5 py-px font-sans text-[11px] text-label3 shadow-[0_0_0_0.5px_rgb(var(--separator)/0.4)]", fade)}>⌘K</kbd>
+          </button>
+        </div>
+        <nav className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4">
+          {SIDEBAR.map((g, gi) => (
+            <div key={gi} className={cn(gi > 0 && "mt-4")}>
+              {g.header && (
+                <div className="relative h-5 px-2.5 text-[11px] font-semibold leading-5 text-label3">
+                  <span className={fade}>{g.header}</span>
+                  {/* 畳んだときは見出しの代わりに短い区切り線 */}
+                  <span aria-hidden className={cn("absolute left-2.5 top-1/2 h-px w-5 origin-top scale-y-50 bg-sep/40 transition-opacity duration-200", collapsed ? "opacity-100" : "opacity-0")} />
+                </div>
+              )}
+              {g.items.map(id => {
+                const d = CLINIC_SCREENS[id];
+                const on = active === id;
+                const Icon = d.icon;
+                const n = counts[id];
+                return (
+                  <button
+                    key={id}
+                    onClick={() => onNav(id)}
+                    aria-current={on ? "page" : undefined}
+                    aria-label={n ? `${d.title}（${n}件）` : d.title}
+                    title={collapsed ? (n ? `${d.title}（${n}件）` : d.title) : undefined}
+                    className={cn(
+                      "relative flex h-[34px] items-center gap-2.5 whitespace-nowrap rounded-[8px] px-[11px] text-[14px] transition-[width,background-color]",
+                      collapsed ? "w-10" : "w-full",
+                      on ? "font-semibold text-label" : "text-label hover:bg-fill/8",
+                    )}
+                  >
+                    {on && <motion.span layoutId="sidebar-active" className="absolute inset-0 rounded-[8px] bg-fill/14" transition={{ type: "spring", stiffness: 500, damping: 40 }} />}
+                    <span className="relative flex shrink-0">
+                      <Icon className={cn("h-[18px] w-[18px]", on ? "text-accent" : "text-label2")} strokeWidth={on ? 2.2 : 1.9} />
+                      {n !== undefined && collapsed && <span aria-hidden className="absolute -right-[3px] -top-[2px] h-[7px] w-[7px] rounded-full bg-label2 ring-2 ring-surface2" />}
+                    </span>
+                    <span className={cn("relative", fade)}>{d.title}</span>
+                    {n !== undefined && <span className={cn("relative ml-auto text-[12px] font-semibold text-label3 tnum", fade)}>{n}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="hairline-t flex items-center gap-2.5 px-[17px] py-3">
+          <span title={collapsed ? `${me.name}（${me.role}）` : undefined} className="flex shrink-0">
+            <Avatar name={me.name} tone={me.tone} size={30} />
+          </span>
+          <div className={cn("min-w-0 flex-1", fade)}>
+            <div className="truncate text-[13px] font-semibold leading-tight">{me.name}</div>
+            <div className="text-[11px] text-label2">{me.role}</div>
+          </div>
+          <button onClick={onExit} tabIndex={collapsed ? -1 : undefined} className={cn("rounded-md px-1.5 py-1 text-[11px] text-label3 hover:bg-fill/10 hover:text-label2", fade)} title="プロトタイプのトップへ">
+            トップへ
+          </button>
+        </div>
       </div>
-    </aside>
+    </motion.aside>
   );
 }

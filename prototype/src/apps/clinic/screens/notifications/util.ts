@@ -1,24 +1,9 @@
-import { useEffect, useState } from "react";
 import { differenceInCalendarDays } from "date-fns";
 import { BellRing, CalendarClock, CalendarX, Globe, Send, Settings2, Star } from "lucide-react";
 import { minutesOfDay } from "@/lib/clock";
 import { hm, md } from "@/lib/format";
-import type { Notice, TileTone } from "@/data";
+import type { Appointment, Notice, TileTone } from "@/data";
 import type { LucideIcon } from "lucide-react";
-
-/** 幅のメディアクエリ（共有の media.ts にない 1024px 以上の判定に使う） */
-export function useMinWidth(px: number): boolean {
-  const q = `(min-width: ${px}px)`;
-  const [m, setM] = useState(() => (typeof window !== "undefined" ? window.matchMedia(q).matches : false));
-  useEffect(() => {
-    const mq = window.matchMedia(q);
-    const on = () => setM(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, [q]);
-  return m;
-}
 
 export const KIND: Record<Notice["kind"], { icon: LucideIcon; tone: TileTone; label: string }> = {
   web: { icon: Globe, tone: "ocean", label: "Web予約" },
@@ -57,3 +42,12 @@ export function noticeStamp(at: Date, n: Date): string {
   if (d === 1) return `昨日 ${t}`;
   return `${md(at)} ${t}`;
 }
+
+/** 承認待ちで届いたWeb予約が、その後に確定・キャンセルされていれば本文の「（承認待ち）」を外す */
+export function liveBody(n: Notice, appt?: Appointment): string {
+  if (!appt || appt.status === "pending" || !n.body.includes("（承認待ち）")) return n.body;
+  return n.body.replace("（承認待ち）", "");
+}
+
+/** この画面で確定した時刻（お知らせID → 時刻）。保存はしない */
+export const confirmedAt = new Map<string, Date>();

@@ -3,12 +3,14 @@ import { differenceInCalendarDays, subMonths } from "date-fns";
 import { TODAY, TODAY_KEY } from "@/lib/clock";
 import { md } from "@/lib/format";
 import { useStore } from "@/lib/store";
-import { patientById, type Appointment, type Patient, type RecallItem } from "@/data";
+import { clinic, patientById, type Appointment, type Patient, type RecallItem } from "@/data";
 import { isActive } from "@/apps/clinic/helpers";
 import "./roster";
 
 export type RecallStatus = RecallItem["status"];
 export const STATUSES: RecallStatus[] = ["未連絡", "送信済み", "予約済み", "保留"];
+/** 画面に出す呼び名。電話で連絡した方も入るので「送信済み」ではなく「連絡済み」と呼ぶ */
+export const STATUS_LABEL: Record<RecallStatus, string> = { 未連絡: "未連絡", 送信済み: "連絡済み", 予約済み: "予約済み", 保留: "保留" };
 const CHECKUP = new Set(["sv01", "sv02", "sv09"]);
 
 export interface RecallRow {
@@ -54,15 +56,18 @@ export function useRecallRows(): RecallRow[] {
   return rows;
 }
 
-/** 期限の表示：「11月10日・3日超過」「今日まで」「11月25日・あと12日」 */
-export function dueLabel(x: RecallRow): { text: string; overdue: boolean } {
-  if (x.days < 0) return { text: `${md(x.r.due)}・${-x.days}日超過`, overdue: true };
-  if (x.days === 0) return { text: `${md(x.r.due)}・今日まで`, overdue: false };
-  return { text: `${md(x.r.due)}・あと${x.days}日`, overdue: false };
+/** 期限の表示：「11月10日・3日超過」「今日まで」「11月25日・あと12日」（日付と残りを分けて返す） */
+export function dueLabel(x: RecallRow): { text: string; date: string; rest: string; overdue: boolean } {
+  const date = md(x.r.due);
+  const rest = x.days < 0 ? `${-x.days}日超過` : x.days === 0 ? "今日まで" : `あと${x.days}日`;
+  return { text: `${date}・${rest}`, date, rest, overdue: x.days < 0 };
 }
 
-/** メッセージのひな形。{氏名} {間隔} は送るときに患者さんごとに置き換える */
-export const TEMPLATE =
-  "【ひだまり歯科クリニック】{氏名}さま 前回の定期検診から{間隔}が経ちました。お口の健康を保つため、定期検診のご予約をおすすめします。ご予約はWeb予約から24時間受け付けています。";
+/** Web予約ページのアドレス（設定の「医院の情報」と同じもの） */
+export const BOOKING_URL = `arche.jp/r/${clinic.slug}`;
+
+/** メッセージのひな形。{氏名} {間隔} は送るときに患者さんごとに置き換える。医院名と電話番号は設定の値を使う */
+export const makeTemplate = (info: { name: string; phone: string }) =>
+  `【${info.name}】{氏名}さま\n前回の定期検診から{間隔}が経ちました。お口の健康を保つため、定期検診のご予約をおすすめします。\nご予約はこちらから（24時間受付）\n${BOOKING_URL}\nお電話：${info.phone}`;
 
 export const fillTemplate = (t: string, p: Patient) => t.replace(/\{氏名\}/g, p.name).replace(/\{間隔\}/g, `${p.recallMonths}か月`);

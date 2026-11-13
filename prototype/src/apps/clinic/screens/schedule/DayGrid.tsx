@@ -9,6 +9,7 @@ import { Avatar, cn } from "@/ui";
 import type { NewPrefill } from "../../context";
 import { isActive } from "../../helpers";
 import { ApptBlock, roleShort } from "./ApptBlock";
+import { useWidth } from "./parts";
 import {
   SLOT, SLOT_BOOK, blockedBands, floorTo, placeLanes, sessionsOf, staffColumns, staffOn, timeRange,
   useAssignments, type ColumnMode,
@@ -26,7 +27,13 @@ const HEAD_H = 52;
 interface Col {
   id: string;
   title: string;
+  /** 列が狭いときの見出し（「U1 佐伯」） */
+  short: string;
   sub: ReactNode;
+  /** 列が狭いときの2段目（職種だけ） */
+  shortSub: string;
+  /** 列の主（ユニット列＝主担当、担当者列＝ふだんのユニット）。ブロックで繰り返さない */
+  main?: string;
   avatar?: { name: string; tone: TileTone };
   count: number;
   list: Appointment[];
@@ -73,7 +80,10 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
         return {
           id: u.id,
           title: u.name,
+          short: st ? `${u.short} ${st.short}` : u.short,
           sub: st ? <>{st.short} · <Role role={st.role} />{ids.length > 1 ? ` ほか${ids.length - 1}名` : ""}</> : "担当なし",
+          shortSub: st ? `${roleShort(st.role)}${ids.length > 1 ? ` ほか${ids.length - 1}` : ""}` : "担当なし",
+          main,
           avatar: st ? { name: st.name, tone: st.tone } : undefined,
           count: mine.filter(isActive).length,
           list: mine.filter(visible),
@@ -91,7 +101,10 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
       return {
         id: s.id,
         title: s.name,
+        short: unit ? `${s.short} ${unit.short}` : s.short,
         sub: <><Role role={s.role} />{unit ? ` · ${unit.short}` : ""}</>,
+        shortSub: roleShort(s.role),
+        main: unitId,
         avatar: { name: s.name, tone: s.tone },
         count: mine.filter(isActive).length,
         list: mine.filter(visible),
@@ -102,6 +115,11 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
   }, [mode, appts, showCancelled, staffOfUnit, unitOfStaff]);
 
   const placed = useMemo(() => new Map(cols.map(c => [c.id, placeLanes(c.list)])), [cols]);
+
+  // 列の幅（iPad縦などで狭いときは、見出しとブロックの中身を詰める）
+  const [wrapRef, wrapW] = useWidth<HTMLDivElement>();
+  const colW = wrapW ? (wrapW - GUTTER - 12) / cols.length : 300;
+  const tightHead = colW < 180;
 
   // ─── 空いている時間：ホバーで「+ 10:30」、クリックで新規予約 ───
   const nowMin = minutesOfDay(now);
@@ -156,21 +174,28 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
   const total = cols.reduce((s, c) => s + c.count, 0);
 
   return (
-    <div className="bg-surface">
-      {/* 列の見出し（スクロールしても上に残る） */}
+    <div ref={wrapRef} className="bg-surface">
+      {/* 列の見出し（スクロールしても上に残る）。狭いときはアバターを外し「U1 佐伯／Dr · 11件」の2段にする */}
       <div className="hairline-b sticky z-20 grid bg-surface pr-3" style={{ ...template, top: BAR_H, height: HEAD_H }}>
         <div />
         {cols.map(c => (
-          <div key={c.id} className="flex min-w-0 items-center gap-2.5 pl-3 pr-2.5">
-            {c.avatar && <Avatar name={c.avatar.name} tone={c.avatar.tone} size={28} />}
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-baseline gap-2">
-                <span className="min-w-0 truncate text-[13px] font-semibold leading-4 palt">{c.title}</span>
-                <span className="ml-auto shrink-0 text-[12px] leading-4 text-label3 tnum">{c.count}件</span>
-              </div>
-              <div className="mt-0.5 truncate text-[12px] leading-4 text-label2">{c.sub}</div>
+          tightHead ? (
+            <div key={c.id} className="flex min-w-0 flex-col justify-center pl-2.5 pr-2" title={`${c.title}（${c.count}件）`}>
+              <span className="truncate text-[13px] font-semibold leading-4 palt">{c.short}</span>
+              <span className="mt-0.5 truncate text-[12px] leading-4 text-label2 tnum">{c.shortSub} · {c.count}件</span>
             </div>
-          </div>
+          ) : (
+            <div key={c.id} className="flex min-w-0 items-center gap-2.5 pl-3 pr-2.5">
+              {c.avatar && <Avatar name={c.avatar.name} tone={c.avatar.tone} size={28} />}
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <span className="min-w-0 truncate text-[13px] font-semibold leading-4 palt">{c.title}</span>
+                  <span className="ml-auto shrink-0 text-[12px] leading-4 text-label3 tnum">{c.count}件</span>
+                </div>
+                <div className="mt-0.5 truncate text-[12px] leading-4 text-label2">{c.sub}</div>
+              </div>
+            </div>
+          )
         ))}
       </div>
 
@@ -234,6 +259,8 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
                       mode={mode}
                       now={now}
                       onOpen={onOpen}
+                      colMain={c.main}
+                      narrow={colW / p.lanes < 160}
                     />
                   ))}
                 </AnimatePresence>
@@ -264,7 +291,7 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
             <div key={b.start} className="absolute inset-x-0 flex items-center justify-center" style={{ top: yOf(b.start), height: (b.end - b.start) * PPM }}>
               <span className="rounded-full bg-surface px-2.5 py-[3px] text-[12px] font-medium leading-4 text-label2 tnum shadow-[0_0_0_0.5px_rgb(var(--separator)/0.25)]">
                 {b.label}
-                <span className="ml-1.5 text-label3">{hm(b.start)}–{hm(b.end)}</span>
+                <span className="ml-1.5 text-label3">{hm(b.start)}〜{hm(b.end)}</span>
               </span>
             </div>
           ))}

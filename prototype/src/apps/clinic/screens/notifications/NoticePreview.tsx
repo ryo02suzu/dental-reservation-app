@@ -1,15 +1,15 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { BellRing, CalendarPlus, Check, ExternalLink, Settings2, UserRound } from "lucide-react";
+import { BellRing, CalendarPlus, Check, CircleCheck, CircleX, ExternalLink, Settings2, UserRound } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { TODAY_KEY } from "@/lib/clock";
+import { TODAY_KEY, minutesOfDay, now as clockNow } from "@/lib/clock";
 import { fromKey, hm, mdw } from "@/lib/format";
 import { patientById, unitById, type Notice } from "@/data";
 import { Button, IconTile, cn, useToast } from "@/ui";
 import { ApptRow } from "@/apps/clinic/ApptRow";
 import { useClinicUI } from "@/apps/clinic/context";
-import { KIND, noticeStamp } from "./util";
+import { KIND, confirmedAt, liveBody, noticeStamp } from "./util";
 
-/** PC（1024px以上）の右側：選んだお知らせの詳細と、その場でできる操作 */
+/** PC・iPad横（1024px以上）の右側：選んだお知らせの詳細と、その場でできる操作 */
 export function NoticePreview({ n, now, unread }: { n?: Notice; now: Date; unread: number }) {
   return (
     <div className="rounded-card bg-surface">
@@ -29,7 +29,8 @@ export function NoticePreview({ n, now, unread }: { n?: Notice; now: Date; unrea
   );
 }
 
-function Detail({ n, now }: { n: Notice; now: Date }) {
+/** お知らせ1件の中身。PCは右の列、スマホ・iPad縦は1段深い画面で使う */
+export function Detail({ n, now }: { n: Notice; now: Date }) {
   const ui = useClinicUI();
   const toast = useToast();
   const { appointments, setStatus, readNotice } = useStore();
@@ -37,6 +38,10 @@ function Detail({ n, now }: { n: Notice; now: Date }) {
   const appt = n.apptId ? appointments.find(a => a.id === n.apptId) : undefined;
   const p = appt ? patientById(appt.patientId) : undefined;
   const slotOpen = n.kind === "cancel" && appt && appt.date >= TODAY_KEY;
+  // 承認待ちで届いたものが、その後どうなったか（本文は届いたときのまま残さず、今の状態に合わせる）
+  const wasPending = n.body.includes("（承認待ち）");
+  const settled = wasPending && appt && appt.status !== "pending" ? appt : undefined;
+  const at = confirmedAt.get(n.id);
 
   return (
     <div className="p-6">
@@ -51,7 +56,25 @@ function Detail({ n, now }: { n: Notice; now: Date }) {
         )}
       </div>
       <h2 className="mt-5 text-title3 palt">{n.title}</h2>
-      <p className="mt-2 text-[15px] leading-[1.7] text-label [word-break:auto-phrase]">{n.body}</p>
+      <p className="mt-2 text-[15px] leading-[1.7] text-label [word-break:auto-phrase]">{liveBody(n, appt)}</p>
+      <AnimatePresence initial={false}>
+        {settled && (
+          <motion.p
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ duration: 0.22 }}
+            className="overflow-hidden"
+          >
+            <span className="mt-2 flex items-center gap-1.5 text-[14px] text-label2 tnum">
+              {settled.status === "cancelled" || settled.status === "no_show" ? (
+                <><CircleX className="h-4 w-4 shrink-0 text-label3" strokeWidth={2.2} />この予約はキャンセルされました</>
+              ) : (
+                <><CircleCheck className="h-4 w-4 shrink-0 text-accent" strokeWidth={2.2} />{at ? `${hm(minutesOfDay(at))}に確定しました` : "確定済みです"}</>
+              )}
+            </span>
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       {appt && (
         <div className="mt-6">
@@ -74,11 +97,12 @@ function Detail({ n, now }: { n: Notice; now: Date }) {
             icon={Check}
             onClick={() => {
               setStatus(appt.id, "confirmed");
+              confirmedAt.set(n.id, clockNow());
               readNotice(n.id);
               toast("予約を確定しました", { detail: `${p?.name}さん・${mdw(fromKey(appt.date))} ${hm(appt.start)}` });
             }}
           >
-            承認する
+            予約を確定
           </Button>
         )}
         {slotOpen && appt && (

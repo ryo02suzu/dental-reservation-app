@@ -1,7 +1,7 @@
 import { ArrowUpRight, BarChart3, BellRing, CalendarClock, NotebookPen, Settings } from "lucide-react";
 import { useRoute } from "@/lib/nav";
 import { useStore } from "@/lib/store";
-import { clinic, staff } from "@/data";
+import { clinic, staffById } from "@/data";
 import { Avatar, ListRow, ListSection, Page } from "@/ui";
 import { useClinicUI } from "../context";
 
@@ -9,8 +9,9 @@ import { useClinicUI } from "../context";
 export default function MoreScreen() {
   const { go } = useClinicUI();
   const { goApp } = useRoute();
-  const { recalls } = useStore();
-  const me = staff.find(s => s.role === "受付")!;
+  const { recalls, currentStaffId } = useStore();
+  // ログインで選んだ人（PCのサイドバーと同じ）
+  const me = staffById(currentStaffId) ?? staffById("s6");
   const pending = recalls.filter(r => r.status === "未連絡").length;
   return (
     <Page title="その他">
@@ -28,7 +29,7 @@ export default function MoreScreen() {
       <ListSection>
         <ListRow icon={Settings} tone="graphite" title="設定" chevron onClick={() => go("settings")} />
       </ListSection>
-      <ListSection footer="表示している医院・患者・予約はすべて架空のサンプルです。">
+      <ListSection footer="医院・患者・予約はすべて架空のサンプルです。">
         <ListRow icon={ArrowUpRight} tone="sand" title="プロトタイプのトップへ" onClick={() => goApp("launcher")} />
       </ListSection>
     </Page>

@@ -1,6 +1,6 @@
 // PC・iPad の週表示。月〜日の列を、それぞれユニット1〜4の細いレーンに分けて並べる
 // （どの日のどのユニットが空いているかが一目で分かるように）
-import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useLayoutEffect, useMemo, useState, type MouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { units as UNITS, type Appointment } from "@/data";
 import { TODAY_KEY, minutesOfDay } from "@/lib/clock";
@@ -8,9 +8,9 @@ import { WEEKDAYS, hm, key } from "@/lib/format";
 import { cn, tapSoft } from "@/ui";
 import type { NewPrefill } from "../../context";
 import { expand, isActive, statusOf } from "../../helpers";
-import { blockLook } from "./ApptBlock";
+import { blockLook, serviceLabel } from "./ApptBlock";
 import { BAR_H, scrollParent } from "./DayGrid";
-import { OccBar } from "./parts";
+import { OccBar, useWidth } from "./parts";
 import {
   SLOT, SLOT_BOOK, blockedBands, closedInfo, dayStat, floorTo, sessionsOf, timeRange, weekDays, type DayStat,
 } from "./model";
@@ -22,20 +22,6 @@ const PAD_T = 12;
 const PAD_B = 18;
 const HEAD_H = 78;
 const EMPTY: Appointment[] = [];
-
-function useWidth<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
-  const [w, setW] = useState(0);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    setW(el.clientWidth);
-    const ro = new ResizeObserver(() => setW(el.clientWidth));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, w] as const;
-}
 
 interface DayCol {
   date: Date;
@@ -115,7 +101,8 @@ export function WeekGrid({ date, byDate, now, dir, onOpenDay, onOpen, onNew }: {
   }, [weekKey, showNow]);
 
   const template = { gridTemplateColumns: `${GUTTER}px repeat(7, minmax(0, 1fr))` };
-  const showText = laneW >= 30;
+  // レーンが広ければ横書きの苗字、狭ければ（iPad縦など）縦書きの苗字。色の箱だけにはしない
+  const text: WeekText = laneW >= 30 ? "row" : laneW >= 13 ? "column" : "none";
   const showBandLabel = laneW * UNITS.length >= 96;
 
   return (
@@ -221,7 +208,7 @@ export function WeekGrid({ date, byDate, now, dir, onOpenDay, onOpen, onNew }: {
               >
                 <AnimatePresence initial={false}>
                   {visible.map(a => (
-                    <WeekBlock key={a.id} a={a} lane={Math.max(0, UNITS.findIndex(u => u.id === a.unitId))} top={yOf(a.start) + 1} height={(a.end - a.start) * PPM - 2} now={now} showText={showText} onOpen={onOpen} />
+                    <WeekBlock key={a.id} a={a} lane={Math.max(0, UNITS.findIndex(u => u.id === a.unitId))} top={yOf(a.start) + 1} height={(a.end - a.start) * PPM - 2} now={now} text={text} onOpen={onOpen} />
                   ))}
                 </AnimatePresence>
               </motion.div>
@@ -261,12 +248,15 @@ export function WeekGrid({ date, byDate, now, dir, onOpenDay, onOpen, onNew }: {
   );
 }
 
-function WeekBlock({ a, lane, top, height, now, showText, onOpen }: {
-  a: Appointment; lane: number; top: number; height: number; now: Date; showText: boolean; onOpen: (id: string) => void;
+type WeekText = "row" | "column" | "none";
+
+function WeekBlock({ a, lane, top, height, now, text, onOpen }: {
+  a: Appointment; lane: number; top: number; height: number; now: Date; text: WeekText; onOpen: (id: string) => void;
 }) {
   const { patient, service, staff, unit } = expand(a);
   const sk = statusOf(a, now);
   const look = blockLook(sk, staff.tone);
+  const surname = patient.name.split(" ")[0];
   return (
     <motion.button
       type="button"
@@ -276,16 +266,24 @@ function WeekBlock({ a, lane, top, height, now, showText, onOpen }: {
       exit={{ opacity: 0, transition: { duration: 0.14 } }}
       whileTap={tapSoft}
       onClick={e => { e.stopPropagation(); onOpen(a.id); }}
-      title={`${hm(a.start)}–${hm(a.end)}　${patient.name}（${service.short}・${staff.short}・${unit.short}）`}
+      title={`${hm(a.start)}〜${hm(a.end)} ${patient.name}（${serviceLabel(a, service)} · ${staff.short} · ${unit.short}）`}
       aria-label={`${hm(a.start)}から ${patient.name} ${service.name} ${unit.name}`}
       className={cn("absolute z-[1] flex flex-col overflow-hidden rounded-[4px] text-left transition-[filter] hover:z-[2] hover:brightness-[0.96]", look.box)}
       style={{ top, height, left: `calc(${lane * 25}% + 1px)`, width: "calc(25% - 2px)" }}
     >
       {look.tint && <span aria-hidden className={cn("absolute inset-0", look.tint)} />}
-      {look.edge && <span aria-hidden className={cn("absolute inset-y-0 left-0 w-[2px]", look.edge)} />}
-      {showText && height >= 16 && (
+      {look.edge && <span aria-hidden className={cn("absolute inset-y-0 left-0", sk === "pending" ? "w-[4px]" : "w-[2px]", look.edge)} />}
+      {text === "row" && height >= 16 && (
         <span className={cn("relative block overflow-hidden whitespace-nowrap pl-[5px] pt-[3px] text-[10px] font-semibold leading-3", look.name)} style={{ textOverflow: "clip" }}>
-          {patient.name.split(" ")[0]}
+          {surname}
+        </span>
+      )}
+      {text === "column" && height >= 22 && (
+        <span
+          className={cn("relative mx-auto block max-h-full overflow-hidden whitespace-nowrap pl-[1px] pt-[3px] text-[10px] font-semibold leading-[11px]", look.name)}
+          style={{ writingMode: "vertical-rl" }}
+        >
+          {surname}
         </span>
       )}
       {sk === "late" && <span aria-hidden className="absolute right-[2px] top-[2px] h-[5px] w-[5px] rounded-full bg-red" />}
