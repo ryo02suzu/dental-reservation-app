@@ -14,7 +14,7 @@ export function AddonMatrix({ onOpenClinic }: { onOpenClinic: (id: string) => vo
   const s = useConsole();
   const toast = useToast();
   const clinics = [...s.clinics].sort((a, b) => Number(b.active) - Number(a.active) || (CLINIC_KANA[a.id] ?? "").localeCompare(CLINIC_KANA[b.id] ?? "", "ja"));
-  const template = `minmax(160px,1.6fr) repeat(${s.addons.length}, minmax(80px,1fr)) 80px`;
+  const template = `minmax(150px,1.6fr) repeat(${s.addons.length}, minmax(72px,1fr)) 80px`;
 
   const [cancel, setCancel] = useState<{ clinic: ConsoleClinic; key: string } | null>(null);
   // 追加はその場で。解約は請求が変わるので確認してから

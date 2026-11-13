@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useIsDesktop, useIsWide } from "@/lib/media";
 import { AnimatePresence, motion } from "framer-motion";
 import { Coffee, Ellipsis, LogIn, LogOut, MessageSquareText, Play, RotateCcw, UserX } from "lucide-react";
 import { staff, staffById, type AttendanceRow } from "@/data";
@@ -154,18 +155,7 @@ export function PunchCard({ me, onPunch, onUndo, canUndo }: { me: Punch; onPunch
 }
 
 /** 表を出せる幅（1024px以上）か。狭いときはiOSのリストにする */
-function useNarrow() {
-  const q = "(max-width: 1023px)";
-  const [m, setM] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(q);
-    const on = () => setM(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return m;
-}
+const useNarrow = () => !useIsDesktop();
 
 // ─── 今日の出勤状況 ─────────────────────────────────────────────────────────
 /** 予定の時刻を過ぎて来ていない人（と、遅刻の連絡があった人）には、受付が代わりに記録できるようにする */
@@ -184,7 +174,8 @@ function AbsenceMenu({ r, onAct }: { r: Punch; onAct: (staffId: string, a: Absen
 }
 
 export function TodayList({ rows, flush, onAct }: { rows: Punch[]; flush?: boolean; onAct: (staffId: string, a: AbsenceAction) => void }) {
-  const phone = useNarrow();
+  // 打刻の横に並ぶので、表は1180px以上（右の列に十分な幅があるとき）だけ。それより狭ければリストにする
+  const phone = !useIsWide();
   const now = useNow(20_000);
   const nowMin = minutesOfDay(now);
   const working = rows.filter(r => r.state === "勤務中" || r.state === "休憩中").length;

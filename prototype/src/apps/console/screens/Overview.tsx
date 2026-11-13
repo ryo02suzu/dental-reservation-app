@@ -169,9 +169,9 @@ function Attention({ s }: { s: ConsoleState }) {
                 subtitle={sent ? `確認メールを送信済み · ${when(sent, t)}` : `最終利用 ${mdw(c.lastActiveAt)}`}
                 aside={
                   sent ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-label2">
+                    <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-label2" aria-label="連絡済み">
                       <Check className="h-4 w-4 text-accent" strokeWidth={2.6} />
-                      連絡済み
+                      {!phone && "連絡済み"}
                     </span>
                   ) : (
                     <span className="text-[14px] font-semibold text-red tnum">{daysSince(c.lastActiveAt)}日</span>

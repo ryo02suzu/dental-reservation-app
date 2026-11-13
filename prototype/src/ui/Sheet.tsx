@@ -17,6 +17,8 @@ export interface SheetProps {
   confirmLabel?: string;
   onConfirm?: () => void;
   confirmDisabled?: boolean;
+  /** 確定ボタンを赤にする（ダウングレード・削除など、取り消しにくい操作） */
+  confirmDestructive?: boolean;
   /** 下に固定する領域（大きなボタンなど） */
   footer?: ReactNode;
   /** sheet=スマホは下から・PCは中央 / inspector=PCでは右側のパネル */
@@ -31,8 +33,8 @@ export function Sheet(props: SheetProps) {
   return props.variant === "inspector" ? <Inspector {...props} /> : <CenterSheet {...props} />;
 }
 
-function Header({ title, cancelLabel, onCancel, confirmLabel, onConfirm, confirmDisabled, TitleTag }: {
-  title: string; cancelLabel?: string; onCancel: () => void; confirmLabel?: string; onConfirm?: () => void; confirmDisabled?: boolean;
+function Header({ title, cancelLabel, onCancel, confirmLabel, onConfirm, confirmDisabled, confirmDestructive, TitleTag }: {
+  title: string; cancelLabel?: string; onCancel: () => void; confirmLabel?: string; onConfirm?: () => void; confirmDisabled?: boolean; confirmDestructive?: boolean;
   TitleTag: typeof Dialog.Title;
 }) {
   return (
@@ -45,7 +47,7 @@ function Header({ title, cancelLabel, onCancel, confirmLabel, onConfirm, confirm
         <button
           onClick={onConfirm}
           disabled={confirmDisabled}
-          className="relative z-10 text-[17px] font-semibold text-accent transition-opacity active:opacity-40 disabled:opacity-30"
+          className={cn("relative z-10 text-[17px] font-semibold transition-opacity active:opacity-40 disabled:opacity-30", confirmDestructive ? "text-red" : "text-accent")}
         >
           {confirmLabel}
         </button>
@@ -56,7 +58,7 @@ function Header({ title, cancelLabel, onCancel, confirmLabel, onConfirm, confirm
   );
 }
 
-function PhoneSheet({ open, onOpenChange, title, children, cancelLabel, confirmLabel, onConfirm, confirmDisabled, footer }: SheetProps) {
+function PhoneSheet({ open, onOpenChange, title, children, cancelLabel, confirmLabel, onConfirm, confirmDisabled, confirmDestructive, footer }: SheetProps) {
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} shouldScaleBackground>
       <Drawer.Portal>
@@ -70,6 +72,7 @@ function PhoneSheet({ open, onOpenChange, title, children, cancelLabel, confirmL
             confirmLabel={confirmLabel}
             onConfirm={onConfirm}
             confirmDisabled={confirmDisabled}
+            confirmDestructive={confirmDestructive}
             TitleTag={Drawer.Title as unknown as typeof Dialog.Title}
           />
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+20px)]">{children}</div>
@@ -80,7 +83,7 @@ function PhoneSheet({ open, onOpenChange, title, children, cancelLabel, confirmL
   );
 }
 
-function CenterSheet({ open, onOpenChange, title, children, cancelLabel, confirmLabel, onConfirm, confirmDisabled, footer, size = "md" }: SheetProps) {
+function CenterSheet({ open, onOpenChange, title, children, cancelLabel, confirmLabel, onConfirm, confirmDisabled, confirmDestructive, footer, size = "md" }: SheetProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <AnimatePresence>
@@ -113,6 +116,7 @@ function CenterSheet({ open, onOpenChange, title, children, cancelLabel, confirm
                   confirmLabel={confirmLabel}
                   onConfirm={onConfirm}
                   confirmDisabled={confirmDisabled}
+                  confirmDestructive={confirmDestructive}
                   TitleTag={Dialog.Title}
                 />
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">{children}</div>
@@ -130,7 +134,7 @@ function CenterSheet({ open, onOpenChange, title, children, cancelLabel, confirm
  * PCの右側の詳細パネル（Macのインスペクタ）。背景は暗くせず、後ろの画面もそのまま操作できる。
  * 外を押したとき、その操作で別の予約やシートが開いた（# が変わった）ならそのまま、何も起きなければ閉じる。
  */
-function Inspector({ open, onOpenChange, title, children, cancelLabel, confirmLabel, onConfirm, confirmDisabled, footer }: SheetProps) {
+function Inspector({ open, onOpenChange, title, children, cancelLabel, confirmLabel, onConfirm, confirmDisabled, confirmDestructive, footer }: SheetProps) {
   const closeIfNothingOpened = () => {
     const before = window.location.hash;
     const done = () => {
@@ -170,6 +174,7 @@ function Inspector({ open, onOpenChange, title, children, cancelLabel, confirmLa
                   confirmLabel={confirmLabel}
                   onConfirm={onConfirm}
                   confirmDisabled={confirmDisabled}
+                  confirmDestructive={confirmDestructive}
                   TitleTag={Dialog.Title}
                 />
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">{children}</div>

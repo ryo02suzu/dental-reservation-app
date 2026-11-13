@@ -44,28 +44,31 @@ export function ToothGrid({ value, onToggle, dentition, onDentition }: {
     );
   };
 
+  // Segmented の full は幅いっぱいに広がるので、幅は外側の箱で決める
   const controls = (
     <div className="mb-2 flex items-center gap-2">
       {phone && (
-        <Segmented
-          value={jaw}
-          onChange={setJaw}
-          className="flex-1"
-          full
-          options={[
-            { value: "upper", label: <>上の歯{count([...upper]) ? <span className="tnum opacity-55">{count([...upper])}</span> : null}</> },
-            { value: "lower", label: <>下の歯{count([...lower]) ? <span className="tnum opacity-55">{count([...lower])}</span> : null}</> },
-          ]}
-        />
+        <div className="min-w-0 flex-1">
+          <Segmented
+            value={jaw}
+            onChange={setJaw}
+            full
+            options={[
+              { value: "upper", label: <>上の歯{count([...upper]) ? <span className="tnum opacity-55">{count([...upper])}</span> : null}</> },
+              { value: "lower", label: <>下の歯{count([...lower]) ? <span className="tnum opacity-55">{count([...lower])}</span> : null}</> },
+            ]}
+          />
+        </div>
       )}
-      <Segmented
-        size={phone ? "md" : "sm"}
-        value={dentition}
-        onChange={onDentition}
-        className={phone ? "w-[132px] shrink-0" : "ml-auto w-[160px]"}
-        full
-        options={[{ value: "permanent", label: "永久歯" }, { value: "primary", label: "乳歯" }]}
-      />
+      <div className={phone ? "w-[128px] shrink-0" : "ml-auto w-[160px]"}>
+        <Segmented
+          size={phone ? "md" : "sm"}
+          value={dentition}
+          onChange={onDentition}
+          full
+          options={[{ value: "permanent", label: "永久歯" }, { value: "primary", label: "乳歯" }]}
+        />
+      </div>
     </div>
   );
 
