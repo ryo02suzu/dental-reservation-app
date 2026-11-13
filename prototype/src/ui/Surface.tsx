@@ -19,12 +19,14 @@ export function Surface({ children, className, onClick, padded = true }: { child
 }
 
 /** 数字の指標。delta は前期比（正で上向き矢印）。good は「上がると良い」かどうか */
-export function Stat({ label, value, unit, delta, deltaLabel, good = true, icon: Icon, children, className }: {
+export function Stat({ label, value, unit, delta, deltaLabel, compareLabel = "前月比", good = true, icon: Icon, children, className }: {
   label: string;
   value: ReactNode;
   unit?: string;
   delta?: number;
   deltaLabel?: string;
+  /** 比べている期間（「前月比」「先週比」「前の30日比」など） */
+  compareLabel?: string;
   good?: boolean;
   icon?: LucideIcon;
   children?: ReactNode;
@@ -46,7 +48,7 @@ export function Stat({ label, value, unit, delta, deltaLabel, good = true, icon:
         <div className={cn("mt-1.5 inline-flex items-center gap-0.5 text-[12px] font-semibold tnum", positive ? "text-accent" : "text-red")}>
           {up ? <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.6} /> : <ArrowDownRight className="h-3.5 w-3.5" strokeWidth={2.6} />}
           {deltaLabel ?? `${Math.abs(delta * 100).toFixed(1)}%`}
-          <span className="ml-1 font-medium text-label3">前月比</span>
+          <span className="ml-1 font-medium text-label3">{compareLabel}</span>
         </div>
       )}
       {children}

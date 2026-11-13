@@ -12,6 +12,8 @@ interface State {
   notices: Notice[];
   patients: Patient[];
   memos: Memo[];
+  /** いま医院アプリを使っているスタッフ（ログインで選んだ人。既定は受付の石井 真央） */
+  currentStaffId: string;
 }
 
 type Action =
@@ -26,7 +28,8 @@ type Action =
   | { type: "patients"; patients: Patient[] }
   | { type: "memoAdd"; memo: Memo }
   | { type: "memoUpdate"; id: string; patch: Partial<Memo> }
-  | { type: "memoRemove"; id: string };
+  | { type: "memoRemove"; id: string }
+  | { type: "staff"; id: string };
 
 function reducer(s: State, a: Action): State {
   switch (a.type) {
@@ -66,6 +69,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, memos: s.memos.map(m => (m.id === a.id ? { ...m, ...a.patch } : m)) };
     case "memoRemove":
       return { ...s, memos: s.memos.filter(m => m.id !== a.id) };
+    case "staff":
+      return { ...s, currentStaffId: a.id };
   }
 }
 
@@ -86,6 +91,7 @@ interface Store extends State {
   addMemo: (m: Omit<Memo, "id" | "date" | "at"> & Partial<Pick<Memo, "date" | "at">>) => Memo;
   updateMemo: (id: string, patch: Partial<Memo>) => void;
   removeMemo: (id: string) => void;
+  setCurrentStaff: (staffId: string) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -98,6 +104,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     notices: initialNotices,
     patients: [...patientRegistry],
     memos: initialMemos,
+    currentStaffId: "s6",
   });
   const setStatus = useCallback((id: string, status: ApptStatus) => dispatch({ type: "status", id, status }), []);
   const addAppointment = useCallback((appt: Omit<Appointment, "id">) => {
@@ -136,13 +143,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const updateMemo = useCallback((id: string, patch: Partial<Memo>) => dispatch({ type: "memoUpdate", id, patch }), []);
   const removeMemo = useCallback((id: string) => dispatch({ type: "memoRemove", id }), []);
+  const setCurrentStaff = useCallback((id: string) => dispatch({ type: "staff", id }), []);
   const value = useMemo(
     () => ({
       ...state, setStatus, addAppointment, updateAppointment, removeAppointment, setRecall, readNotice, readAllNotices,
-      addNotice, addPatient, updatePatient, addMemo, updateMemo, removeMemo,
+      addNotice, addPatient, updatePatient, addMemo, updateMemo, removeMemo, setCurrentStaff,
     }),
     [state, setStatus, addAppointment, updateAppointment, removeAppointment, setRecall, readNotice, readAllNotices,
-      addNotice, addPatient, updatePatient, addMemo, updateMemo, removeMemo],
+      addNotice, addPatient, updatePatient, addMemo, updateMemo, removeMemo, setCurrentStaff],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

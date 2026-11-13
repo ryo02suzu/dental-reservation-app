@@ -106,7 +106,7 @@ export default function StaffScreen({ param }: { param?: string }) {
             <>
               <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
                 <PunchCard me={me} onPunch={punch} onUndo={undo} canUndo={history.length > 0} />
-                <TodayList rows={rows} />
+                <TodayList rows={rows} flush />
               </div>
               <MonthTable />
             </>

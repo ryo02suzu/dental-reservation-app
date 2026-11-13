@@ -17,3 +17,7 @@ function useMedia(query: string): boolean {
 export const useIsPhone = () => useMedia("(max-width: 767px)");
 /** 幅の広い画面（3カラムなどを使ってよい） */
 export const useIsWide = () => useMedia("(min-width: 1180px)");
+/** iPadの横向き以上（2段組みを使ってよい） */
+export const useIsDesktop = () => useMedia("(min-width: 1024px)");
+/** 任意の最小幅 */
+export const useMinWidth = (px: number) => useMedia(`(min-width: ${px}px)`);

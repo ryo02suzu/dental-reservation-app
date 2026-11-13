@@ -65,7 +65,7 @@ export function Scan({ onResult, onUseNumber }: { onResult: (a: Appointment | un
     <div className="flex flex-col gap-8 md:gap-10 lg:flex-row lg:items-center lg:gap-16">
       <div className="lg:flex-1">
         <KTitle
-          title={read ? "読み取りました" : "QRコードを枠に合わせてください"}
+          title={read ? "読み取りました" : <>QRコードを<br />枠に合わせてください</>}
           lead={<>診察券の裏のQRコードを、<br />カメラに向けてかざしてください。</>}
         />
         <div className="mt-8 hidden lg:block">
@@ -321,7 +321,7 @@ export function NotFound({ name, onRetry, retryLabel, onHelp }: { name?: string;
   return (
     <ResultLayout
       icon={<span className="flex h-20 w-20 items-center justify-center rounded-full bg-fill/12 text-label2"><SearchX className="h-9 w-9" strokeWidth={2} /></span>}
-      title="本日のご予約が見つかりませんでした"
+      title={<>本日のご予約が<br />見つかりませんでした</>}
       lead={name
         ? <>{name} さま、ご予約の日にちが違うか、<br className="hidden md:inline" />ご予約が変更されている可能性があります。<br />受付でお調べします。</>
         : <>ご予約の日にちが違う場合や、ご予約のない方は、<br className="hidden md:inline" />受付でご案内します。</>}
@@ -368,7 +368,7 @@ export function Help({ onCall, called, onHome }: { onCall: () => void; called: b
   );
 }
 
-function ResultLayout({ icon, title, lead, children }: { icon: React.ReactNode; title: string; lead: React.ReactNode; children: React.ReactNode }) {
+function ResultLayout({ icon, title, lead, children }: { icon: React.ReactNode; title: React.ReactNode; lead: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-col">
       {icon}

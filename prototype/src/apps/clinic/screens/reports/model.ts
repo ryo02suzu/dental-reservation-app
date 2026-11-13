@@ -66,7 +66,7 @@ export function metricsFor(period: Period): Metric[] {
 /** 冒頭の一文（事実だけ） */
 export function headline(period: Period): string {
   const { cur, prev } = raw(period);
-  const lead = period === "month" ? "前の30日より" : "先週より";
+  const lead = period === "month" ? "前の30日より" : "先週は前の週より";
   const dv = cur.visits - prev.visits;
   const visits = dv > 0 ? `来院が${dv}人増え` : dv < 0 ? `来院が${-dv}人減り` : "来院は同じ人数で";
   const dc = Math.round((cur.cancel - prev.cancel) * 1000) / 10;
@@ -80,9 +80,10 @@ export function rangeOf(period: Period): { from: string; to: string; label: stri
     const from = subDays(TODAY, 29);
     return { from: key(from), to: key(TODAY), label: `${md(from)}〜${md(TODAY)}`, compare: "前の30日と比較" };
   }
-  const from = startOfWeek(TODAY, { weekStartsOn: 1 });
+  // 週は「先週（月〜日）」を、その前の週と比べる（今週はまだ途中なので）
+  const from = subDays(startOfWeek(TODAY, { weekStartsOn: 1 }), 7);
   const to = addDays(from, 6);
-  return { from: key(from), to: key(to), label: `${md(from)}〜${md(to)}`, compare: "先週と比較" };
+  return { from: key(from), to: key(to), label: `${md(from)}〜${md(to)}`, compare: "前の週と比較" };
 }
 
 export interface Share { label: string; value: number; share: number }

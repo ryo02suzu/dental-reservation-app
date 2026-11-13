@@ -67,6 +67,8 @@ for (const j of jobs) {
       else if (st.hover) await page.hover(st.hover, { timeout: 3000 });
       else if (st.fill) await page.fill(st.fill[0], st.fill[1], { timeout: 3000 });
       else if (st.press) await page.keyboard.press(st.press);
+      else if (st.mouse) await page.mouse.move(st.mouse[0], st.mouse[1]);
+      else if (st.clickAt) await page.mouse.click(st.clickAt[0], st.clickAt[1]);
       if (st.wait) await page.waitForTimeout(st.wait);
       else await page.waitForTimeout(450);
     } catch (e) { errors.push(`操作に失敗: ${JSON.stringify(st)}`); }

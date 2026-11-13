@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import type { Staff } from "@/data";
 import { useIsPhone } from "@/lib/media";
 import { useRoute } from "@/lib/nav";
+import { useStore } from "@/lib/store";
 import { cn, springSoft, useToast } from "@/ui";
 import { Credentials } from "./parts/Credentials";
 import { PinPad, StaffPicker } from "./parts/Device";
@@ -15,14 +16,16 @@ export default function LoginApp() {
   const phone = useIsPhone();
   const { goApp } = useRoute();
   const toast = useToast();
+  const { setCurrentStaff } = useStore();
   const [step, setStep] = useState<Step>({ k: "account" });
   const [dir, setDir] = useState(1);
   const to = (s: Step, d = 1) => { setDir(d); setStep(s); };
 
   const finish = useCallback((who: Staff) => {
+    setCurrentStaff(who.id);
     toast(`${who.name}さんでサインインしました`, { detail: "ひだまり歯科クリニック" });
     goApp("clinic");
-  }, [toast, goApp]);
+  }, [toast, goApp, setCurrentStaff]);
   const cancelPin = useCallback(() => { setDir(-1); setStep({ k: "who" }); }, []);
 
   const back = (

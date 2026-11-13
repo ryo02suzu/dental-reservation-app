@@ -161,7 +161,7 @@ function useNarrow() {
 }
 
 // ─── 今日の出勤状況 ─────────────────────────────────────────────────────────
-export function TodayList({ rows }: { rows: Punch[] }) {
+export function TodayList({ rows, flush }: { rows: Punch[]; flush?: boolean }) {
   const phone = useNarrow();
   const now = useNow(20_000);
   const nowMin = minutesOfDay(now);
@@ -169,7 +169,7 @@ export function TodayList({ rows }: { rows: Punch[] }) {
   const header = <span className="tnum">今日の出勤状況 · 出勤中 {working}人</span>;
   if (phone) {
     return (
-      <ListSection header={header}>
+      <ListSection header={header} className={flush ? "!mt-0" : undefined}>
         {rows.map(r => {
           const s = staffById(r.staffId);
           const late = isLate(r, nowMin);

@@ -102,7 +102,7 @@ Tailwind のクラスは `prototype/tailwind.config.cjs` に定義したもの�
 | `SearchField` / `Switch` / `Stepper` / `FieldRow` | 入力部品 |
 | `useToast` | `const toast = useToast(); toast("予約を登録しました", { detail: "11月20日（金）15:30" })` |
 | `Sparkline` / `Bars` / `Ring` | 小さなグラフ |
-| `Surface` / `Stat` / `EmptyState` | 面、数字の指標、空のときの表示 |
+| `Surface` / `Stat` / `EmptyState` | 面、数字の指標（`compareLabel` で「先週比」なども）、空のときの表示 |
 | `Menu` / `MenuItem` / `MenuSeparator` | ポップアップメニュー |
 | `spring` `springSoft` `springBouncy` `springPush` `easeOut` `tap` `tapSoft` `listItem` | 動きの共通値 |
 | `cn` | クラス名の結合 |
@@ -112,17 +112,19 @@ Tailwind のクラスは `prototype/tailwind.config.cjs` に定義したもの�
 ## 6. データ・ストア・時刻
 
 - **`@/data`**（型は `src/data/types.ts`）
+  - 規模：患者さん800人、予約は「今週より前の12週」から35日先まで（約3,600件）。1人あたりの予約は4か月で最大9件ほど。しばらく来院していない患者さんがリコールの対象になる。
   - `clinic`（医院情報）、`HOURS` / `hoursFor(d)`（診療時間）、`clinicPhase(now)`（午前の診療中・昼休み などの時間帯）、`staff` `units` `services` `patients`、`ME`（患者アプリでログインしている本人：田中 美咲）
   - `patientById` `serviceById` `staffById` `unitById`
   - `visitsOf(p)`：**42日より前**の来院記録（`WINDOW_START` より前）。それ以降の来院はストアの予約（`completed`）から出す。
   - `availableStarts(day, minutes, appointments)`：その日に予約できる開始時刻（30分刻み、空きユニットがある時刻）
-  - レポート用：`weekly`（12週）、`kpis`、`HEATMAP_DAYS` `HEATMAP_HOURS` `heatmap`
+  - レポート用（すべて予約データからの集計）：`weekly`（先週までの12週。最後が先週）、`kpis`（直近30日とその前の30日）、`HEATMAP_DAYS` `HEATMAP_HOURS` `heatmap`（直近8週の稼働率）、`summarize(from, to)`（任意の期間の集計）、`WEEK_START`（今週の月曜）
   - スタッフ用：`shiftWeek` `attendanceToday`
   - 運営用：`PLANS` `addons` `consoleClinics` `consoleMonthly`
   - `initialAppointments` `recalls` `notices` `initialMemos` は**直接使わず、ストアから読む**。
 - **`useStore()`**（`@/lib/store`）：`appointments` `recalls` `notices` `patients` `memos` と、変更用の
   `setStatus(id, status)` `addAppointment(a)` `updateAppointment(id, patch)` `removeAppointment(id)` `setRecall(patientId, status)`
-  `readNotice(id)` `readAllNotices()` `addNotice(n)` `addPatient(p)` `updatePatient(id, patch)` `addMemo(m)` `updateMemo(id, patch)` `removeMemo(id)`。
+  `readNotice(id)` `readAllNotices()` `addNotice(n)` `addPatient(p)` `updatePatient(id, patch)` `addMemo(m)` `updateMemo(id, patch)` `removeMemo(id)`、
+  いま使っているスタッフ `currentStaffId` と `setCurrentStaff(id)`（ログインで選んだ人。既定は受付の石井 真央）。
   - **画面をまたいで反映させたい変更は必ずストアで。** 例：受付端末で受付 → 医院の「今日」で来院済になる。患者さんがWeb予約 → 医院の「今日」「予約台帳」に仮予約が現れ、「お知らせ」に通知が届く。
   - 保存はしない（再読み込みで元に戻る）。
 - **時刻**（`@/lib/clock`）：`TODAY` `TODAY_KEY`（"yyyy-MM-dd"）`now()` `useNow(ms)` `minutesOfDay(d)` `isClinicOpenDay(d)`。
@@ -146,9 +148,9 @@ Tailwind のクラスは `prototype/tailwind.config.cjs` に定義したもの�
 
 ## 8. レイアウト
 
-- 幅：スマホ `< 768px`（`useIsPhone()`）、タブレット 768〜1179px、ワイド `≥ 1180px`（`useIsWide()`）。Tailwind の `md:`=768、`lg:`=1024、`xl:`=1280。
+- 幅：スマホ `< 768px`（`useIsPhone()`）、タブレット 768〜1179px、`≥ 1024px`（`useIsDesktop()`）、ワイド `≥ 1180px`（`useIsWide()`）、任意の幅は `useMinWidth(px)`。Tailwind の `md:`=768、`lg:`=1024、`xl:`=1280。
 - **390×844（iPhone）、1024×768 または 820×1180（iPad）、1440×900（Mac）** で正しく見えること。ページ全体が横にスクロールしないこと（台帳や表のように横に長いものは、それ自身の `overflow-x-auto` の中で）。
-- すべての画面の一番外は `<Page>`。医院アプリでは、外側（サイドバー／タブバー、下の余白）はシェルが用意している。`Page` と競合するスクロール領域を外側に作らない。
+- すべての画面の一番外は `<Page>`（例外：ログインと受付端末は全画面の専用レイアウト）。医院アプリでは、外側（サイドバー／タブバー、下の余白）はシェルが用意している。`Page` と競合するスクロール領域を外側に作らない。
 - PCでは段組み（一覧＋詳細、本文＋右カラム）を積極的に使う。最大幅は 1080px（`wide` で解除）。
 - スマホのタップ領域は 44px 以上。入力欄の文字は 16px 以上（iOSで拡大されないように）。
 - 行の中の名前には `min-w-0` と `truncate`。長い名前・0件・大量の件数でも崩れないこと。
@@ -198,6 +200,7 @@ node prototype/tools/today.mjs                                      # 今日の�
 
 - `shot.mjs` のオプション：`--w` `--h`（既定 390×844）、`--dark`、`--full`（スクロール全体）、`--wait <ms>`（最初の待ち）、`--scroll <px>`、`--scale`（既定 1。自分の確認は 1 倍で十分。人に見せる最終の画像だけ 2）。
   操作は書いた順に実行：`--click "<セレクタ>"`、`--fill "<セレクタ>=><文字>"`、`--press <キー>`（例 `Enter` `Escape` `ArrowDown`）、`--hover "<セレクタ>"`、`--pause <ms>`。
+  `--batch` の steps では座標の操作 `{"mouse":[x,y]}`（移動）`{"clickAt":[x,y]}`（クリック）も使える（台帳の空き枠など）。
   セレクタは Playwright の形（`text=受付する`、`[aria-label="閉じる"]`、`input[placeholder="検索"]` など）。横のはみ出しとコンソールのエラー・失敗した操作を報告する（あると終了コード 2）。
 - `--batch` には `[{"hash":"#clinic","out":"…/a.png","w":1440,"h":900,"dark":true,"steps":[{"click":"text=…"},{"fill":["input","たなか"]},{"press":"Enter"},{"wait":300}]}]` の形のJSONファイルを渡す。
 - 撮った画像は**必ず開いて見る**。揃い・余白のリズム・文字の切れ・ダークモード・空の状態・長い名前を確認する。

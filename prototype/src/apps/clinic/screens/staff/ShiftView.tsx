@@ -56,7 +56,7 @@ export function ShiftGrid({ offset, edits, onEdit }: { offset: number; edits: Ed
     <div className="overflow-x-auto rounded-card bg-surface">
       <div className="min-w-[940px]">
         <div className="hairline-b grid" style={{ gridTemplateColumns: cols }}>
-          <div className="sticky left-0 z-10 flex items-end bg-surface px-4 pb-2.5 text-[12px] font-medium text-label2">スタッフ</div>
+          <div className="hairline-b sticky left-0 z-10 flex items-end bg-surface px-4 pb-2.5 text-[12px] font-medium text-label2">スタッフ</div>
           {days.map(d => {
             const k = key(d);
             const today = k === TODAY_KEY;

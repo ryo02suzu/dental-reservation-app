@@ -92,7 +92,7 @@ export function WeeklyChart({ height = 196 }: { height?: number }) {
   return (
     <div ref={ref} className="relative w-full" style={{ height }}>
       {w > 0 && (
-        <svg width={w} height={height} className="block" role="img" aria-label={`週ごとの来院数。今週 ${data[last]}人、12週の平均 ${avg}人`}>
+        <svg width={w} height={height} className="block" role="img" aria-label={`週ごとの来院数。先週 ${data[last]}人、12週の平均 ${avg}人`}>
           {ticks.map(t => (
             <g key={t}>
               <line x1={0} x2={plotW} y1={y(t)} y2={y(t)} stroke="rgb(var(--separator) / 0.16)" strokeWidth={1} />
@@ -120,7 +120,7 @@ export function WeeklyChart({ height = 196 }: { height?: number }) {
                 </motion.rect>
                 {labelAt(i) && (
                   <text x={cx} y={height - 5} textAnchor="middle" className={cn("text-[11px] tnum", i === last ? "fill-label font-semibold" : "fill-label3")}>
-                    {i === last ? "今週" : md(weekly[i].week)}
+                    {i === last ? "先週" : md(weekly[i].week)}
                   </text>
                 )}
               </g>

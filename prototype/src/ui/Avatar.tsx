@@ -4,7 +4,7 @@ import { cn } from "./cn";
 const TONES: TileTone[] = ["sand", "slate", "sage", "clay", "plum", "ocean", "amber", "graphite"];
 const BG: Record<TileTone, string> = {
   sand: "bg-tile-sand/20 text-tile-sand",
-  graphite: "bg-tile-graphite/15 text-tile-graphite",
+  graphite: "bg-fill/14 text-label2",
   slate: "bg-tile-slate/18 text-tile-slate",
   sage: "bg-tile-sage/18 text-tile-sage",
   clay: "bg-tile-clay/16 text-tile-clay",

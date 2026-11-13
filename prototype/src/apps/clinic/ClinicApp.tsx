@@ -191,15 +191,13 @@ function DesktopLayout({ screenKey, def, param, onNav, onSearch, onExit }: {
 }
 
 function Sidebar({ active, onNav, onSearch, onExit }: { active: string; onNav: (s: string) => void; onSearch: () => void; onExit: () => void }) {
-  const { appointments, notices, recalls } = useStore();
-  const now = useNow();
-  const remaining = appointments.filter(a => a.date === TODAY_KEY && isActive(a) && a.status !== "completed" && statusOf(a, now) !== "completed").length;
+  const { notices, recalls, currentStaffId } = useStore();
+  // 件数は「対応が必要なもの」だけに出す（未読のお知らせ・未連絡のリコール）
   const counts: Record<string, number | undefined> = {
-    schedule: remaining || undefined,
     notifications: notices.filter(n => !n.read).length || undefined,
     recall: recalls.filter(r => r.status === "未連絡").length || undefined,
   };
-  const me = staff.find(s => s.role === "受付")!;
+  const me = staff.find(s => s.id === currentStaffId) ?? staff.find(s => s.role === "受付")!;
   return (
     <aside className="hairline-r flex w-[248px] shrink-0 flex-col bg-surface2/80 lg:w-[264px]">
       <div className="flex items-center gap-2.5 px-4 pb-3 pt-5">

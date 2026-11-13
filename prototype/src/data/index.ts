@@ -1,6 +1,6 @@
 // プロトタイプ用のサンプルデータ（すべて架空）。
 // 乱数は固定シードなので、同じ日に開けば同じ内容になる。
-import { addDays, addMonths, format, startOfWeek, subDays, subMonths } from "date-fns";
+import { addDays, addMonths, differenceInCalendarDays, format, startOfWeek, subDays, subMonths } from "date-fns";
 import { TODAY, TODAY_KEY, isClinicOpenDay, minutesOfDay, now } from "@/lib/clock";
 import { fromKey, hm, mdw, relDay } from "@/lib/format";
 import type {
@@ -111,21 +111,25 @@ const FAMILY: [string, string][] = [
   ["西村", "ニシムラ"], ["福田", "フクダ"], ["太田", "オオタ"], ["三浦", "ミウラ"], ["岡本", "オカモト"], ["松田", "マツダ"],
   ["中島", "ナカジマ"], ["原田", "ハラダ"], ["小川", "オガワ"], ["竹内", "タケウチ"], ["金子", "カネコ"], ["和田", "ワダ"],
 ];
-const FEMALE: [string, string][] = [
-  ["美咲", "ミサキ"], ["陽菜", "ヒナ"], ["結衣", "ユイ"], ["さくら", "サクラ"], ["葵", "アオイ"], ["七海", "ナナミ"],
-  ["真由美", "マユミ"], ["恵子", "ケイコ"], ["由美子", "ユミコ"], ["彩", "アヤ"], ["千尋", "チヒロ"], ["優子", "ユウコ"],
-  ["明美", "アケミ"], ["花子", "ハナコ"], ["舞", "マイ"], ["香織", "カオリ"], ["理沙", "リサ"], ["京子", "キョウコ"],
-  ["和子", "カズコ"], ["凛", "リン"], ["紗希", "サキ"], ["智子", "トモコ"], ["奈々", "ナナ"], ["芽依", "メイ"],
-];
-const MALE: [string, string][] = [
-  ["翔太", "ショウタ"], ["大輔", "ダイスケ"], ["健", "ケン"], ["拓也", "タクヤ"], ["蓮", "レン"], ["陽翔", "ハルト"],
-  ["大翔", "ヒロト"], ["誠", "マコト"], ["浩二", "コウジ"], ["隆", "タカシ"], ["直樹", "ナオキ"], ["健太", "ケンタ"],
-  ["悠真", "ユウマ"], ["亮", "リョウ"], ["修", "オサム"], ["達也", "タツヤ"], ["一郎", "イチロウ"], ["智也", "トモヤ"],
-  ["圭", "ケイ"], ["湊", "ミナト"], ["昭夫", "アキオ"], ["正雄", "マサオ"], ["颯太", "ソウタ"], ["朝陽", "アサヒ"],
-];
+/** 名前は年代に合わせる（若い人に昭和の名前が付かないように） */
+type Bracket = "young" | "mid" | "old";
+const NAMES: Record<"女性" | "男性", Record<Bracket, [string, string][]>> = {
+  女性: {
+    young: [["陽菜", "ヒナ"], ["結衣", "ユイ"], ["さくら", "サクラ"], ["葵", "アオイ"], ["七海", "ナナミ"], ["凛", "リン"], ["紗希", "サキ"], ["芽依", "メイ"], ["結菜", "ユイナ"], ["莉子", "リコ"], ["美桜", "ミオ"], ["心春", "コハル"]],
+    mid: [["美咲", "ミサキ"], ["彩", "アヤ"], ["千尋", "チヒロ"], ["優子", "ユウコ"], ["舞", "マイ"], ["香織", "カオリ"], ["理沙", "リサ"], ["奈々", "ナナ"], ["麻衣", "マイ"], ["愛", "アイ"], ["沙織", "サオリ"], ["恵", "メグミ"]],
+    old: [["恵子", "ケイコ"], ["和子", "カズコ"], ["京子", "キョウコ"], ["明美", "アケミ"], ["由美子", "ユミコ"], ["真由美", "マユミ"], ["智子", "トモコ"], ["洋子", "ヨウコ"], ["幸子", "サチコ"], ["久美子", "クミコ"], ["典子", "ノリコ"], ["裕子", "ユウコ"]],
+  },
+  男性: {
+    young: [["蓮", "レン"], ["陽翔", "ハルト"], ["大翔", "ヒロト"], ["湊", "ミナト"], ["悠真", "ユウマ"], ["颯太", "ソウタ"], ["朝陽", "アサヒ"], ["樹", "イツキ"], ["律", "リツ"], ["蒼", "アオイ"], ["陸", "リク"], ["新", "アラタ"]],
+    mid: [["翔太", "ショウタ"], ["大輔", "ダイスケ"], ["健", "ケン"], ["拓也", "タクヤ"], ["直樹", "ナオキ"], ["健太", "ケンタ"], ["亮", "リョウ"], ["達也", "タツヤ"], ["智也", "トモヤ"], ["圭", "ケイ"], ["和也", "カズヤ"], ["雄太", "ユウタ"]],
+    old: [["昭夫", "アキオ"], ["正雄", "マサオ"], ["一郎", "イチロウ"], ["浩二", "コウジ"], ["隆", "タカシ"], ["修", "オサム"], ["誠", "マコト"], ["博", "ヒロシ"], ["茂", "シゲル"], ["進", "ススム"], ["勝", "マサル"], ["清", "キヨシ"]],
+  },
+};
+const bracketOf = (age: number): Bracket => (age < 25 ? "young" : age < 50 ? "mid" : "old");
 const ALLERGIES = ["ペニシリン系", "ラテックス", "局所麻酔（リドカイン）", "金属（ニッケル）", "アスピリン"];
 const CONDITIONS = ["高血圧", "糖尿病", "心疾患（ペースメーカー）", "骨粗しょう症（BP製剤服用中）", "抗凝固薬（ワーファリン）服用中", "喘息", "妊娠中（20週）"];
 const TOOTH_STATES: ToothState[] = ["CR", "CR", "CR", "In", "Cr", "RCT", "C", "M", "観察", "Br", "Imp"];
+const TOOTH_STATES_YOUNG: ToothState[] = ["CR", "CR", "C", "In", "観察", "RCT"];
 const QUADS: Quadrant[] = ["UR", "UL", "LR", "LL"];
 
 function insuranceFor(ageYears: number): InsuranceType {
@@ -134,24 +138,36 @@ function insuranceFor(ageYears: number): InsuranceType {
   return pick<InsuranceType>(["社保本人", "社保本人", "社保家族", "国保"]);
 }
 
+/** 年齢に合った歯式（子どもにインプラントや欠損が付かないように） */
 function makeTeeth(ageYears: number): Patient["teeth"] {
-  const n = ageYears < 15 ? int(0, 2) : ageYears > 65 ? int(5, 10) : int(1, 6);
   const t: Patient["teeth"] = {};
+  if (ageYears < 6) return t; // 乳歯だけの年齢。永久歯の記録はまだない
+  if (ageYears < 15) {
+    // 永久歯は6番（6歳ごろ）と、12歳以降の7番だけ。むし歯・CR・要観察のみ
+    for (let i = 0, n = int(0, 2); i < n; i++) {
+      const num = ageYears >= 12 && chance(0.4) ? 7 : 6;
+      t[`${pick(QUADS)}${num}`] = pick<ToothState>(["C", "CR", "観察"]);
+    }
+    return t;
+  }
+  const n = ageYears > 65 ? int(5, 10) : ageYears < 30 ? int(0, 3) : int(1, 6);
+  const pool = ageYears < 30 ? TOOTH_STATES_YOUNG : TOOTH_STATES;
   for (let i = 0; i < n; i++) {
     const q = pick(QUADS);
-    const num = (ageYears < 15 ? int(4, 6) : int(1, 8)) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-    let s = pick(TOOTH_STATES);
-    if (ageYears > 65 && chance(0.3)) s = "M";
-    t[`${q}${num}`] = s;
+    const num = int(1, 8) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+    let st = pick(pool);
+    if (ageYears > 65 && chance(0.3)) st = "M";
+    t[`${q}${num}`] = st;
   }
   return t;
 }
 
 const usedNames = new Set<string>();
-function makeName(sex: "女性" | "男性"): { name: string; kana: string } {
+function makeName(sex: "女性" | "男性", ageYears: number): { name: string; kana: string } {
+  const pool = NAMES[sex][bracketOf(ageYears)];
   for (;;) {
     const [f, fk] = pick(FAMILY);
-    const [g, gk] = pick(sex === "女性" ? FEMALE : MALE);
+    const [g, gk] = pick(pool);
     const name = `${f} ${g}`;
     if (usedNames.has(name)) continue;
     usedNames.add(name);
@@ -159,12 +175,13 @@ function makeName(sex: "女性" | "男性"): { name: string; kana: string } {
   }
 }
 
-export const patients: Patient[] = Array.from({ length: 84 }, (_, i) => {
+/** 患者さん（800人）。医院の規模に合わせ、1人あたりの予約が多くなりすぎないようにしている */
+export const patients: Patient[] = Array.from({ length: 800 }, (_, i) => {
   const sex: "女性" | "男性" = chance(0.56) ? "女性" : "男性";
-  const { name, kana } = makeName(sex);
-  const ageYears = pick([int(4, 14), int(18, 39), int(25, 49), int(40, 64), int(50, 74), int(66, 88)]);
+  const ageYears = pick([int(3, 14), int(18, 39), int(25, 49), int(40, 64), int(50, 74), int(66, 88)]);
+  const { name, kana } = makeName(sex, ageYears);
   const birth = subDays(subMonths(TODAY, ageYears * 12 + int(0, 11)), int(0, 27));
-  const firstVisit = subDays(TODAY, int(20, 2400));
+  const firstVisit = subDays(TODAY, Math.min(int(20, 2400), Math.max(20, (ageYears - 2) * 365)));
   const visits = int(1, 46);
   const lastVisit = subDays(TODAY, int(3, 220));
   const recallMonths = pick([3, 3, 4, 6] as const);
@@ -214,6 +231,7 @@ export const ME: Patient = (() => {
     lastVisit: subDays(TODAY, 86),
     recallMonths: 3,
     nextRecall: addDays(TODAY, 6),
+    teeth: { LR6: "CR", UL7: "In", UR6: "観察" },
   } satisfies Partial<Patient>);
   return p;
 })();
@@ -222,7 +240,14 @@ export const ME: Patient = (() => {
 const LATE_PATIENT = patients[8];
 Object.assign(LATE_PATIENT, { cancellations: 2, noShows: 1 });
 const ANTICOAG_PATIENT = patients[14];
-Object.assign(ANTICOAG_PATIENT, { conditions: ["抗凝固薬（ワーファリン）服用中", "高血圧"], birth: subMonths(TODAY, 71 * 12) });
+Object.assign(ANTICOAG_PATIENT, { conditions: ["抗凝固薬（ワーファリン）服用中", "高血圧"], birth: subMonths(TODAY, 71 * 12 + 3), teeth: makeTeeth(71) });
+{
+  // 年代に合う名前に付け替える（姓はそのまま）
+  const [family, familyKana] = [ANTICOAG_PATIENT.name.split(" ")[0], ANTICOAG_PATIENT.kana.split(" ")[0]];
+  const given = NAMES[ANTICOAG_PATIENT.sex].old.find(([g]) => !usedNames.has(`${family} ${g}`))!;
+  usedNames.add(`${family} ${given[0]}`);
+  Object.assign(ANTICOAG_PATIENT, { name: `${family} ${given[0]}`, kana: `${familyKana} ${given[1]}` });
+}
 const ALLERGY_PATIENT = patients[21];
 Object.assign(ALLERGY_PATIENT, { allergies: ["ラテックス"] });
 const NEW_PATIENT = patients[30];
@@ -236,6 +261,20 @@ export const unitById = (id: string) => units.find(u => u.id === id)!;
 // ─── 予約 ───────────────────────────────────────────────────────────────────
 const DR_SERVICES = services.filter(s => s.by === "Dr" && s.id !== "sv10");
 const DH_SERVICES = services.filter(s => s.by === "DH");
+/** メニューの出やすさ（むし歯・定期検診が多く、ホワイトニングや相談は少ない） */
+const SERVICE_WEIGHT: Record<string, number> = {
+  sv03: 30, sv04: 14, sv08: 18, sv06: 8, sv07: 8, sv09: 10, sv12: 4, sv13: 4,
+  sv01: 55, sv05: 25, sv02: 13, sv11: 7,
+};
+function pickService(list: Service[]): Service {
+  const total = list.reduce((s, x) => s + (SERVICE_WEIGHT[x.id] ?? 1), 0);
+  let r = R() * total;
+  for (const x of list) {
+    r -= SERVICE_WEIGHT[x.id] ?? 1;
+    if (r <= 0) return x;
+  }
+  return list[list.length - 1];
+}
 const FIRST = services.find(s => s.id === "sv10")!;
 /** 受付が予約に添えるメモ。メニューに合うものだけ（初診には付けない） */
 const NOTES_BY_SERVICE: Record<string, string[]> = {
@@ -252,9 +291,12 @@ const NOTES_BY_SERVICE: Record<string, string[]> = {
 };
 const SOURCE: ApptSource[] = ["web", "web", "web", "phone", "phone", "phone", "phone", "phone", "line", "walkin"];
 /** 初診（初診・カウンセリング）にだけ現れる新しい患者さん。過去分と今後の分 */
-const NEW_PAST = patients.slice(70, 76);
-const NEW_FUTURE = patients.slice(76, 82);
+const NEW_PAST = patients.slice(700, 760);
+const NEW_FUTURE = patients.slice(760, 790);
 const REGULARS = patients.filter(p => p !== ME && p !== NEW_PATIENT && !NEW_PAST.includes(p) && !NEW_FUTURE.includes(p));
+/** しばらく来院していない患者さん（この期間に予約がない。リコールの対象になる） */
+const LAPSED = new Set(patients.slice(500, 700));
+const BOOKABLE = REGULARS.filter(p => !LAPSED.has(p));
 /** 年齢に合うメニューか（小児歯科は15歳未満、入れ歯は55歳以上 など） */
 const ageOf = (p: Patient) => Math.floor((TODAY.getTime() - p.birth.getTime()) / (365.25 * 86_400_000));
 const FITS: Record<string, (age: number) => boolean> = {
@@ -262,22 +304,29 @@ const FITS: Record<string, (age: number) => boolean> = {
   sv09: a => a < 15, sv11: a => a >= 18 && a <= 65, sv12: a => a >= 30, sv13: a => a >= 7 && a <= 50,
 };
 const suits = (p: Patient, sv: Service) => (FITS[sv.id] ?? (() => true))(ageOf(p));
+/** 今週の月曜日 */
+export const WEEK_START = startOfWeek(TODAY, { weekStartsOn: 1 });
+/** 予約データは「今週より前の12週」から35日先まで */
+const FIRST_OFF = -(differenceInCalendarDays(TODAY, WEEK_START) + 84);
 /** 予約データがある期間の始まり（これより前の来院は visitsOf で出す） */
-export const WINDOW_START = subDays(TODAY, 42);
+export const WINDOW_START = addDays(TODAY, FIRST_OFF);
 
 function buildAppointments(): Appointment[] {
   const out: Appointment[] = [];
   let seq = 0;
   let past = 0;
   let future = 0;
+  const perPatient = new Map<string, number>();
   const nowMin = minutesOfDay(now());
-  for (let off = -42; off <= 35; off++) {
+  for (let off = FIRST_OFF; off <= 35; off++) {
     const day = addDays(TODAY, off);
     const h = hoursFor(day);
     if (!h) continue;
     const dk = key(day);
     const booked = new Set<string>();
     const pool = off > 0 ? NEW_FUTURE : NEW_PAST;
+    // 土曜と夕方は混み、水曜と昼過ぎは空きやすい
+    const dayFactor = day.getDay() === 6 ? 0.6 : day.getDay() === 3 ? 1.4 : 1;
     for (const u of units) {
       const isDr = u.id === "u1" || u.id === "u2";
       const staffId = u.id === "u1" ? "s1" : u.id === "u2" ? "s2" : u.id === "u3" ? "s3" : "s4";
@@ -285,20 +334,28 @@ function buildAppointments(): Appointment[] {
         let cur = ws;
         const gapRate = off > 7 ? 0.42 : off > 0 ? 0.3 : 0.18;
         while (cur < we) {
-          if (chance(gapRate)) cur += pick([15, 30, 30, 45]);
-          let sv = isDr ? (chance(off > 0 ? 0.1 : 0.05) ? FIRST : pick(DR_SERVICES)) : pick(DH_SERVICES);
-          if (sv === FIRST && (off > 0 ? future : past) >= pool.length) sv = pick(DR_SERVICES);
+          const hourFactor = cur >= 1020 ? 0.5 : cur >= 840 && cur < 960 ? 1.35 : cur < 600 ? 0.9 : 1;
+          if (chance(Math.min(0.9, gapRate * dayFactor * hourFactor))) cur += pick([15, 30, 30, 45]);
+          let sv = isDr ? (chance(off > 0 ? 0.045 : 0.03) ? FIRST : pickService(DR_SERVICES)) : pickService(DH_SERVICES);
+          if (sv === FIRST && (off > 0 ? future : past) >= pool.length) sv = pickService(DR_SERVICES);
           if (cur + sv.minutes > we) break;
           let p: Patient;
           if (sv === FIRST) p = off > 0 ? NEW_FUTURE[future++] : NEW_PAST[past++];
           else {
-            const cands = REGULARS.filter(q => !booked.has(q.id) && suits(q, sv));
-            p = cands.length ? pick(cands) : pick(REGULARS);
+            // 予約が少ない人を優先して選ぶ（同じ人が毎週来るような偏りを防ぐ）
+            const cands = BOOKABLE.filter(q => !booked.has(q.id) && suits(q, sv));
+            const pool2 = cands.length ? cands : BOOKABLE;
+            p = pool2[Math.floor(R() * pool2.length)];
+            for (let k = 0; k < 2; k++) {
+              const q = pool2[Math.floor(R() * pool2.length)];
+              if ((perPatient.get(q.id) ?? 0) < (perPatient.get(p.id) ?? 0)) p = q;
+            }
           }
+          perPatient.set(p.id, (perPatient.get(p.id) ?? 0) + 1);
           booked.add(p.id);
           const source: ApptSource = sv === FIRST ? pick(["web", "web", "phone"] as const) : off > 0 ? pick(SOURCE.filter(s => s !== "walkin")) : pick(SOURCE);
           let status: Appointment["status"] = "confirmed";
-          if (off < 0) status = chance(0.9) ? "completed" : chance(0.7) ? "cancelled" : "no_show";
+          if (off < 0) status = chance(0.94) ? "completed" : chance(0.75) ? "cancelled" : "no_show";
           else if (off > 0) status = source === "web" && chance(0.08) ? "pending" : chance(0.03) ? "cancelled" : "confirmed";
           else if (cur + sv.minutes <= nowMin) status = "completed";
           else if (cur <= nowMin) status = "in_progress";
@@ -316,8 +373,8 @@ function buildAppointments(): Appointment[] {
             source,
             firstVisit: sv === FIRST,
             note: notes && chance(0.16) ? pick(notes) : undefined,
-            arrivedAt: status === "in_progress" ? cur - int(4, 12) : undefined,
-            startedAt: status === "in_progress" ? cur + int(0, 4) : undefined,
+            arrivedAt: status === "in_progress" ? cur - int(4, 12) : status === "completed" ? cur - int(1, 12) : undefined,
+            startedAt: status === "in_progress" ? cur + int(0, 4) : status === "completed" ? cur + int(0, 6) : undefined,
             cancelReason: status === "cancelled" ? pick(["体調不良のため", "仕事の都合", "日程の変更希望", "家庭の事情"]) : undefined,
           });
           if (sv === FIRST) {
@@ -370,7 +427,7 @@ function buildAppointments(): Appointment[] {
   if (waiting2) Object.assign(waiting2, { status: "arrived", arrivedAt: nowMin - 2 });
   // 午前の無断キャンセル
   const morningDone = t0.filter(a => a.status === "completed");
-  if (morningDone[2]) Object.assign(morningDone[2], { status: "no_show", note: undefined });
+  if (morningDone[2]) Object.assign(morningDone[2], { status: "no_show", note: undefined, arrivedAt: undefined, startedAt: undefined });
   // 午後：キャンセル1件・Web予約の承認待ち2件
   const pm = upcoming.filter(a => a.start >= 870);
   if (pm[1]) Object.assign(pm[1], { status: "cancelled", cancelReason: "体調不良のため" });
@@ -409,6 +466,16 @@ function buildAppointments(): Appointment[] {
     id: "a-me-next", date: myKey, start: 930, end: 960, patientId: ME.id, serviceId: "sv01",
     staffId: "s3", unitId: "u3", status: "confirmed", source: "web", firstVisit: false,
   });
+  // 本人の前回の定期検診（約3か月前）
+  const lastDay = new Date(subDays(TODAY, 86));
+  while (!hoursFor(lastDay)) lastDay.setDate(lastDay.getDate() - 1);
+  const lastKey = key(lastDay);
+  for (const b of out.filter(b => b.date === lastKey && b.unitId === "u3" && b.start < 960 && b.end > 930)) out.splice(out.indexOf(b), 1);
+  out.push({
+    id: "a-me-last", date: lastKey, start: 930, end: 960, patientId: ME.id, serviceId: "sv01",
+    staffId: "s3", unitId: "u3", status: "completed", source: "line", firstVisit: false, arrivedAt: 924, startedAt: 931,
+  });
+  ME.lastVisit = lastDay;
 
   // 患者情報を予約データに合わせる（最終来院・来院回数・初診日・キャンセル回数・次のリコール）
   for (const p of REGULARS) {
@@ -468,55 +535,66 @@ export function visitsOf(p: Patient): VisitRecord[] {
 
 // ─── 診療メモ ───────────────────────────────────────────────────────────────
 type ToothKey = NonNullable<Memo["teeth"]>[number];
-const MEMO_LINES: Record<string, { body: string; teeth?: ToothKey[]; next?: string }[]> = {
+type MemoLine = { body: string; teeth?: ToothKey[]; next?: string; state?: ToothState };
+const MEMO_LINES: Record<string, MemoLine[]> = {
   sv01: [
     { body: "歯石除去・TBI。PCR 28%。右下の歯間部に磨き残し", next: "3か月後に定期検診" },
     { body: "定期検診。新しいむし歯なし。歯ぐきの状態も良好", next: "3か月後に定期検診" },
-    { body: "歯石除去。左上6番の歯ぐきに軽い腫れ。経過観察", teeth: ["UL6"], next: "1か月後に歯ぐきの再チェック" },
+    { body: "歯石除去。左上6番の歯ぐきに軽い腫れ。経過観察", teeth: ["UL6"], next: "1か月後に歯ぐきの再チェック", state: "観察" },
   ],
   sv02: [
     { body: "PMTC・フッ素塗布。コーヒーの着色が多め", next: "2か月後にPMTC" },
     { body: "PMTC。前回より着色は減少。歯間ブラシ SSS を案内" },
   ],
   sv03: [
-    { body: "右下6番 CR充填。しみる症状は消失", teeth: ["LR6"], next: "左下5番 CR・30分" },
-    { body: "左上5番 C2。インレー形成・印象", teeth: ["UL5"], next: "左上5番 インレーセット・30分" },
-    { body: "右上4番 CR充填。浸潤麻酔あり", teeth: ["UR4"] },
+    { body: "右下6番 CR充填。しみる症状は消失", teeth: ["LR6"], next: "左下5番 CR・30分", state: "CR" },
+    { body: "左上5番 C2。インレー形成・印象", teeth: ["UL5"], next: "左上5番 インレーセット・30分", state: "In" },
+    { body: "右上4番 CR充填。浸潤麻酔あり", teeth: ["UR4"], state: "CR" },
   ],
   sv04: [
-    { body: "左上4番 根管拡大・洗浄（2回目）。打診痛は軽減", teeth: ["UL4"], next: "左上4番 根管充填・45分" },
-    { body: "右下7番 根管充填。術後のX線で確認", teeth: ["LR7"], next: "右下7番 支台築造・45分" },
+    { body: "左上4番 根管拡大・洗浄（2回目）。打診痛は軽減", teeth: ["UL4"], next: "左上4番 根管充填・45分", state: "RCT" },
+    { body: "右下7番 根管充填。術後のX線で確認", teeth: ["LR7"], next: "右下7番 支台築造・45分", state: "RCT" },
   ],
   sv05: [
     { body: "右下 SRP（1/4ブロック目）。出血あり。浸潤麻酔使用", teeth: ["LR6", "LR7"], next: "左下 SRP・45分" },
     { body: "左上 SRP。歯周ポケット 4〜5mm の部位を中心に", teeth: ["UL6", "UL7"], next: "右上 SRP・45分" },
   ],
   sv06: [
-    { body: "左下8番 抜歯。止血を確認。抗生剤と痛み止めを処方", teeth: ["LL8"], next: "翌日 消毒・15分" },
-    { body: "右上8番 抜歯。術後の注意を説明。腫れは数日で引く見込み", teeth: ["UR8"], next: "1週間後 抜糸・15分" },
+    { body: "左下8番 抜歯。止血を確認。抗生剤と痛み止めを処方", teeth: ["LL8"], next: "翌日 消毒・15分", state: "M" },
+    { body: "右上8番 抜歯。術後の注意を説明。腫れは数日で引く見込み", teeth: ["UR8"], next: "1週間後 抜糸・15分", state: "M" },
   ],
   sv07: [
     { body: "上の入れ歯 当たりを2か所調整。痛みは軽減", next: "2週間後に再調整" },
     { body: "下の入れ歯 クラスプを調整。食事時の外れが改善" },
   ],
   sv08: [
-    { body: "右上6番 クラウンセット。咬み合わせ良好", teeth: ["UR6"] },
-    { body: "左下6番 支台形成・印象。仮歯を装着", teeth: ["LL6"], next: "左下6番 クラウンセット・45分" },
+    { body: "右上6番 クラウンセット。咬み合わせ良好", teeth: ["UR6"], state: "Cr" },
+    { body: "左下6番 支台形成・印象。仮歯を装着", teeth: ["LL6"], next: "左下6番 クラウンセット・45分", state: "Cr" },
   ],
   sv09: [
     { body: "フッ素塗布。仕上げ磨きの方法を保護者に説明", next: "3か月後にフッ素塗布" },
     { body: "右下6番 シーラント。泣かずに頑張れました", teeth: ["LR6"] },
   ],
   sv10: [
-    { body: "初診。パノラマ撮影・歯周検査。主訴は右下の冷水痛", teeth: ["LR6"], next: "右下6番 むし歯治療・30分" },
-    { body: "初診。全体のクリーニング希望。むし歯は2本（右上5番・左下6番）", teeth: ["UR5", "LL6"], next: "歯周病治療（SRP）・45分" },
+    { body: "初診。パノラマ撮影・歯周検査。主訴は右下の冷水痛", teeth: ["LR6"], next: "右下6番 むし歯治療・30分", state: "C" },
+    { body: "初診。全体のクリーニング希望。むし歯は2本（右上5番・左下6番）", teeth: ["UR5", "LL6"], next: "歯周病治療（SRP）・45分", state: "C" },
   ],
   sv11: [{ body: "オフィスホワイトニング1回目。シェード A3 → A2。知覚過敏なし", next: "2週間後に2回目" }],
-  sv12: [{ body: "左下6番欠損部のインプラント相談。CT撮影の予約を案内", teeth: ["LL6"], next: "CT撮影・30分" }],
+  sv12: [{ body: "左下6番欠損部のインプラント相談。CT撮影の予約を案内", teeth: ["LL6"], next: "CT撮影・30分", state: "M" }],
   sv13: [{ body: "マウスピース矯正の相談。口腔内スキャンと費用を説明" }],
 };
 
-/** 直近の来院に付いている診療メモ（受付・衛生士・歯科医師の申し送り） */
+/** 15歳未満の患者さんのメモ（永久歯の6番・7番だけを扱う） */
+const MEMO_LINES_CHILD: Record<string, MemoLine[]> = {
+  sv01: [{ body: "定期検診。フッ素塗布。仕上げ磨きのコツを保護者に説明", next: "3か月後に定期検診" }],
+  sv02: [{ body: "クリーニング。歯みがきの練習を一緒に行った" }],
+  sv03: [{ body: "右下6番 小さなむし歯をCR充填。よく頑張りました", teeth: ["LR6"], state: "CR" }],
+  sv09: MEMO_LINES.sv09,
+  sv10: [{ body: "初診。お口全体のチェックとフッ素塗布。保護者に食生活のアドバイス", next: "3か月後に定期検診" }],
+  sv13: [{ body: "小児矯正の相談。歯並びの経過を半年ごとに確認", next: "6か月後に経過観察" }],
+};
+
+/** 直近の来院に付いている診療メモ（受付・衛生士・歯科医師の申し送り）。書いた処置は歯式にも反映する */
 export const initialMemos: Memo[] = (() => {
   const r = mulberry32(4242);
   const out: Memo[] = [];
@@ -524,10 +602,14 @@ export const initialMemos: Memo[] = (() => {
   const done = initialAppointments
     .filter(a => a.status === "completed" && a.date >= from && a.date <= TODAY_KEY)
     .sort((a, b) => (a.date === b.date ? b.start - a.start : a.date < b.date ? 1 : -1));
+  const toothUpdates: [Patient, ToothKey[], ToothState][] = [];
   done.forEach((a, i) => {
     if (r() > 0.62) return;
-    const pool = MEMO_LINES[a.serviceId] ?? MEMO_LINES.sv01;
+    const p = patientById(a.patientId);
+    const child = ageOf(p) < 15;
+    const pool = (child ? MEMO_LINES_CHILD[a.serviceId] ?? MEMO_LINES_CHILD.sv01 : MEMO_LINES[a.serviceId]) ?? MEMO_LINES.sv01;
     const line = pool[Math.floor(r() * pool.length)];
+    if (line.state && line.teeth) toothUpdates.push([p, line.teeth, line.state]);
     out.push({
       id: `m${String(i + 1).padStart(4, "0")}`,
       patientId: a.patientId,
@@ -540,6 +622,8 @@ export const initialMemos: Memo[] = (() => {
       next: line.next,
     });
   });
+  // 古いメモから順に、歯式に反映する
+  for (const [p, teeth, st] of toothUpdates.reverse()) for (const t of teeth) p.teeth[t] = st;
   // 気をつけたい患者には固定メモ
   out.push({ id: "m-pin-1", patientId: ANTICOAG_PATIENT.id, date: key(subDays(TODAY, 40)), at: 640, staffId: "s1", body: "ワーファリン服用中。観血処置の前に PT-INR を確認する（かかりつけ内科：桜新町内科）", pinned: true });
   out.push({ id: "m-pin-2", patientId: ALLERGY_PATIENT.id, date: key(subDays(TODAY, 120)), at: 600, staffId: "s3", body: "ラテックスアレルギー。ニトリルグローブ・ラバーダムはノンラテックスを使用", pinned: true });
@@ -563,42 +647,89 @@ export function availableStarts(day: Date, minutes: number, appts: Appointment[]
   return res;
 }
 
-// ─── レポート ───────────────────────────────────────────────────────────────
-const weekStart = startOfWeek(TODAY, { weekStartsOn: 1 });
-export const weekly = Array.from({ length: 12 }, (_, i) => {
-  const w = subDays(weekStart, (11 - i) * 7);
-  const trend = i / 11;
+// ─── レポート（予約データから集計） ───────────────────────────────────────────
+const weekStart = WEEK_START;
+function capacityMinutes(from: Date, to: Date): number {
+  let m = 0;
+  for (let d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+    const h = hoursFor(d);
+    if (h) m += (h.am[1] - h.am[0] + h.pm[1] - h.pm[0]) * units.length;
+  }
+  return m;
+}
+/** from〜to（to は含まない）の予約を集計する */
+export function summarize(from: Date, to: Date) {
+  const f = key(from);
+  const t = key(to);
+  const xs = initialAppointments.filter(a => a.date >= f && a.date < t);
+  const done = xs.filter(a => a.status === "completed");
+  const booked = xs.filter(a => a.status !== "cancelled" && a.status !== "no_show");
+  const n = Math.max(1, xs.length);
+  const cancellations = xs.filter(a => a.status === "cancelled").length;
+  const noShows = xs.filter(a => a.status === "no_show").length;
   return {
-    week: w,
-    visits: Math.round(156 + trend * 22 + (R() - 0.5) * 18),
-    newPatients: Math.round(7 + trend * 4 + (R() - 0.5) * 5),
-    cancellations: Math.round(10 - trend * 3 + (R() - 0.5) * 4),
-    noShows: Math.max(0, Math.round(3 - trend * 1.5 + (R() - 0.5) * 2)),
-    webRatio: Math.min(0.48, 0.3 + trend * 0.1 + (R() - 0.5) * 0.04),
-    selfPay: Math.round((210 + trend * 90 + (R() - 0.5) * 80) * 1000),
+    appointments: xs.length,
+    visits: done.length,
+    newPatients: done.filter(a => a.firstVisit).length,
+    cancellations,
+    noShows,
+    cancelRate: cancellations / n,
+    noShowRate: noShows / n,
+    webRatio: xs.filter(a => a.source === "web").length / n,
+    selfPay: done.reduce((sum, a) => sum + (serviceById(a.serviceId).price ?? 0), 0),
+    utilization: booked.reduce((sum, a) => sum + (a.end - a.start), 0) / Math.max(1, capacityMinutes(from, to)),
   };
+}
+/** 先週までの12週（月曜はじまり）。最後の要素が先週 */
+export const weekly = Array.from({ length: 12 }, (_, i) => {
+  const w = subDays(weekStart, (12 - i) * 7);
+  const x = summarize(w, addDays(w, 7));
+  return { week: w, visits: x.visits, newPatients: x.newPatients, cancellations: x.cancellations, noShows: x.noShows, webRatio: x.webRatio, selfPay: x.selfPay };
 });
+const last30 = summarize(subDays(TODAY, 30), TODAY);
+const prev30 = summarize(subDays(TODAY, 60), subDays(TODAY, 30));
+/** 直近30日（今日は含まない）と、その前の30日 */
 export const kpis = {
-  visitsMonth: 742, visitsPrev: 699,
-  newMonth: 38, newPrev: 34,
-  cancelRate: 0.048, cancelPrev: 0.054,
-  noShowRate: 0.011, noShowPrev: 0.016,
-  webRatio: 0.41, webPrev: 0.36,
-  selfPayMonth: 1284000, selfPayPrev: 1102000,
-  utilization: 0.82, utilizationPrev: 0.79,
+  visitsMonth: last30.visits, visitsPrev: prev30.visits,
+  newMonth: last30.newPatients, newPrev: prev30.newPatients,
+  cancelRate: last30.cancelRate, cancelPrev: prev30.cancelRate,
+  noShowRate: last30.noShowRate, noShowPrev: prev30.noShowRate,
+  webRatio: last30.webRatio, webPrev: prev30.webRatio,
+  selfPayMonth: last30.selfPay, selfPayPrev: prev30.selfPay,
+  utilization: last30.utilization, utilizationPrev: prev30.utilization,
   recallReturn: 0.68, recallReturnPrev: 0.63,
 };
-/** ユニット稼働率のヒートマップ（診療曜日 × 9時〜18時台）。null は診療時間外 */
+/** ユニット稼働率のヒートマップ（診療曜日 × 9時〜18時台、直近8週）。null は診療時間外 */
 export const HEATMAP_DAYS = ["月", "火", "水", "金", "土"];
 export const HEATMAP_HOURS = Array.from({ length: 10 }, (_, i) => 9 + i);
-export const heatmap: (number | null)[][] = HEATMAP_DAYS.map(d =>
-  HEATMAP_HOURS.map(hour => {
-    if (hour === 13) return null; // 昼休み
-    if (d === "土" && hour >= 17) return null;
-    const base = hour >= 17 ? 0.92 : hour >= 15 ? 0.78 : hour <= 10 ? 0.84 : 0.7;
-    const dayAdj = d === "土" ? 0.08 : d === "水" ? -0.12 : 0;
-    return Math.max(0.25, Math.min(1, base + dayAdj + (R() - 0.5) * 0.14));
-  }));
+export const heatmap: (number | null)[][] = (() => {
+  const DOW: Record<string, number> = { 月: 1, 火: 2, 水: 3, 金: 5, 土: 6 };
+  const byDate = new Map<string, Appointment[]>();
+  for (const a of initialAppointments) {
+    if (a.status === "cancelled" || a.status === "no_show") continue;
+    const list = byDate.get(a.date);
+    if (list) list.push(a);
+    else byDate.set(a.date, [a]);
+  }
+  return HEATMAP_DAYS.map(dn =>
+    HEATMAP_HOURS.map(hour => {
+      let avail = 0;
+      let used = 0;
+      const hs = hour * 60;
+      const he = hs + 60;
+      for (let d = subDays(TODAY, 56); d < TODAY; d = addDays(d, 1)) {
+        if (d.getDay() !== DOW[dn]) continue;
+        const h = hoursFor(d);
+        if (!h) continue;
+        const open = [h.am, h.pm].reduce((sum, [a, b]) => sum + Math.max(0, Math.min(b, he) - Math.max(a, hs)), 0);
+        if (!open) continue;
+        avail += open * units.length;
+        for (const a of byDate.get(key(d)) ?? []) used += Math.max(0, Math.min(a.end, he) - Math.max(a.start, hs));
+      }
+      return avail ? Math.min(1, used / avail) : null;
+    }),
+  );
+})();
 
 // ─── リコール ───────────────────────────────────────────────────────────────
 /** 定期検診の時期（nextRecall）が前後30日に入っている患者さん。予約が入っていれば「予約済み」 */
@@ -606,10 +737,22 @@ export const recalls: RecallItem[] = (() => {
   const from = subDays(TODAY, 30);
   const to = addDays(TODAY, 30);
   const CHECKUP = new Set(["sv01", "sv02", "sv09"]);
+  const recallTaken = new Set<string>();
   const items = REGULARS.filter(p => p.nextRecall && p.nextRecall >= from && p.nextRecall <= to)
+    .sort((a, b) => Math.abs(a.nextRecall!.getTime() - TODAY.getTime()) - Math.abs(b.nextRecall!.getTime() - TODAY.getTime()))
+    .slice(0, 40)
     .sort((a, b) => a.nextRecall!.getTime() - b.nextRecall!.getTime())
-    .map((p): RecallItem => {
-      const booked = initialAppointments.some(a => a.patientId === p.id && a.date > TODAY_KEY && CHECKUP.has(a.serviceId) && (a.status === "confirmed" || a.status === "pending"));
+    .map((p, idx): RecallItem => {
+      let booked = initialAppointments.some(a => a.patientId === p.id && a.date > TODAY_KEY && CHECKUP.has(a.serviceId) && (a.status === "confirmed" || a.status === "pending"));
+      // リコールのお知らせを見て、何人かはすでに定期検診を予約している
+      if (!booked && idx % 4 === 1) {
+        const slot = initialAppointments.find(a => a.date > TODAY_KEY && (a.serviceId === "sv01" || a.serviceId === "sv02") && a.status === "confirmed" && a.id !== "a-me-next" && !recallTaken.has(a.id));
+        if (slot) {
+          recallTaken.add(slot.id);
+          Object.assign(slot, { patientId: p.id, source: p.line ? "line" : "web" });
+          booked = true;
+        }
+      }
       const due = p.nextRecall!;
       const status: RecallItem["status"] = booked ? "予約済み" : due < TODAY ? pick(["未連絡", "送信済み", "送信済み"] as const) : pick(["未連絡", "未連絡", "送信済み", "保留"] as const);
       return {
@@ -719,6 +862,12 @@ export const consoleClinics: ConsoleClinic[] = [
   { id: "c7", name: "しらかば歯科医院", city: "北海道札幌市", plan: "partner", active: true, createdAt: subDays(TODAY, 540), staff: 3, units: 3, appts30d: 274, apptsSeries: series(70, -0.04), webRatio: 0.22, addons: ["line_reminder", "recall"], lastActiveAt: subDays(now(), 9), setup: { hours: true, menu: true, staff: true, email: true, line: true } },
   { id: "c8", name: "ことり歯科", city: "福岡県福岡市", plan: "free", active: false, createdAt: subDays(TODAY, 77), staff: 1, units: 1, appts30d: 0, apptsSeries: series(4, -1), webRatio: 0, addons: [], lastActiveAt: subDays(now(), 41), setup: { hours: true, menu: false, staff: false, email: false, line: false } },
 ];
+{
+  const c1 = consoleClinics[0];
+  c1.appts30d = last30.appointments;
+  c1.webRatio = Math.round(last30.webRatio * 100) / 100;
+  c1.apptsSeries = weekly.map(w => summarize(w.week, addDays(w.week, 7)).appointments);
+}
 export const consoleMonthly = Array.from({ length: 12 }, (_, i) => ({
   month: subMonths(TODAY, 11 - i),
   mrr: Math.round(18000 + i * 6400 + (R() - 0.3) * 4000),
