@@ -29,7 +29,7 @@ export default function Booking({ param }: { param?: string }) {
   // もう一度見せると二重予約の入口になるので、最初の手順なら新しい予約として始め、それ以外はホームへ。
   // 抜けていく途中の画面（確認→完了で後ろに下がる確認画面など）では判定しない
   const present = useIsPresent();
-  const stale = present && (step !== "done" ? !!draft.apptId : !ready && hasFinishedBooking());
+  const stale = present && (step !== "done" ? !!draft.apptId : !ready && !draft.apptId && hasFinishedBooking());
   useEffect(() => {
     if (!stale) return;
     if (step === "type") reset();

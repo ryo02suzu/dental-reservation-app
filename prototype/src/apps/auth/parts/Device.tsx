@@ -28,7 +28,7 @@ export function StaffPicker({ onPick, onOther }: { onPick: (s: Staff) => void; o
             onClick={() => onPick(s)}
             className="flex flex-col items-center rounded-card px-1 pb-3 pt-4 transition-colors hover:bg-fill/8 active:bg-fill/12"
           >
-            <Avatar name={s.name} tone={s.tone} size={64} className={s.id === LAST_USED ? "ring-2 ring-accent/45 ring-offset-2 ring-offset-bg" : undefined} />
+            <Avatar name={s.name} tone={s.tone} size={64} className={s.id === LAST_USED ? "ring-2 ring-accent/45" : undefined} />
             <span className="mt-2.5 w-full truncate text-[14px] font-semibold">{s.name}</span>
             <span className="mt-0.5 text-[12px] text-label2">{s.role}{s.id === LAST_USED && <span className="font-medium text-accent">・前回</span>}</span>
           </motion.button>

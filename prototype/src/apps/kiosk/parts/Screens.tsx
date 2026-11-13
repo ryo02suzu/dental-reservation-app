@@ -80,7 +80,7 @@ export function Scan({ onResult, onUseNumber }: { onResult: (a: Appointment | un
           <KButton variant="secondary" size="md" icon={CreditCard} onClick={onUseNumber}>診察券番号で受付する</KButton>
         </div>
       </div>
-      <div className="relative mx-auto aspect-square w-full max-w-[340px] overflow-hidden rounded-[32px] bg-black md:max-w-[420px] lg:mx-0 lg:w-[420px] lg:shrink-0">
+      <div className="relative mx-auto aspect-square w-full max-w-[340px] overflow-hidden rounded-[32px] bg-black md:max-w-[420px] lg:mx-0 lg:w-[420px] lg:shrink-0 shadow-[inset_0_0_0_1px_rgb(var(--separator)/0.3)]">
         {/* カメラ映像の代わりの、かざされた診察券の影 */}
         <div className="absolute inset-[22%] rounded-[14px] bg-white/[0.06]" />
         <QrCode className="absolute left-1/2 top-1/2 h-[30%] w-[30%] -translate-x-1/2 -translate-y-1/2 text-white/20" strokeWidth={1.3} />

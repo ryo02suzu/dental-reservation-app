@@ -98,7 +98,7 @@ export function PatientPage({ title, barTitle, subtitle, back, leading, actions,
               <div className={cn("flex-1", !footer && (phone ? "pb-[calc(32px+env(safe-area-inset-bottom))]" : "pb-16"))}>{children}</div>
               {footer}
             </main>
-            {split && <aside className="sticky top-[68px] min-w-0 pb-16 pt-2">{side}</aside>}
+            {split && <aside className="sticky top-[52px] min-w-0 pb-16 pt-[9px]">{side}</aside>}
           </div>
         </div>
       </div>
