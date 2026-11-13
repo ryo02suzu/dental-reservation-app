@@ -1,0 +1,19 @@
+import { useEffect, useState } from "react";
+
+function useMedia(query: string): boolean {
+  const get = () => (typeof window !== "undefined" ? window.matchMedia(query).matches : false);
+  const [match, setMatch] = useState(get);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setMatch(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return match;
+}
+
+/** スマホ幅（タブバー＋大見出しのiOS型レイアウト） */
+export const useIsPhone = () => useMedia("(max-width: 767px)");
+/** 幅の広い画面（3カラムなどを使ってよい） */
+export const useIsWide = () => useMedia("(min-width: 1180px)");

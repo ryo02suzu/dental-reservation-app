@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── デザイントークン ─────────────────────────────────────────────
+   色はRGBの3値で持ち、Tailwindの bg-label/60 のように不透明度を足して使う。
+   ライトがこの:root、ダークは下の2ブロックで同じ名前を上書きする。 */
+:root {
+  --bg: 242 242 247;
+  --grouped: 242 242 247;
+  --surface: 255 255 255;
+  --surface-2: 248 248 250;
+  --elevated: 255 255 255;
+  --thumb: 255 255 255;
+  --label: 29 29 31;
+  --label-2: 110 110 115;
+  --label-3: 160 160 165;
+  --label-4: 205 205 210;
+  --separator: 60 60 67;
+  --fill: 120 120 128;
+  --accent: 132 105 76;
+  --sand: 196 181 160;
+  --on-sand: 43 36 27;
+  --ink: 29 29 31;
+  --on-ink: 255 255 255;
+  --red: 217 58 63;
+  --material: 249 249 251;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: 0 0 0;
+    --grouped: 0 0 0;
+    --surface: 28 28 30;
+    --surface-2: 38 38 41;
+    --elevated: 32 32 35;
+    --thumb: 99 99 102;
+    --label: 245 245 247;
+    --label-2: 152 152 157;
+    --label-3: 105 105 110;
+    --label-4: 72 72 76;
+    --separator: 168 168 176;
+    --fill: 230 230 240;
+    --accent: 214 196 168;
+    --sand: 196 181 160;
+    --on-sand: 30 25 18;
+    --ink: 245 245 247;
+    --on-ink: 0 0 0;
+    --red: 255 92 87;
+    --material: 30 30 32;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: 0 0 0;
+  --grouped: 0 0 0;
+  --surface: 28 28 30;
+  --surface-2: 38 38 41;
+  --elevated: 32 32 35;
+  --thumb: 99 99 102;
+  --label: 245 245 247;
+  --label-2: 152 152 157;
+  --label-3: 105 105 110;
+  --label-4: 72 72 76;
+  --separator: 168 168 176;
+  --fill: 230 230 240;
+  --accent: 214 196 168;
+  --sand: 196 181 160;
+  --on-sand: 30 25 18;
+  --ink: 245 245 247;
+  --on-ink: 0 0 0;
+  --red: 255 92 87;
+  --material: 30 30 32;
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    height: 100%;
+    background: rgb(var(--bg));
+    color: rgb(var(--label));
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  #root {
+    height: 100%;
+    background: rgb(var(--bg));
+  }
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background: rgb(var(--sand) / 0.4);
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent) / 0.7);
+    outline-offset: 2px;
+  }
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  /* 和文見出しを詰めて組む（Appleの和文組版に近い字面） */
+  .palt {
+    font-feature-settings: "palt" 1;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  /* 0.5pxの罫線（Retinaで1物理ピクセル） */
+  .hairline-b {
+    box-shadow: inset 0 -0.5px 0 rgb(var(--separator) / 0.3);
+  }
+  .hairline-t {
+    box-shadow: inset 0 0.5px 0 rgb(var(--separator) / 0.3);
+  }
+  .hairline-r {
+    box-shadow: inset -0.5px 0 0 rgb(var(--separator) / 0.3);
+  }
+  .hairline-l {
+    box-shadow: inset 0.5px 0 0 rgb(var(--separator) / 0.3);
+  }
+  .hairline {
+    box-shadow: inset 0 0 0 0.5px rgb(var(--separator) / 0.3);
+  }
+  /* すりガラスのバー素材 */
+  .material {
+    background-color: rgb(var(--material) / 0.78);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    backdrop-filter: saturate(180%) blur(24px);
+  }
+  .material-thick {
+    background-color: rgb(var(--material) / 0.92);
+    -webkit-backdrop-filter: saturate(180%) blur(30px);
+    backdrop-filter: saturate(180%) blur(30px);
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .safe-b {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-t {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  /* 昼休み・休診などの斜線 */
+  .hatch {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      rgb(var(--fill) / 0.1) 0 6px,
+      transparent 6px 12px
+    );
+  }
+}
+
+@media (max-resolution: 1.5dppx) {
+  .hairline-b { box-shadow: inset 0 -1px 0 rgb(var(--separator) / 0.22); }
+  .hairline-t { box-shadow: inset 0 1px 0 rgb(var(--separator) / 0.22); }
+  .hairline-r { box-shadow: inset -1px 0 0 rgb(var(--separator) / 0.22); }
+  .hairline-l { box-shadow: inset 1px 0 0 rgb(var(--separator) / 0.22); }
+  .hairline { box-shadow: inset 0 0 0 1px rgb(var(--separator) / 0.22); }
+}
+
+@keyframes menuIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* vaulのシート表示中、背景をiOSのカードのように縮める際の地色 */
+[vaul-drawer-wrapper] {
+  min-height: 100%;
+}
