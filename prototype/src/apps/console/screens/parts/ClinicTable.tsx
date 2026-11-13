@@ -119,7 +119,7 @@ export function ClinicTable({ rows, width, sort, onSort, selected, onSelect, onC
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState icon={SearchX} title="該当する医院はありません" message="検索の文字や、絞り込みの条件を変えてください。" action={<Button size="sm" variant="gray" onClick={onClearFilters}>条件をクリア</Button>} />
+        <EmptyState icon={SearchX} title="該当する医院はありません" message="検索の条件を変えてください。" action={<Button size="sm" variant="gray" onClick={onClearFilters}>条件をクリア</Button>} />
       ) : (
         <div tabIndex={0} onKeyDown={onKey} className="outline-none" aria-label="↑↓キーで医院を切り替え">
           <AnimatePresence initial={false}>
@@ -175,7 +175,7 @@ export function ClinicTable({ rows, width, sort, onSort, selected, onSelect, onC
                   {show("status") && (
                     <div role="cell" className="min-w-0 text-[13px] leading-[18px]">
                       <StateText clinic={c} className="block" />
-                      <ReasonText clinic={c} className="block truncate text-[12px] leading-4" />
+                      <ReasonText clinic={c} withLast={!show("last")} className="block truncate text-[12px] leading-4" />
                     </div>
                   )}
                   <span aria-hidden className="pointer-events-none absolute bottom-0 left-[60px] right-0 h-px origin-bottom scale-y-50 bg-sep/30 group-last:hidden" />

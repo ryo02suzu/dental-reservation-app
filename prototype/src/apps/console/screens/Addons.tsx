@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Pencil } from "lucide-react";
 import type { Addon } from "@/data";
 import { yen } from "@/lib/format";
-import { useIsPhone } from "@/lib/media";
+import { useIsPhone, useIsWide } from "@/lib/media";
 import { useRoute } from "@/lib/nav";
 import { IconTile, ListSection, Page, SectionTitle, Switch, cn, springSoft, useToast } from "@/ui";
 import { AddonMatrix } from "./parts/AddonMatrix";
@@ -62,13 +62,17 @@ function Adoption({ count, total, className }: { count: number; total: number; c
 }
 
 // ─── PC：一覧（表の形） ───────────────────────────────────────────────────
-const CATALOG_COLS = "minmax(0,1fr) 112px 184px 112px 64px";
+// Mac は導入の帯を長く、iPad は名前と説明に幅を残す
+const CATALOG_COLS = "minmax(0,1fr) 88px 200px 104px 56px";
+const CATALOG_COLS_COMPACT = "minmax(0,1fr) 72px 132px 84px 52px";
 
 function Catalog({ s, onOpen, onOffer }: { s: ConsoleState; onOpen: (k: string) => void; onOffer: (a: Addon, on: boolean) => void }) {
   const n = s.clinics.length;
+  const wide = useIsWide();
+  const cols = wide ? CATALOG_COLS : CATALOG_COLS_COMPACT;
   return (
     <div role="table" aria-label="オプション" className="overflow-hidden rounded-cell bg-surface">
-      <div role="row" className="hairline-b grid h-9 items-center gap-x-4 px-4 text-[12px] font-medium text-label2" style={{ gridTemplateColumns: CATALOG_COLS }}>
+      <div role="row" className="hairline-b grid h-9 items-center gap-x-4 px-4 text-[12px] font-medium text-label2" style={{ gridTemplateColumns: cols }}>
         <span role="columnheader" className="pl-12">オプション</span>
         <span role="columnheader" className="text-right">月額</span>
         <span role="columnheader">導入</span>
@@ -86,7 +90,7 @@ function Catalog({ s, onOpen, onOffer }: { s: ConsoleState; onOpen: (k: string) 
             onClick={() => onOpen(a.key)}
             onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(a.key))}
             className="group relative grid min-h-[64px] cursor-default items-center gap-x-4 px-4 py-2.5 outline-none transition-colors duration-100 hover:bg-fill/[0.05] focus-visible:bg-fill/[0.06]"
-            style={{ gridTemplateColumns: CATALOG_COLS }}
+            style={{ gridTemplateColumns: cols }}
           >
             <div role="cell" className="flex min-w-0 items-center gap-3">
               <span className={cn("transition-opacity", !a.active && "opacity-45")}><IconTile icon={m.icon} tone={m.tone} size={32} /></span>
@@ -100,9 +104,9 @@ function Catalog({ s, onOpen, onOffer }: { s: ConsoleState; onOpen: (k: string) 
               {yen(a.price)}
             </div>
             <div role="cell" className="min-w-0">
-              <div className="flex items-baseline justify-between text-[13px] tnum">
+              <div className="flex items-baseline justify-between gap-2 whitespace-nowrap text-[13px] tnum">
                 <span><span className="font-semibold">{st.count}</span><span className="text-label2"> / {n} 医院</span></span>
-                <span className="text-[12px] text-label3">{Math.round((st.count / n) * 100)}%</span>
+                {wide && <span className="text-[12px] text-label3">{Math.round((st.count / n) * 100)}%</span>}
               </div>
               <Adoption count={st.count} total={n} className="mt-1.5" />
             </div>
@@ -131,9 +135,12 @@ function PhoneAddonRow({ a, s, onOpen, onOffer }: { a: Addon; s: ConsoleState; o
           <span className={cn("block truncate text-[16px] font-medium leading-[21px]", !a.active && "text-label2")}>{a.name}</span>
           <span className="mt-0.5 block truncate text-[13px] leading-[18px] text-label2">{a.active ? a.description : "提供を停止中"}</span>
           <Meta>
-            <span className="font-medium text-label">{yen(a.price)}</span> / 月 · 導入 <span className="font-medium text-label">{st.count}</span> / {n} 医院
+            <span className="font-medium text-label">{yen(a.price)}</span> / 月 · 売上 <span className="font-medium text-label">{yen(st.revenue)}</span>
           </Meta>
-          <Adoption count={st.count} total={n} className="mt-2 w-full max-w-[220px]" />
+          <span className="mt-2 flex items-center gap-2.5">
+            <Adoption count={st.count} total={n} className="w-full max-w-[160px] flex-1" />
+            <span className="shrink-0 text-[12px] text-label2 tnum">導入 {st.count} / {n} 医院</span>
+          </span>
         </span>
       </button>
       <div className="shrink-0 pr-4 pt-3.5">

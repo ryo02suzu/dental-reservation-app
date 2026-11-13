@@ -2,7 +2,8 @@ import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpDown, Check, MessageCircle, Plus, Search, TriangleAlert, UserPlus } from "lucide-react";
 import { TODAY, TODAY_KEY, useNow } from "@/lib/clock";
-import { KANA_ROWS, age, ago, hm, matchesPatient } from "@/lib/format";
+import { format } from "date-fns";
+import { KANA_ROWS, age, ago, fromKey, hm, matchesPatient } from "@/lib/format";
 import { Avatar, Button, EmptyState, IconButton, Menu, MenuItem, SearchField, Tag, cn, spring } from "@/ui";
 import type { Patient } from "@/data";
 import { alertsOf, statusOf } from "@/apps/clinic/helpers";
@@ -74,7 +75,7 @@ function FitSegmented<T extends string>({ value, onChange, options, size }: {
           >
             {active && <motion.span layoutId={`fseg-${id}`} className="absolute inset-0 -z-10 rounded-[7px] bg-thumb shadow-thumb" transition={spring} />}
             {o.label}
-            {o.count !== undefined && <span className="tnum text-label3">{o.count}</span>}
+            {o.count !== undefined && <span className={cn("tnum", active ? "text-label2" : "text-label3")}>{o.count}</span>}
           </button>
         );
       })}
@@ -97,7 +98,7 @@ export function ListActions({ state, onAdd }: { state: ListState; onAdd: () => v
 
 // ─── 一覧の本体 ───────────────────────────────────────────────────────────
 export function PatientSections({
-  sections, total, state, index, selectedId, onSelect, stickyTop, bleed, column, phone, flashId, onAdd, rememberScroll,
+  sections, total, state, index, selectedId, onSelect, stickyTop, bleed, column, narrow, phone, flashId, onAdd, rememberScroll,
 }: {
   sections: Section[];
   total: number;
@@ -110,6 +111,8 @@ export function PatientSections({
   /** 見出しの帯を左右の余白まで伸ばす幅 */
   bleed: number;
   column?: boolean;
+  /** 一覧の列が狭い（iPad）：次回の日付を短く出す */
+  narrow?: boolean;
   phone?: boolean;
   flashId?: string;
   onAdd: () => void;
@@ -151,7 +154,7 @@ export function PatientSections({
           {sections.map(s => (
             <section key={s.key} id={`pt-sec-${s.key}`} className="mt-3 first:mt-0" style={{ scrollMarginTop: stickyTop }}>
               <div
-                className="sticky z-10 flex h-8 items-end bg-bg/92 pb-1.5 text-footnote font-semibold text-label2"
+                className="sticky z-10 flex h-8 items-end bg-bg pb-1.5 text-footnote font-semibold text-label2"
                 style={{ top: stickyTop, marginLeft: -bleed, marginRight: -bleed, paddingLeft: bleed + 16, paddingRight: bleed + 16 }}
               >
                 {s.label}
@@ -167,6 +170,7 @@ export function PatientSections({
                     onSelect={onSelect}
                     phone={phone}
                     column={column}
+                    narrow={narrow}
                     flash={p.id === flashId}
                     scrollTop={stickyTop + 36}
                   />
@@ -183,7 +187,7 @@ export function PatientSections({
 }
 
 /** 一覧の右側に出す「今日の状態」または次回の予約 */
-function rightLabel(m: PatientMeta, now: Date): { text: string; cls: string } | null {
+function rightLabel(m: PatientMeta, now: Date, narrow?: boolean): { text: string; cls: string } | null {
   const t = m.today;
   if (t && t.status !== "completed") {
     const s = statusOf(t, now);
@@ -195,16 +199,17 @@ function rightLabel(m: PatientMeta, now: Date): { text: string; cls: string } | 
   if (!m.next) return null;
   const w = whenShort(m.next);
   const near = m.next.date === TODAY_KEY || w.startsWith("明日");
-  return { text: near ? w : `次回 ${w}`, cls: near ? "font-medium text-label" : "text-label2" };
+  const far = narrow ? format(fromKey(m.next.date), "M/d") : w;
+  return { text: near ? w : `次回 ${far}`, cls: near ? "font-medium text-label" : "text-label2" };
 }
 
-function PatientRow({ p, m, now, selected, onSelect, phone, column, flash, scrollTop }: {
+function PatientRow({ p, m, now, selected, onSelect, phone, column, narrow, flash, scrollTop }: {
   p: Patient; m: PatientMeta; now: Date; selected: boolean; onSelect: (id: string) => void;
-  phone?: boolean; column?: boolean; flash?: boolean; scrollTop: number;
+  phone?: boolean; column?: boolean; narrow?: boolean; flash?: boolean; scrollTop: number;
 }) {
   const alerts = alertsOf(p);
   const red = alerts.some(a => a.tone === "red");
-  const right = rightLabel(m, now);
+  const right = rightLabel(m, now, narrow);
   const isNew = m.visits === 0;
   const pad = column ? 12 : 16;
   const av = phone ? 40 : 36;

@@ -7,11 +7,19 @@ import { man } from "./model";
 import { useElementWidth } from "./ui";
 
 // ─── 目盛りと曲線 ─────────────────────────────────────────────────────────
+/** 目盛りを3〜5本で、最大値にいちばん近い切りのよい上端を選ぶ（値が増えても目盛りが急に粗くならない） */
 function niceScale(max: number, count = 4) {
-  const raw = Math.max(1, max) / count;
-  const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) ?? 10 * mag;
-  return { step, top: Math.ceil(max / step) * step };
+  const m = Math.max(1, max);
+  const mag = 10 ** Math.floor(Math.log10(m / count));
+  let best: { step: number; top: number } | null = null;
+  for (const k of [1, 2, 2.5, 5, 10, 20]) {
+    const step = k * mag;
+    const n = Math.ceil(m / step);
+    if (n < 3 || n > 5) continue;
+    const top = n * step;
+    if (!best || top < best.top || (top === best.top && step > best.step)) best = { step, top };
+  }
+  return best ?? { step: 10 * mag, top: Math.ceil(m / (10 * mag)) * 10 * mag };
 }
 
 /** 単調な3次補間（Fritsch–Carlson）。点の間で行き過ぎない、なめらかな線 */

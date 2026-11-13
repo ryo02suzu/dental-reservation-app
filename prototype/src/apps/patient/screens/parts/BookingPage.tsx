@@ -63,7 +63,7 @@ function BookingSide({ step, d }: { step: Step; d: Draft }) {
   const when = d.date && d.start !== undefined && sv ? { value: `${mdw(fromKey(d.date))} ${hm(d.start)}`, sub: range(d.start, sv.minutes) } : undefined;
   return (
     <div>
-      {step === "done" ? (
+      {step === "done" || step === "confirm" ? (
         <BringList first={d.visit === "first"} />
       ) : (
         <>
@@ -72,7 +72,7 @@ function BookingSide({ step, d }: { step: Step; d: Draft }) {
             <SummaryRow label="初診・再診" value={d.visit ? (d.visit === "first" ? "はじめての方（初診）" : "通院中の方（再診）") : undefined} onEdit={edit("type")} />
             <SummaryRow label="メニュー" value={sv?.name} sub={sv ? `${duration(sv.minutes)}・${priceLong(sv)}` : undefined} onEdit={edit("menu")} />
             <SummaryRow label="日時" value={when?.value} sub={when?.sub} onEdit={edit("time")} />
-            <SummaryRow label="受診される方" value={n >= 4 && d.name ? `${d.name} さん` : undefined} onEdit={edit("info")} empty="未入力" />
+            <SummaryRow label="受診される方" value={n >= 3 && d.name.trim() ? `${d.name.trim()} さん` : undefined} onEdit={edit("info")} empty="未入力" />
           </div>
         </>
       )}

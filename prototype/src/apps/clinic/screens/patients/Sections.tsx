@@ -33,8 +33,8 @@ function DateTile({ d, today }: { d: Date; today: boolean }) {
   );
 }
 
-export function UpcomingSection({ p, m, upcoming, now, onOpen, onBook, onCopyPhone }: {
-  p: Patient; m: PatientMeta; upcoming: Appointment[]; now: Date;
+export function UpcomingSection({ p, m, upcoming, now, onOpen, onBook, onCopyPhone, stacked }: {
+  p: Patient; m: PatientMeta; upcoming: Appointment[]; now: Date; stacked?: boolean;
   onOpen: (id: string) => void; onBook: () => void; onCopyPhone: () => void;
 }) {
   const [all, setAll] = useState(false);
@@ -53,7 +53,7 @@ export function UpcomingSection({ p, m, upcoming, now, onOpen, onBook, onCopyPho
       ) : (
         <>
           <HeroRow a={hero} p={p} now={now} onOpen={onOpen} onCopyPhone={onCopyPhone} />
-          {shown.map(a => <CompactRow key={a.id} a={a} now={now} onOpen={onOpen} />)}
+          {shown.map(a => <CompactRow key={a.id} a={a} now={now} onOpen={onOpen} stacked={stacked} />)}
           {rest.length > 3 && <ShowAll open={all} total={upcoming.length} onClick={() => setAll(v => !v)} />}
         </>
       )}
@@ -101,8 +101,8 @@ function HeroRow({ a, p, now, onOpen, onCopyPhone }: { a: Appointment; p: Patien
       </motion.button>
       {late && (
         <div className="-mt-1.5 flex items-center gap-2 pb-3.5 pl-[78px] pr-4">
-          <Button variant="tinted" size="sm" icon={Copy} onClick={onCopyPhone}>電話番号をコピー</Button>
-          <span className="truncate text-footnote text-label2 tnum">{p.phone}</span>
+          <Button variant="tinted" size="sm" icon={Copy} onClick={onCopyPhone} aria-label={`電話番号をコピー（${p.phone}）`} className="tnum">{p.phone}</Button>
+          <span className="truncate text-footnote text-label2">電話で確認</span>
         </div>
       )}
       <Sep />
@@ -110,7 +110,7 @@ function HeroRow({ a, p, now, onOpen, onCopyPhone }: { a: Appointment; p: Patien
   );
 }
 
-function CompactRow({ a, now, onOpen }: { a: Appointment; now: Date; onOpen: (id: string) => void }) {
+function CompactRow({ a, now, onOpen, stacked }: { a: Appointment; now: Date; onOpen: (id: string) => void; stacked?: boolean }) {
   const s = serviceById(a.serviceId);
   const st = staffById(a.staffId);
   const u = unitById(a.unitId);
@@ -118,16 +118,20 @@ function CompactRow({ a, now, onOpen }: { a: Appointment; now: Date; onOpen: (id
     <button
       type="button"
       onClick={() => onOpen(a.id)}
-      className="group relative grid min-h-[44px] w-full grid-cols-[7.4em_2.8em_minmax(0,1fr)_auto] items-center gap-x-2 px-4 py-2 text-left text-footnote transition-colors hover:bg-fill/[0.05] active:bg-fill/12"
+      className="group relative flex min-h-[44px] w-full items-center gap-3 px-4 py-2 text-left text-footnote transition-colors hover:bg-fill/[0.05] active:bg-fill/12"
     >
-      <span className="tnum">{mdw(fromKey(a.date))}</span>
-      <span className="font-semibold tnum">{hm(a.start)}</span>
-      <span className="truncate text-label2">
-        {s.name}
-        <span className="px-1 text-label4">·</span>
-        {st.short}
-        <span className="px-1 text-label4">·</span>
-        {u.short}
+      <span className={cn("min-w-0 flex-1", !stacked && "grid grid-cols-[7.4em_2.8em_minmax(0,1fr)] items-center gap-x-2")}>
+        <span className={stacked ? "flex gap-2" : "contents"}>
+          <span className="tnum">{mdw(fromKey(a.date))}</span>
+          <span className="font-semibold tnum">{hm(a.start)}</span>
+        </span>
+        <span className={cn("block truncate text-label2", stacked && "mt-0.5")}>
+          {s.name}
+          <span className="px-1 text-label4">·</span>
+          {st.short}
+          <span className="px-1 text-label4">·</span>
+          {u.short}
+        </span>
       </span>
       <StatusPill status={statusOf(a, now)} compact />
       <Sep />
@@ -250,7 +254,14 @@ export function ContactSection({ p, onCopy }: { p: Patient; onCopy: (text: strin
           )
         }
       >
-        {p.line ? "連携済み（予約の確認・リマインドをLINEで送信）" : <span className="text-label2">未連携</span>}
+        {p.line ? (
+          <>
+            連携済み
+            <span className="mt-0.5 block whitespace-normal text-footnote leading-[18px] text-label2">予約の確認と前日のお知らせを送信</span>
+          </>
+        ) : (
+          <span className="text-label2">未連携</span>
+        )}
       </Field>
     </ListSection>
   );

@@ -11,7 +11,7 @@ import { useClinicUI } from "../context";
 import { alertsOf, riskOf, statusOf } from "../helpers";
 import {
   ageOf, eligibleStaff, markCompleted, openStarts, pickUnit, priceLabel, pushRecentPatient, sourceLabel, staffConflict, unitBusy, upcomingDays,
-  completedTime,
+  recordedTimes,
 } from "./logic";
 import { AutoText, Chip, DayStrip, Head, Inset, KV, Reveal, RowSep, SlotGrid } from "./parts";
 import type { LucideIcon } from "lucide-react";
@@ -151,7 +151,7 @@ function Detail({ a, nowD, onClose }: { a: Appointment; nowD: Date; onClose: () 
   const canChange = notPast && (status === "pending" || status === "confirmed" || status === "late" || status === "arrived");
   const restorable = notPast && (a.status === "cancelled" || a.status === "no_show");
   const actions: { key: Exclude<Panel, null>; label: string; icon: LucideIcon; red?: boolean }[] = [];
-  if (canChange || restorable) actions.push({ key: "time", label: "日時を変更", icon: CalendarClock });
+  if (canChange || restorable) actions.push({ key: "time", label: restorable ? "別の日時で予約に戻す" : "日時を変更", icon: CalendarClock });
   if (canChange) actions.push({ key: "assign", label: "担当・ユニット", icon: UserRoundCog });
   if (canChange) actions.push({ key: "cancel", label: "キャンセル", icon: CircleSlash, red: true });
 
@@ -216,7 +216,7 @@ function Detail({ a, nowD, onClose }: { a: Appointment; nowD: Date; onClose: () 
         <div className="mt-4">
           <div className="flex gap-2">
             {actions.map(x => (
-              <ActionTile key={x.key} icon={x.icon} label={x.label} red={x.red} active={panel === x.key} onClick={() => toggle(x.key)} />
+              <ActionTile key={x.key} icon={x.icon} label={x.label} red={x.red} wide={actions.length === 1} active={panel === x.key} onClick={() => toggle(x.key)} />
             ))}
           </div>
           <Reveal show={panel === "time"}>
@@ -301,17 +301,18 @@ const DONE: Partial<Record<StatusKey, number>> = { pending: 0, confirmed: 1, lat
 function Timeline({ a, status, nowMin }: { a: Appointment; status: StatusKey; nowMin: number }) {
   const doneCount = DONE[status] ?? 1;
   const isToday = a.date === TODAY_KEY;
-  const done = completedTime(a.id);
+  const rec = recordedTimes(a);
+  const done = rec.done;
   const steps: { label: string; detail: string; tone?: "red" | "accent" }[] = [
     { label: status === "pending" ? "仮予約" : "予約", detail: sourceLabel(a), tone: status === "pending" ? "accent" : undefined },
     {
       label: status === "late" ? "未来院" : "来院",
-      detail: a.arrivedAt != null ? hm(a.arrivedAt)
+      detail: rec.arrived != null ? hm(rec.arrived)
         : status === "late" ? `${duration(Math.max(0, nowMin - a.start))}経過`
         : isToday && status === "confirmed" && a.start > nowMin && a.start - nowMin <= 60 ? `あと${a.start - nowMin}分` : "",
       tone: status === "late" ? "red" : undefined,
     },
-    { label: "診療開始", detail: a.startedAt != null ? hm(a.startedAt) : status === "arrived" && a.arrivedAt != null ? `${Math.max(0, nowMin - a.arrivedAt)}分待ち` : "" },
+    { label: "診療開始", detail: rec.started != null ? hm(rec.started) : status === "arrived" && a.arrivedAt != null ? `${Math.max(0, nowMin - a.arrivedAt)}分待ち` : "" },
     { label: "完了", detail: done != null ? hm(done) : status === "in_progress" && a.startedAt != null ? `${duration(Math.max(0, nowMin - a.startedAt))}経過` : "" },
   ];
   return (
@@ -418,22 +419,24 @@ function LateNote({ a, p, nowMin }: { a: Appointment; p: Patient; nowMin: number
 }
 
 // ─── 変更・キャンセル ─────────────────────────────────────────────────────────
-function ActionTile({ icon: Icon, label, red, active, onClick }: { icon: LucideIcon; label: string; red?: boolean; active?: boolean; onClick: () => void }) {
+function ActionTile({ icon: Icon, label, red, active, wide, onClick }: { icon: LucideIcon; label: string; red?: boolean; active?: boolean; wide?: boolean; onClick: () => void }) {
   return (
     <motion.button
       type="button"
-      whileTap={{ scale: 0.96 }}
+      whileTap={{ scale: wide ? 0.985 : 0.96 }}
       transition={{ type: "spring", stiffness: 700, damping: 32 }}
       onClick={onClick}
       aria-expanded={active}
       className={cn(
-        "flex h-[60px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-cell px-1 transition-colors duration-150",
+        "flex min-w-0 flex-1 items-center rounded-cell transition-colors duration-150",
+        // 操作が1つだけのときは、大きなタイルではなく横長の行にする
+        wide ? "h-11 justify-center gap-2 px-4" : "h-[60px] flex-col justify-center gap-1 px-1",
         active ? (red ? "bg-red/12" : "bg-sand/30") : "bg-fill/8 hover:bg-fill/12",
         red ? "text-red" : "text-accent",
       )}
     >
-      <Icon className="h-[19px] w-[19px]" strokeWidth={2} />
-      <span className="max-w-full truncate text-[12px] font-semibold leading-none">{label}</span>
+      <Icon className={wide ? "h-[18px] w-[18px]" : "h-[19px] w-[19px]"} strokeWidth={2} />
+      <span className={cn("max-w-full truncate font-semibold leading-none", wide ? "text-[15px] md:text-[14px]" : "text-[12px]")}>{label}</span>
     </motion.button>
   );
 }

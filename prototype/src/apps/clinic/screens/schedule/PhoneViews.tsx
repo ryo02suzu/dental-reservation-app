@@ -47,7 +47,7 @@ export function PhoneWeek({ date, byDate, now, dir, onOpenDay }: {
                 <span className="text-label3">休診日</span>
               ) : (
                 <span className="flex items-center gap-2">
-                  <span className="tnum">予約 <span className="font-semibold">{st.count}</span>件</span>
+                  <span className="shrink-0 tnum"><span className="font-semibold">{st.count}</span>件</span>
                   {st.pending > 0 && !past && <span className="rounded-[6px] bg-sand/30 px-1.5 py-[3px] text-[11px] font-semibold leading-none text-accent">仮予約 {st.pending}</span>}
                   {st.late > 0 && <span className="rounded-[6px] bg-red/10 px-1.5 py-[3px] text-[11px] font-semibold leading-none text-red">未来院 {st.late}</span>}
                 </span>

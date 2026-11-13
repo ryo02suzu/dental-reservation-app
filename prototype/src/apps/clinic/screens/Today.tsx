@@ -62,12 +62,12 @@ export default function TodayScreen({ param }: { param?: string }) {
   );
 
   const attention = (
-    <Section id="today-attention" title="対応が必要" count={t.attention.length}>
+    <Section id="today-attention" title="対応が必要" count={t.attention.length || undefined}>
       <AttentionList t={t} />
     </Section>
   );
   const waiting = (
-    <Section id="today-waiting" title="待合" count={t.waiting.length}>
+    <Section id="today-waiting" title="待合" count={t.waiting.length || undefined}>
       <WaitingList t={t} />
     </Section>
   );

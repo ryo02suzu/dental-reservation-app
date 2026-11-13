@@ -161,10 +161,22 @@ export function when(d: Date, base: Date): string {
   return ago(d, base);
 }
 
+// 所在地の読み（ひらがなでの地域検索に使う）
+const CITY_KANA: Record<string, string> = {
+  c1: "トウキョウトセタガヤク",
+  c2: "カナガワケンヨコハマシ",
+  c3: "トウキョウトナカノク",
+  c4: "ミヤギケンセンダイシ",
+  c5: "アイチケンナゴヤシ",
+  c6: "オオサカフオオサカシ",
+  c7: "ホッカイドウサッポロシ",
+  c8: "フクオカケンフクオカシ",
+};
+
 /** 医院の検索（名前・読み・所在地。ひらがなでも当たる） */
 export function matchesClinic(c: ConsoleClinic, q: string) {
   const t = q.trim().replace(/\s/g, "");
   if (!t) return true;
   const k = toKatakana(t);
-  return c.name.replace(/\s/g, "").includes(t) || (CLINIC_KANA[c.id] ?? "").includes(k) || c.city.includes(t);
+  return c.name.replace(/\s/g, "").includes(t) || (CLINIC_KANA[c.id] ?? "").includes(k) || c.city.includes(t) || (CITY_KANA[c.id] ?? "").includes(k);
 }

@@ -25,7 +25,7 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
   const content = width - (phone ? 32 : 64);
   const twoCol = !phone && content >= 736;
   const barActions = !phone && width >= 600;
-  const factCols = !phone && content >= 700 ? 6 : 3;
+  const factCols = phone || content < 520 ? 2 : content >= 700 ? 6 : 3;
 
   const mine = useMemo(() => appointments.filter(a => a.patientId === p.id), [appointments, p.id]);
   const m = useMemo(() => metaOf(p, mine), [p, mine]);
@@ -95,11 +95,11 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
   );
 
   const upcomingEl = (
-    <UpcomingSection p={p} m={m} upcoming={upcoming} now={now} onOpen={ui.openAppointment} onBook={book} onCopyPhone={() => copy(p.phone, "電話番号")} />
+    <UpcomingSection p={p} m={m} upcoming={upcoming} now={now} onOpen={ui.openAppointment} onBook={book} onCopyPhone={() => copy(p.phone, "電話番号")} stacked={content < 520} />
   );
   const chartEl = (
     <ListSection
-      header={<span ref={chartHead} className="scroll-mt-[76px]">歯式</span>}
+      header={<span ref={chartHead} className="scroll-mt-[76px]">{child ? "歯式（永久歯）" : "歯式"}</span>}
       aside={Object.keys(p.teeth).length > 0 ? <span className="text-footnote text-label2 tnum">記録 {Object.keys(p.teeth).length}本</span> : undefined}
     >
       <ChartCard
@@ -145,18 +145,20 @@ export function PatientDetail({ p, back }: { p: Patient; back?: { label: string;
             </div>
           )}
           {twoCol ? (
-            <div className="mt-5 grid grid-cols-[minmax(0,1fr)_288px] items-start gap-x-6">
-              <div className="min-w-0">
-                {upcomingEl}
-                {chartEl}
-                {memoEl}
-                {historyEl}
+            <>
+              <div className="mt-5 grid grid-cols-[minmax(0,1fr)_288px] items-start gap-x-6">
+                <div className="min-w-0">{upcomingEl}</div>
+                <div className="min-w-0">{contactEl}</div>
               </div>
-              <div className="sticky top-[60px] min-w-0">
-                {contactEl}
-                {statsEl}
+              {chartEl}
+              <div className="grid grid-cols-[minmax(0,1fr)_288px] items-start gap-x-6">
+                <div className="min-w-0">
+                  {memoEl}
+                  {historyEl}
+                </div>
+                <div className="sticky top-[60px] min-w-0">{statsEl}</div>
               </div>
-            </div>
+            </>
           ) : (
             <>
               {upcomingEl}
@@ -180,7 +182,7 @@ function AttentionCard({ p, m, pinned }: { p: Patient; m: PatientMeta; pinned: M
   const risk = riskOfMeta(m);
   if (risk >= 2) {
     const parts = [m.cancellations && `キャンセル ${m.cancellations}回`, m.noShows && `無断キャンセル ${m.noShows}回`].filter(Boolean);
-    items.push({ label: `キャンセル歴：${parts.join("・")}`, red: risk >= 3 });
+    items.push({ label: parts.join("・"), red: risk >= 3 });
   }
   if (!items.length && !pinned.length && !p.memo) return null;
   const red = items.some(i => i.red);
@@ -241,9 +243,12 @@ function Facts({ p, m, cols }: { p: Patient; m: PatientMeta; cols: number }) {
     ["来院回数", `${m.visits}回`],
   ];
   return (
-    <dl className="mt-3 grid gap-x-4 gap-y-3 rounded-card bg-surface px-4 py-3.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+    <dl
+      className={cn("mt-3 rounded-card bg-surface px-4 py-3.5", cols === 6 ? "flex justify-between gap-x-5" : "grid gap-x-4 gap-y-3")}
+      style={cols === 6 ? undefined : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+    >
       {facts.map(([k, v]) => (
-        <div key={k} className="min-w-0">
+        <div key={k} className={cn("min-w-0", cols === 6 && "shrink")}>
           <dt className="truncate text-caption text-label2">{k}</dt>
           <dd className="mt-0.5 truncate text-[15px] font-medium leading-5 tnum">{v}</dd>
         </div>

@@ -66,12 +66,15 @@ export function MonthGrid({ date, byDate, now, dir, onOpenDay }: {
                 <span className={cn("shrink-0 text-[15px] font-semibold tnum", today ? "text-accent" : closed ? "text-label3" : "text-label")}>
                   {d.getDate() === 1 ? `${d.getMonth() + 1}月1日` : d.getDate()}
                 </span>
-                {closed?.holiday && <span className="min-w-0 truncate text-[11px] text-label2">{closed.holiday}</span>}
                 {today && <span className="ml-auto shrink-0 text-[11px] font-semibold text-accent">今日</span>}
               </span>
               <span className={cn("mt-auto min-w-0", out && "opacity-40")}>
                 {closed ? (
-                  <span className="text-[12px] text-label3">休診</span>
+                  closed.holiday ? (
+                    <span className="block truncate text-[12px] font-medium text-label2">{closed.holiday}</span>
+                  ) : (
+                    <span className="text-[12px] text-label3">休診</span>
+                  )
                 ) : stat.count === 0 ? (
                   <span className="text-[12px] text-label3">{past ? "予約なし" : `空き ${stat.free}枠`}</span>
                 ) : (

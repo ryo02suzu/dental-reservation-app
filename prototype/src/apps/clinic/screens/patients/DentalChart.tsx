@@ -80,7 +80,8 @@ export function DentalChart({ teeth, selected, onSelect, marked, picks, maxCell 
   const cell = (k: ToothKey, i: number, row: 2 | 4) => {
     const s = teeth[k];
     const on = selected === k || !!picks?.has(k);
-    const sym = s && s !== "M" ? s : "";
+    // 狭いマスでは「観察」を「観」の1字に（点線の枠と凡例で読める）
+    const sym = !s || s === "M" ? "" : s === "観察" && g.cell < 26 ? "観" : s;
     const small = g.cell < 23 && sym.length > 2;
     return (
       <motion.button
@@ -94,7 +95,7 @@ export function DentalChart({ teeth, selected, onSelect, marked, picks, maxCell 
         animate={{ scale: selected === k ? 1.08 : 1 }}
         transition={{ type: "spring", stiffness: 600, damping: 30 }}
         className={cn(
-          "relative flex items-center justify-center rounded-[6px] font-semibold leading-none outline-offset-2 transition-colors",
+          "relative flex items-center justify-center whitespace-nowrap rounded-[6px] font-semibold leading-none outline-offset-2 transition-colors",
           CELL[s ?? "none"],
           !s && "hover:bg-fill/14",
           on && "z-[1] outline outline-2 outline-accent",
@@ -194,7 +195,7 @@ export function ChartCard({ p, memos, visits, appts, selected, onSelect, onWrite
           <ChartLegend states={states} marked={marked.size > 0} />
         </div>
       )}
-      {child && !empty && <p className="mt-2.5 text-caption text-label3">15歳未満の患者さんです。永久歯の記録のみ表示しています。</p>}
+      {child && <p className="mt-2.5 text-caption text-label2">15歳未満の患者さんです。ここには永久歯のみ表示しています。乳歯（A〜E）の状態はカルテで確認してください。</p>}
 
       <AnimatePresence initial={false}>
         {selected && (

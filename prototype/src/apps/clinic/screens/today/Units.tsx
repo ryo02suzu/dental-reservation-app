@@ -76,7 +76,11 @@ function UnitTile({ u, t }: { u: UnitState; t: Today }) {
                 toast("診療を完了しました", { detail: `${u.unit.name}・${busy.patient.name}さん` });
               }} />
             ) : u.done ? (
-              <Done u={u} onBook={() => ui.openNew({ patientId: u.done!.a.patientId, serviceId: u.done!.a.serviceId })} />
+              <Done
+                u={u}
+                onBook={() => ui.openNew({ patientId: u.done!.a.patientId, serviceId: u.done!.a.serviceId })}
+                onOpenNext={() => u.doneNext && ui.openAppointment(u.doneNext.id)}
+              />
             ) : (
               <Idle u={u} />
             )}
@@ -117,7 +121,7 @@ function Busy({ u, t, onDone }: { u: UnitState; t: Today; onDone: () => void }) 
   );
 }
 
-function Done({ u, onBook }: { u: UnitState; onBook: () => void }) {
+function Done({ u, onBook, onOpenNext }: { u: UnitState; onBook: () => void; onOpenNext: () => void }) {
   const r = u.done!;
   const nx = u.doneNext;
   return (
@@ -130,18 +134,19 @@ function Done({ u, onBook }: { u: UnitState; onBook: () => void }) {
       </div>
       <div className="mt-1 truncate text-[13px] leading-[18px] text-label2">{r.patient.name}さん</div>
       <div className="mt-auto pt-3">
-        {nx ? (
-          <>
-            <div className="text-[12px] leading-4 text-label3">次回の予約</div>
-            <div className="mt-0.5 truncate text-[13px] font-medium leading-[18px] tnum">
-              {nx.date === TODAY_KEY ? "今日" : md(fromKey(nx.date))} {hm(nx.start)}
-            </div>
-          </>
-        ) : (
-          <Button size="sm" variant="tinted" full className={cn(hit, "pointer-events-auto h-7 px-2")} onClick={onBook}>
-            次回の予約を取る
-          </Button>
-        )}
+        {/* 次回の予約がすでにあれば確認、なければ取る（会計のときに受付で次回を決める） */}
+        <div className="truncate text-[12px] leading-4 text-label3 tnum">
+          {nx ? `次回 ${nx.date === TODAY_KEY ? "今日" : md(fromKey(nx.date))} ${hm(nx.start)}` : "次回の予約はまだありません"}
+        </div>
+        <Button
+          size="sm"
+          variant="tinted"
+          full
+          className={cn(hit, "pointer-events-auto mt-1.5 h-7 px-2")}
+          onClick={nx ? onOpenNext : onBook}
+        >
+          {nx ? "次回の予約を確認" : "次回の予約を取る"}
+        </Button>
       </div>
     </>
   );

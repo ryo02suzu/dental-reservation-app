@@ -77,7 +77,8 @@ export function PhoneSchedule({ param }: { param?: string }) {
       items={[
         { label: "予約", value: sum.count, unit: "件" },
         ...(past ? [] : [{ label: "空き", value: sum.free, unit: "枠" }]),
-        ...(view !== "day" || past ? [{ label: "稼働率", value: Math.round(sum.util * 100), unit: "%" }] : []),
+        // スマホの週・月は1行に収めるため、稼働率は各日の行に任せる
+        ...(past ? [{ label: "稼働率", value: Math.round(sum.util * 100), unit: "%" }] : []),
         ...(sum.pending && !past ? [{ label: "仮予約", value: sum.pending, unit: "件", tone: "accent" as const }] : []),
         ...(sum.late ? [{ label: "未来院", value: sum.late, unit: "件", tone: "red" as const }] : []),
       ]}

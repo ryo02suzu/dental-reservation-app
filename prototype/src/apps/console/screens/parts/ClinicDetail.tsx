@@ -11,7 +11,7 @@ import {
   SETUP_ITEMS, addonOf, addonsTotal, clinicMRR, daysSince, isDormant, isGrowingFree, pct, planLabel, planPrice,
   recentOf, setupDone, setupMissing, weeksOf, when, ymd, PLAN_STYLE,
 } from "./model";
-import { sendGuide, setClinicAddon, setMemo, useConsole } from "./store";
+import { sendCheckin, sendGuide, setClinicAddon, setMemo, useConsole } from "./store";
 import { WeekBars } from "./charts";
 import { PlanSheet } from "./PlanSheet";
 import { ProposalSheet } from "./ProposalSheet";
@@ -34,6 +34,7 @@ export function ClinicDetail({ id, variant, onClose }: { id: string; variant: "i
   const { last4, prev4 } = recentOf(c);
   const extra = addonsTotal(s, c);
   const guide = s.guides[c.id];
+  const checkin = s.checkins[c.id];
   const proposal = s.proposals[c.id];
   const dormant = isDormant(c);
   const growing = isGrowingFree(c);
@@ -44,6 +45,10 @@ export function ClinicDetail({ id, variant, onClose }: { id: string; variant: "i
     if (!a) return;
     setClinicAddon(c.id, key, on);
     toast(on ? `${a.name}を追加しました` : `${a.name}を解約しました`, { detail: on ? `${c.name} · ${yen(a.price)} / 月` : c.name });
+  };
+  const checkinSend = () => {
+    sendCheckin(c.id);
+    toast("利用状況の確認メールを送りました", { detail: `${c.name} · 院長あて` });
   };
   const guideSend = () => {
     sendGuide(c.id);
@@ -95,15 +100,29 @@ export function ClinicDetail({ id, variant, onClose }: { id: string; variant: "i
               leading={<CircleAlert className={cn("h-[22px] w-[22px] shrink-0", c.active ? "text-red" : "text-label3")} strokeWidth={2} />}
               inset={50}
               title={c.active ? `${daysSince(c.lastActiveAt)}日間 利用がありません` : "利用を停止しています"}
-              subtitle={c.active ? `${mdw(c.lastActiveAt)}から、管理画面へのログインがありません` : `最終利用は${md(c.lastActiveAt)}（${daysSince(c.lastActiveAt)}日前）`}
+              subtitle={
+                !c.active ? `最終利用は${md(c.lastActiveAt)}（${daysSince(c.lastActiveAt)}日前）`
+                : checkin ? `${when(checkin, t)}に確認のメールを送りました`
+                : `${mdw(c.lastActiveAt)}からログインなし`
+              }
+              trailing={
+                c.active && (checkin ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-label2">
+                    <Check className="h-4 w-4 text-accent" strokeWidth={2.6} />
+                    送信済み
+                  </span>
+                ) : (
+                  <Button size="sm" variant="gray" icon={Send} onClick={checkinSend}>連絡する</Button>
+                ))
+              }
             />
           )}
           {growing && (
             <ListRow
               leading={<TrendingUp className="h-[22px] w-[22px] shrink-0 text-accent" strokeWidth={2} />}
               inset={50}
-              title="フリープランで予約が増えています"
-              subtitle={proposal ? `${md(proposal.at)}に${planLabel(proposal.plan)}プランを提案済み` : `直近4週で${last4}件`}
+              title="予約が増えています"
+              subtitle={proposal ? `${when(proposal.at, t)}に${planLabel(proposal.plan)}プランを提案` : `フリープランで直近4週 ${last4}件`}
               trailing={
                 proposal ? (
                   <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-medium text-label2">
@@ -120,20 +139,27 @@ export function ClinicDetail({ id, variant, onClose }: { id: string; variant: "i
       )}
 
       {/* 初期設定 */}
-      <ListSection header="初期設定" aside={<span className="text-footnote text-label3 tnum">{done} / {SETUP_ITEMS.length}</span>}>
+      <ListSection
+        header="初期設定"
+        aside={
+          done < SETUP_ITEMS.length && c.active ? (
+            <button onClick={guideSend} className="-my-1 inline-flex h-7 items-center gap-1 rounded-full px-1 text-[13px] font-medium text-accent transition-opacity active:opacity-40">
+              <Send className="h-3.5 w-3.5" strokeWidth={2.2} />
+              {guide ? "案内を再送" : "設定の案内を送る"}
+            </button>
+          ) : undefined
+        }
+      >
         <div className="relative flex items-center gap-3.5 px-4 py-3">
           <Ring value={done / SETUP_ITEMS.length} size={44} stroke={5}>
             <span className="text-[12px] font-semibold tnum">{done}/{SETUP_ITEMS.length}</span>
           </Ring>
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-semibold">{done === SETUP_ITEMS.length ? "すべて完了しています" : `あと${SETUP_ITEMS.length - done}項目`}</div>
-            <div className="mt-0.5 truncate text-[13px] text-label2">
-              {done === SETUP_ITEMS.length ? "診療時間からLINE連携まで設定済み" : guide ? `${md(guide)} ${when(guide, t)}に案内を送りました` : missing.map(m => m.short).join("・")}
+            <div className="mt-0.5 text-[13px] leading-[18px] text-label2">
+              {done === SETUP_ITEMS.length ? "診療時間からLINE連携まで設定済み" : guide ? `${when(guide, t)}に案内を送りました` : `${missing.map(m => m.label).join("・")}が未完了`}
             </div>
           </div>
-          {done < SETUP_ITEMS.length && c.active && (
-            <Button size="sm" variant="gray" icon={Send} onClick={guideSend}>{guide ? "再送" : "案内を送る"}</Button>
-          )}
           <span aria-hidden className="pointer-events-none absolute bottom-0 left-4 right-0 h-px origin-bottom scale-y-50 bg-sep/30" />
         </div>
         {SETUP_ITEMS.map(item => {
@@ -169,15 +195,7 @@ export function ClinicDetail({ id, variant, onClose }: { id: string; variant: "i
       <ListSection
         header="オプション"
         aside={<span className="text-footnote text-label3 tnum">{c.addons.length}件 · {yen(extra)} / 月</span>}
-        footer={
-          c.active ? (
-            <span className="tnum">
-              この医院の月額 <span className="font-semibold text-label">{yen(clinicMRR(s, c))}</span>（プラン {yen(planPrice(c.plan))} ＋ オプション {yen(extra)}）
-            </span>
-          ) : (
-            "停止中の医院は、オプションを変更できません。"
-          )
-        }
+        footer={c.active ? "切り替えると、次回の請求から日割りで反映されます。" : "停止中の医院は、オプションを変更できません。"}
       >
         {s.addons.map(a => {
           const on = c.addons.includes(a.key);
@@ -191,6 +209,15 @@ export function ClinicDetail({ id, variant, onClose }: { id: string; variant: "i
             />
           );
         })}
+        {c.active && (
+          <div className="relative flex min-h-[52px] items-center gap-3 bg-fill/[0.04] px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-semibold">この医院の月額</div>
+              <div className="mt-0.5 truncate text-[12px] text-label2 tnum">プラン {yen(planPrice(c.plan))} ＋ オプション {yen(extra)}</div>
+            </div>
+            <span className="shrink-0 text-[17px] font-semibold tnum">{yen(clinicMRR(s, c))}</span>
+          </div>
+        )}
       </ListSection>
 
       {/* 予約数 */}

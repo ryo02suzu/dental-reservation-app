@@ -110,41 +110,49 @@ function PhoneList({ rows, query, setQuery, filter, setFilter, counts, subtitle,
       }
     >
       {rows.length ? (
-        <ListSection footer={`${rows.length}医院 · ${SORTS.find(o => o.sort.key === sort.key && o.sort.dir === sort.dir)?.label ?? "並べ替え中"}`}>
+        <ListSection
+          header={SORTS.find(o => o.sort.key === sort.key && o.sort.dir === sort.dir)?.label ?? "並べ替え中"}
+          aside={<span className="pr-[30px] text-footnote font-medium text-label2">30日の予約</span>}
+          footer={`${rows.length}医院 · 右上のボタンで並べ替えを変えられます`}
+        >
           {rows.map(c => (
             <ListRow
               key={c.id}
               leading={<ClinicMark name={c.name} size={40} />}
               inset={68}
-              title={
+              title={<span className="font-medium">{c.name}</span>}
+              subtitle={
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate font-medium">{c.name}</span>
                   <PlanTag plan={c.plan} className="shrink-0" />
+                  <span className="truncate">
+                    {shortCity(c.city)}
+                    <PhoneState clinic={c} />
+                  </span>
                 </span>
               }
-              subtitle={
-                <>
-                  {c.city} · <PhoneState clinic={c} />
-                </>
-              }
-              value={<span className="tnum">{c.appts30d.toLocaleString("ja-JP")}件</span>}
+              value={<span className="tnum text-label">{c.appts30d.toLocaleString("ja-JP")}</span>}
               chevron
               onClick={() => onOpen(c.id)}
             />
           ))}
         </ListSection>
       ) : (
-        <EmptyState icon={SearchX} title="該当する医院はありません" message="検索の文字や、絞り込みの条件を変えてください。" action={<Button size="sm" variant="gray" onClick={clear}>条件をクリア</Button>} />
+        <EmptyState icon={SearchX} title="該当する医院はありません" message="検索の条件を変えてください。" action={<Button size="sm" variant="gray" onClick={clear}>条件をクリア</Button>} />
       )}
     </Page>
   );
 }
 
+/** 「東京都世田谷区」→「世田谷区」（一覧の行では都道府県を省く） */
+const shortCity = (city: string) => city.replace(/^(東京都|北海道|(?:大阪|京都)府|.{2,3}?県)/, "") || city;
+
+/** 一覧の行の状態。ふつうに稼働中なら出さず、停止中・要対応のときだけ短く出す */
 function PhoneState({ clinic }: { clinic: ConsoleClinic }) {
-  if (!clinic.active) return <span className="text-label2">停止中</span>;
+  if (!clinic.active) return <> · 停止中</>;
   const r = reasonOf(clinic);
-  if (!r) return <span>稼働中</span>;
-  return <span className={isDormant(clinic) ? "text-red" : isGrowingFree(clinic) ? "text-accent" : "text-label2"}>{r}</span>;
+  if (!r) return null;
+  const short = isGrowingFree(clinic) ? "予約増加中" : isDormant(clinic) ? r : r.replace("初期設定 ", "設定 ");
+  return <> · <span className={isDormant(clinic) ? "text-red" : isGrowingFree(clinic) ? "text-accent" : undefined}>{short}</span></>;
 }
 
 function DetailPage({ id, onBack }: { id: string; onBack: () => void }) {
@@ -209,7 +217,7 @@ function DesktopClinics({ rows, query, setQuery, filter, setFilter, counts, subt
             onClose={close}
             onClearFilters={clear}
           />
-          <p className="px-4 pt-2 text-footnote text-label3">見出しを押すと並べ替えます。↑↓キーで医院を切り替え、escで閉じます。</p>
+          <p className="px-4 pt-2 text-footnote text-label3">見出しで並べ替え · ↑↓で医院を切り替え · escで閉じる</p>
         </div>
         <AnimatePresence initial={false}>
           {selected && !push && (

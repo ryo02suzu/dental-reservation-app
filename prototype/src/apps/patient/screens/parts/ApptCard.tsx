@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, CircleX } from "lucide-react";
 import { ME, clinic, patientById, serviceById, staffById } from "@/data";
 import type { Appointment } from "@/data";
-import { TODAY, useNow } from "@/lib/clock";
+import { TODAY, TODAY_KEY, useNow } from "@/lib/clock";
 import { fromKey, hm, mdw, relDay } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { Button, StatusPill, cn, easeOut, tap, useToast } from "@/ui";
@@ -62,7 +62,11 @@ export function ApptCard({ appt }: { appt: Appointment }) {
       <div className="hairline-t">
         {!editable ? (
           <div className="px-4 py-3.5 md:px-5">
-            <p className="text-footnote leading-[1.6] text-label2">前日18時を過ぎたため、Webでの変更・キャンセルはできません。お電話でご連絡ください。</p>
+            <p className="text-footnote leading-[1.6] text-label2">
+              {appt.date === TODAY_KEY
+                ? "当日のご予約の変更・キャンセルは、お電話でお願いします。"
+                : `Webでの変更・キャンセルは${deadlineLabel(appt.date)}で締め切りました。お電話でご連絡ください。`}
+            </p>
             <div className="mt-2.5 flex items-center justify-between gap-3">
               <span className="text-[17px] font-semibold tnum">{clinic.phone}</span>
               <CopyButton text={clinic.phone} what="電話番号" />
@@ -160,6 +164,7 @@ function ChangePanel({ appt, onClose }: { appt: Appointment; onClose: () => void
     <div className="px-4 pb-4 pt-4 md:px-5">
       <PanelTitle sub={`いまのご予約：${mdw(fromKey(appt.date))} ${hm(appt.start)}`}>新しい日時を選んでください</PanelTitle>
       <DatePicker
+        onSurface
         days={days}
         selected={date}
         onSelect={k => {
@@ -169,7 +174,7 @@ function ChangePanel({ appt, onClose }: { appt: Appointment; onClose: () => void
       />
       <div className="mt-6">
         {slots.length > 0 ? (
-          <SlotGrid slots={slots} selected={start} onSelect={setStart} />
+          <SlotGrid onSurface slots={slots} selected={start} onSelect={setStart} />
         ) : (
           <p className="rounded-[12px] bg-fill/8 px-3 py-3 text-footnote text-label2">この日はほかに空いている時間がありません。別の日をお選びください。</p>
         )}

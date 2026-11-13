@@ -45,7 +45,7 @@ export function StepConfirm({ d }: { d: Draft }) {
     >
       {/* 日時とメニュー（いちばん大事なところを大きく） */}
       <section className="rounded-card bg-surface">
-        <div className="flex items-start justify-between gap-3 px-4 pb-4 pt-4 md:px-5">
+        <div className="flex items-start justify-between gap-3 px-4 pb-4 pt-4">
           <div className="min-w-0">
             <div className="text-footnote font-medium text-label2">日時</div>
             <div className="mt-1 flex items-baseline gap-2">
@@ -56,7 +56,7 @@ export function StepConfirm({ d }: { d: Draft }) {
           </div>
           <EditLink onClick={() => go("book", "time")} />
         </div>
-        <div className="hairline-t flex items-start justify-between gap-3 px-4 py-3.5 md:px-5">
+        <div className="hairline-t flex items-start justify-between gap-3 px-4 py-3.5">
           <div className="min-w-0">
             <div className="text-[16px] leading-[22px]">{sv.name}</div>
             <div className="mt-0.5 text-footnote text-label2 tnum">
@@ -73,7 +73,7 @@ export function StepConfirm({ d }: { d: Draft }) {
         {first && d.birth && <KVRow label="生年月日">{birthLabel(d.birth)}</KVRow>}
         {first && d.sex && <KVRow label="性別">{d.sex}</KVRow>}
         {!first && <KVRow label="診察券番号">{number ? <span className="tnum">{number}</span> : <span className="text-label3">未入力</span>}</KVRow>}
-        <KVRow label="受診">{first ? "はじめて（初診）" : "通院中（再診）"}</KVRow>
+        <KVRow label="初診・再診">{first ? "はじめて（初診）" : "通院中（再診）"}</KVRow>
       </ListSection>
 
       <ListSection header="ご連絡先" aside={<EditLink onClick={() => go("book", "info")} />}>
@@ -90,7 +90,7 @@ export function StepConfirm({ d }: { d: Draft }) {
         </ListSection>
       )}
 
-      <section className="mt-8 rounded-cell bg-surface px-4 py-4 md:px-5">
+      <section className="mt-8 rounded-cell bg-surface px-4 py-4">
         <h3 className="text-[15px] font-semibold">変更・キャンセルについて</h3>
         <p className="mt-1.5 text-footnote leading-[1.65] text-label2">
           変更・キャンセルは前日18時までにお願いします。それ以降は、お電話（<span className="tnum">{clinic.phone}</span>）でご連絡ください。

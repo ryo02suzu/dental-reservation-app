@@ -105,8 +105,9 @@ function WaitingRow({ r, t, unit, asking, onAsk }: { r: Row; t: Today; unit: Uni
           >
             <div className="pb-3.5 pl-[60px] pr-4">
               <div className="rounded-[10px] bg-fill/8 px-3 py-2.5">
-                <p className="break-keep text-[13px] leading-[19px] text-label">
-                  {unit.unit.name}では{busy.patient.name}さんが診療中です。前の診療を完了にして、{patient.name}さんの診療を始めますか？
+                <p className="text-[13px] leading-[19px] text-label">
+                  {unit.unit.name}は<span className="whitespace-nowrap">{busy.patient.name}さん</span>が診療中です。
+                  <span className="mt-0.5 block text-label2">前の診療を完了にしてから始めますか？</span>
                 </p>
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   <Button

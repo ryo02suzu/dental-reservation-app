@@ -10,7 +10,7 @@ import type { LucideIcon } from "lucide-react";
 import { MrrChart, SegmentBar } from "./parts/charts";
 import {
   PLAN_ORDER, PLAN_STYLE, SETUP_ITEMS, addonMRR, attentionOf, clinicMRR, daysSince, mrrHistory, overviewStats, pct, planLabel, planMRR,
-  recentOf, setupDone, setupMissing, when,
+  setupDone, setupMissing, weeksOf, when,
 } from "./parts/model";
 import { ProposalSheet } from "./parts/ProposalSheet";
 import { useConsole, type ConsoleEvent, type ConsoleState } from "./parts/store";
@@ -26,7 +26,7 @@ export default function ConsoleOverview({ param }: { param?: string }) {
 
   return (
     <Page title="概要" subtitle={longDate(TODAY)}>
-      <div className="grid gap-x-6 gap-y-4 min-[1180px]:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-x-6 gap-y-4 min-[1180px]:grid-cols-[minmax(0,1fr)_344px]">
         {/* MRR */}
         <Surface className="min-w-0">
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
@@ -61,7 +61,7 @@ export default function ConsoleOverview({ param }: { param?: string }) {
           </StatCell>
           <StatCell i={3}>
             <Stat label="休眠" value={st.dormant} unit="医院" delta={st.dormantDelta} deltaLabel={`${st.dormantDelta >= 0 ? "+" : "−"}${Math.abs(st.dormantDelta)}`} good={false} />
-            <Foot>停止中・7日以上利用なし</Foot>
+            <Foot>7日以上 利用なし</Foot>
           </StatCell>
         </div>
 
@@ -96,6 +96,7 @@ function Attention({ s }: { s: ConsoleState }) {
   const t = useNow(60_000);
   const a = attentionOf(s);
   const [proposing, setProposing] = useState<ConsoleClinic | null>(null);
+  const phone = useIsPhone();
   const open = (c: ConsoleClinic) => go("clinics", c.id);
   return (
     <section className="min-w-0">
@@ -143,13 +144,14 @@ function Attention({ s }: { s: ConsoleState }) {
         <ListSection header="フリープランで予約が増えている医院">
           {a.growth.map(c => {
             const p = s.proposals[c.id];
-            const w = recentOf(c);
+            const wk = weeksOf(c);
+            const w = { thisWeek: wk[wk.length - 1].count };
             return (
               <AttentionRow
                 key={c.id}
                 clinic={c}
                 onOpen={() => open(c)}
-                subtitle={p ? `${md(p.at)} ${when(p.at, t)} に${planLabel(p.plan)}プランを提案しました` : `登録から${daysSince(c.createdAt)}日で予約${c.appts30d}件（直近4週 ${w.last4}件）`}
+                subtitle={p ? `${when(p.at, t)}に${planLabel(p.plan)}プランを提案` : phone ? `登録${daysSince(c.createdAt)}日・予約${c.appts30d}件` : `登録から${daysSince(c.createdAt)}日で予約${c.appts30d}件 · 今週 ${w.thisWeek}件`}
                 action={
                   p ? (
                     <span className="inline-flex shrink-0 items-center gap-1 pr-1 text-[13px] font-medium text-label2">
@@ -157,7 +159,7 @@ function Attention({ s }: { s: ConsoleState }) {
                       提案済み
                     </span>
                   ) : (
-                    <Button size="sm" variant="tinted" onClick={() => setProposing(c)}>アップグレードを提案</Button>
+                    <Button size="sm" variant="tinted" onClick={() => setProposing(c)}>{phone ? "提案する" : "アップグレードを提案"}</Button>
                   )
                 }
               />
@@ -213,13 +215,13 @@ function PlanMix({ s }: { s: ConsoleState }) {
             <div
               key={r.plan}
               onPointerEnter={() => setHover(r.plan)}
-              className={cn("grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 rounded-[8px] py-[7px] text-[13px] transition-opacity", hover && hover !== r.plan && "opacity-45")}
+              className={cn("grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-2.5 rounded-[8px] py-[7px] text-[13px] transition-opacity", hover && hover !== r.plan && "opacity-45")}
             >
               <span className="flex min-w-0 items-center gap-2">
                 <Swatch plan={r.plan} />
                 <span className="truncate text-label">{planLabel(r.plan)}</span>
               </span>
-              <span className="w-[40px] text-right text-label2 tnum">{r.count}医院</span>
+              <span className="w-[36px] text-right text-label2 tnum">{r.count}医院</span>
               <span className="w-[76px] text-right font-medium tnum">{yen(r.mrr)}</span>
               <span className="w-[34px] text-right text-label2 tnum">{pct(r.mrr / total)}</span>
             </div>
@@ -239,6 +241,7 @@ const ICON: Record<ConsoleEvent["kind"], LucideIcon> = {
   suspend: CirclePause,
   proposal: Send,
   guide: Mail,
+  checkin: Mail,
   price: TagIcon,
   offer_on: Puzzle,
   offer_off: CirclePause,
@@ -255,6 +258,7 @@ function describe(e: ConsoleEvent, s: ConsoleState): { title: string; detail: st
     case "suspend": return { title: c?.name ?? "", detail: "利用を停止" };
     case "proposal": return { title: c?.name ?? "", detail: `アップグレードを提案 · ${planLabel(e.to!)}` };
     case "guide": return { title: c?.name ?? "", detail: "初期設定の案内を送信" };
+    case "checkin": return { title: c?.name ?? "", detail: "利用状況の確認メールを送信" };
     case "price": return { title: a?.name ?? "", detail: `料金を変更 · ${yen(e.prices![0])} → ${yen(e.prices![1])}` };
     case "offer_on": return { title: a?.name ?? "", detail: "提供を再開" };
     case "offer_off": return { title: a?.name ?? "", detail: "提供を停止" };

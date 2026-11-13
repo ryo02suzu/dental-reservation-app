@@ -9,12 +9,12 @@ import { useStore } from "@/lib/store";
 import { useRoute } from "@/lib/nav";
 import { useIsPhone } from "@/lib/media";
 import { TODAY_KEY, minutesOfDay, useNow } from "@/lib/clock";
-import { hm, matchesPatient, toKatakana } from "@/lib/format";
+import { hm, toKatakana } from "@/lib/format";
 import { serviceById, staffById, unitById, type Appointment, type Patient } from "@/data";
 import { Avatar, SearchField, StatusPill, cn, spring } from "@/ui";
 import { useClinicUI } from "./context";
 import { statusOf } from "./helpers";
-import { ageOf, pushRecentPatient, useRecentPatients, visitLabel } from "./sheets/logic";
+import { ageOf, pushRecentPatient, searchHit, useRecentPatients, visitLabel } from "./sheets/logic";
 import type { LucideIcon } from "lucide-react";
 
 // ─── 検索の対象 ───────────────────────────────────────────────────────────────
@@ -81,14 +81,16 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const kq = toKatakana(query).replace(/\s/g, "");
     const plain = query.replace(/\s/g, "");
     const rank = (p: Patient) => (p.name.replace(/\s/g, "").startsWith(plain) || p.kana.replace(/\s/g, "").startsWith(kq) ? 0 : 1);
-    const pats = store.patients.filter(p => matchesPatient(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja")).slice(0, 5);
+    const pats = store.patients.filter(p => searchHit(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja")).slice(0, 5);
     const digits = query.replace(/\D/g, "");
     const appts = today
       .filter(a => {
         const p = store.patients.find(x => x.id === a.patientId);
         const sv = serviceById(a.serviceId);
         const st = staffById(a.staffId);
-        return (p && matchesPatient(p, query)) || norm(sv.name).includes(nq) || norm(st.name).includes(nq) || hm(a.start).startsWith(query) || (digits.length >= 3 && hm(a.start).replace(":", "") === digits);
+        return (p && searchHit(p, query)) || norm(sv.name).includes(nq) || norm(st.name).includes(nq) || hm(a.start).startsWith(query) || (digits.length >= 3 && hm(a.start).replace(":", "") === digits)
+          // 「11」「9」のような1〜2桁の数字は、その時台の予約
+          || (/^\d{1,2}$/.test(query) && Math.floor(a.start / 60) === +query);
       })
       .slice(0, 5);
     const screens = SCREENS.filter(s => [s.title, ...s.words].some(w => norm(w).includes(nq)));
@@ -110,7 +112,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     else if (it.kind === "screen") ui.go(it.screen.id);
     else ui.openNew(it.p ? { patientId: it.p.id } : undefined);
   };
-  const noResults = q.trim() !== "" && flat.length === 0;
+  // 患者・予約・画面のどれにも当たらなかった（「新規予約」だけが残る）
+  const noResults = q.trim() !== "" && groups.every(g => g.title === "操作");
 
   return phone ? (
     <PhoneSheet open={open} onClose={onClose} q={q} setQ={setQ} groups={groups} run={run} nowD={nowD} empty={noResults} />
@@ -205,12 +208,13 @@ function Panel({ open, onClose, q, setQ, groups, flat, run, nowD, empty }: {
                 </div>
 
                 <motion.div ref={list} layoutScroll id={`${hl}-list`} role="listbox" aria-label="検索結果" className="h-[min(440px,56vh)] overflow-y-auto overscroll-contain px-2 pb-2">
-                  {empty ? (
-                    <div className="flex h-full flex-col items-center justify-center px-8 pb-6 text-center">
-                      <div className="text-[15px] font-semibold">「{q.trim()}」に一致する項目はありません</div>
-                      <p className="mt-1 text-[13px] text-label2">氏名・ふりがな・診察券番号・電話番号・画面の名前で探せます。</p>
+                  {empty && (
+                    <div className="px-3 pb-1 pt-4">
+                      <div className="text-[15px] font-semibold">「{q.trim()}」に一致する患者・予約はありません</div>
+                      <p className="mt-0.5 text-[13px] leading-[1.6] text-label2 [word-break:auto-phrase]">{noMatchHint(q)}</p>
                     </div>
-                  ) : (
+                  )}
+                  {(
                     groups.map(g => (
                       <div key={g.title} role="group" aria-label={g.title}>
                         <div className="px-3 pb-1 pt-3 text-[12px] font-medium text-label2">{g.title}</div>
@@ -328,12 +332,13 @@ function PhoneSheet({ open, onClose, q, setQ, groups, run, nowD, empty }: {
             <button onClick={onClose} className="shrink-0 text-[17px] text-accent transition-opacity active:opacity-40">キャンセル</button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+24px)]" data-vaul-no-drag="">
-            {empty ? (
-              <div className="px-8 pt-16 text-center">
-                <div className="text-[17px] font-semibold">「{q.trim()}」に一致する項目はありません</div>
-                <p className="mt-1.5 text-[14px] leading-[1.6] text-label2">氏名・ふりがな・診察券番号・電話番号・画面の名前で探せます。</p>
+            {empty && (
+              <div className="px-4 pb-1 pt-5">
+                <div className="text-[17px] font-semibold leading-[22px] [word-break:auto-phrase]">「{q.trim()}」に一致する患者・予約はありません</div>
+                <p className="mt-1 text-[14px] leading-[1.6] text-label2 [word-break:auto-phrase]">{noMatchHint(q)}</p>
               </div>
-            ) : (
+            )}
+            {(
               groups.map(g => (
                 <section key={g.title}>
                   <h3 className="px-4 pb-1.5 pt-5 text-footnote font-medium text-label2">{g.title}</h3>
@@ -414,6 +419,12 @@ function PhoneItem({ it, q, nowD }: { it: Item; q: string; nowD: Date }) {
 }
 
 // ─── 補助 ────────────────────────────────────────────────────────────────────
+function noMatchHint(q: string) {
+  return /^[\d\-\s()]+$/.test(q.trim())
+    ? "診察券番号は3桁から、電話番号は4桁から探せます。"
+    : "氏名・ふりがな・診察券番号・電話番号で探せます。";
+}
+
 /** どの項目で当たったか（強調する場所を決める） */
 function matchBy(p: Patient, q: string): "name" | "kana" | "number" | "phone" | null {
   const s = q.trim();
@@ -421,8 +432,8 @@ function matchBy(p: Patient, q: string): "name" | "kana" | "number" | "phone" | 
   if (p.name.replace(/\s/g, "").includes(s.replace(/\s/g, ""))) return "name";
   if (p.kana.replace(/\s/g, "").includes(toKatakana(s).replace(/\s/g, ""))) return "kana";
   const d = s.replace(/\D/g, "");
-  if (d.length >= 2 && p.number.includes(d)) return "number";
-  if (d.length >= 2 && p.phone.replace(/\D/g, "").includes(d)) return "phone";
+  if (d.length >= 3 && p.number.includes(d)) return "number";
+  if (d.length >= 4 && p.phone.replace(/\D/g, "").includes(d)) return "phone";
   return null;
 }
 

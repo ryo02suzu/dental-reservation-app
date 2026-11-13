@@ -49,10 +49,7 @@ export function StatusPill({ status, className, compact }: { status: StatusKey; 
   return (
     <span className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full font-semibold leading-none", compact ? "px-2 py-[4px] text-[11px]" : "px-2.5 py-[5px] text-[12px]", m.cls, className)}>
       {status === "in_progress" && (
-        <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-onsand/50" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-onsand" />
-        </span>
+        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-onsand" />
       )}
       {status === "completed" && <Check className="h-3 w-3" strokeWidth={3} />}
       {status === "no_show" && compact ? "無断" : m.label}

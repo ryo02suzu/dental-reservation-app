@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from "react";
 import { addDays } from "date-fns";
 import { TODAY, TODAY_KEY, isClinicOpenDay, minutesOfDay, now } from "@/lib/clock";
-import { ago, fromKey, hm, key, md, mdw } from "@/lib/format";
+import { ago, fromKey, hm, key, matchesPatient, md, mdw } from "@/lib/format";
 import { getHolidayName } from "@/lib/holidays";
 import { availableStarts, hoursFor, staff, units, type Appointment, type ApptSource, type Patient, type Service, type Staff } from "@/data";
 
@@ -153,4 +153,33 @@ export function ageOf(p: Patient, base: Date = TODAY): number | null {
   const m = base.getMonth() - p.birth.getMonth();
   if (m < 0 || (m === 0 && base.getDate() < p.birth.getDate())) y--;
   return y;
+}
+
+/**
+ * 完了した予約の記録時刻（来院・診療開始・完了）。記録があればそれを、サンプルデータで
+ * 記録のない過去の完了分は、予約IDから毎回同じになるように現実的な時刻を決める。
+ */
+export function recordedTimes(a: Appointment): { arrived?: number; started?: number; done?: number } {
+  if (a.status !== "completed") return { arrived: a.arrivedAt, started: a.startedAt };
+  let h = 0;
+  for (const c of a.id) h = (h * 31 + c.charCodeAt(0)) | 0;
+  const r = (n: number) => Math.abs((h >> n) % 7); // 0〜6
+  const arrived = a.arrivedAt ?? a.start - 2 - r(1);
+  const started = a.startedAt ?? Math.max(arrived + 1, a.start + r(4) - 2);
+  const done = completedAt.get(a.id) ?? Math.max(started + 10, a.end - 3 + r(7));
+  return { arrived, started, done };
+}
+
+/**
+ * 患者検索。数字だけの入力は、診察券番号（3桁から）と電話番号（4桁から）に当てる。
+ * 「09」のような短い数字で、携帯番号の全員が当たってしまわないように。
+ */
+export function searchHit(p: Patient, query: string): boolean {
+  const q = query.trim();
+  if (!q) return true;
+  if (/^[\d\-\s()]+$/.test(q)) {
+    const d = q.replace(/\D/g, "");
+    return (d.length >= 3 && p.number.includes(d)) || (d.length >= 4 && p.phone.replace(/\D/g, "").includes(d));
+  }
+  return matchesPatient(p, q);
 }

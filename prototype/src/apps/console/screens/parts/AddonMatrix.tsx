@@ -13,7 +13,7 @@ export function AddonMatrix({ onOpenClinic }: { onOpenClinic: (id: string) => vo
   const s = useConsole();
   const toast = useToast();
   const clinics = [...s.clinics].sort((a, b) => Number(b.active) - Number(a.active) || (CLINIC_KANA[a.id] ?? "").localeCompare(CLINIC_KANA[b.id] ?? "", "ja"));
-  const template = `minmax(184px,1.6fr) repeat(${s.addons.length}, minmax(72px,1fr)) 96px`;
+  const template = `minmax(160px,1.6fr) repeat(${s.addons.length}, minmax(80px,1fr)) 80px`;
 
   const toggle = (c: ConsoleClinic, key: string) => {
     const a = s.addons.find(x => x.key === key)!;
@@ -24,13 +24,13 @@ export function AddonMatrix({ onOpenClinic }: { onOpenClinic: (id: string) => vo
 
   return (
     <div className="overflow-x-auto rounded-cell bg-surface">
-      <div role="table" aria-label="医院ごとのオプション" className="min-w-[680px]">
+      <div role="table" aria-label="医院ごとのオプション" className="min-w-[640px]">
         {/* 見出し */}
         <div role="row" className="hairline-b grid min-h-[52px] items-center gap-x-2 px-4 py-2" style={{ gridTemplateColumns: template }}>
           <div role="columnheader" className="text-[12px] font-medium text-label2">医院</div>
           {s.addons.map(a => (
             <div key={a.key} role="columnheader" className={cn("min-w-0 text-center leading-tight", !a.active && "opacity-55")} title={a.name}>
-              <div className="truncate text-[12px] font-semibold text-label">{addonMeta(a.key).short}</div>
+              <div className="whitespace-nowrap text-[12px] font-semibold tracking-[-0.02em] text-label">{addonMeta(a.key).short}</div>
               <div className="mt-0.5 truncate text-[11px] text-label3 tnum">{a.active ? yen(a.price) : "提供停止"}</div>
             </div>
           ))}

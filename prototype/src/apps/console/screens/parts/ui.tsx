@@ -52,10 +52,11 @@ export function StateText({ clinic, className }: { clinic: ConsoleClinic; classN
 }
 
 /** 要対応の理由。休眠は赤（いま連絡が必要）、予約の増加はアクセント（提案の機会）、初期設定は灰色 */
-export function ReasonText({ clinic, className }: { clinic: ConsoleClinic; className?: string }) {
-  const r = reasonOf(clinic);
+export function ReasonText({ clinic, className, withLast = true }: { clinic: ConsoleClinic; className?: string; withLast?: boolean }) {
+  // 最終利用の列があるときは、日数を繰り返さず「要連絡」だけを出す（赤は最終利用の列の1か所に）
+  const r = !withLast && isDormant(clinic) ? (clinic.active ? "要連絡" : undefined) : reasonOf(clinic);
   if (!r) return null;
-  const tone = isDormant(clinic) && clinic.active ? "text-red" : isGrowingFree(clinic) ? "text-accent" : "text-label3";
+  const tone = isDormant(clinic) && clinic.active ? (withLast ? "text-red" : "text-label2") : isGrowingFree(clinic) ? "text-accent" : "text-label3";
   return <span className={cn("tnum", tone, className)}>{r}</span>;
 }
 

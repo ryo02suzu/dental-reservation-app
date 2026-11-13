@@ -200,12 +200,7 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
             <span key={`h${t}`} className="absolute inset-x-0 h-px origin-top scale-y-50 bg-sep/12" style={{ top: yOf(t + 30) }} />
           ))}
           {bands.map(b => (
-            <div key={b.start} className="hatch absolute inset-x-0 flex items-center justify-center" style={{ top: yOf(b.start), height: (b.end - b.start) * PPM }}>
-              <span className="rounded-full bg-surface px-2.5 py-[3px] text-[12px] font-medium leading-4 text-label2 tnum shadow-[0_0_0_0.5px_rgb(var(--separator)/0.2)]">
-                {b.label}
-                <span className="ml-1.5 text-label3">{hm(b.start)}–{hm(b.end)}</span>
-              </span>
-            </div>
+            <div key={b.start} className="hatch absolute inset-x-0" style={{ top: yOf(b.start), height: (b.end - b.start) * PPM }} />
           ))}
         </div>
 
@@ -262,6 +257,18 @@ export function DayGrid({ date, dk, appts, mode, showCancelled, now, dir, onOpen
             </div>
           );
         })}
+
+        {/* 昼休み・時間外のラベル（列の罫線より上に） */}
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 z-[2]" style={{ left: GUTTER, right: 12 }}>
+          {bands.map(b => (
+            <div key={b.start} className="absolute inset-x-0 flex items-center justify-center" style={{ top: yOf(b.start), height: (b.end - b.start) * PPM }}>
+              <span className="rounded-full bg-surface px-2.5 py-[3px] text-[12px] font-medium leading-4 text-label2 tnum shadow-[0_0_0_0.5px_rgb(var(--separator)/0.25)]">
+                {b.label}
+                <span className="ml-1.5 text-label3">{hm(b.start)}–{hm(b.end)}</span>
+              </span>
+            </div>
+          ))}
+        </div>
 
         {/* いまの線 */}
         {showNow && (

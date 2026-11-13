@@ -4,13 +4,13 @@ import { Check, Plus, TriangleAlert, UserRoundPlus } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useIsPhone } from "@/lib/media";
 import { TODAY, TODAY_KEY, minutesOfDay, now } from "@/lib/clock";
-import { ago, fromKey, hm, matchesPatient, mdw, toKatakana } from "@/lib/format";
+import { age, fromKey, hm, key, mdw, toKatakana } from "@/lib/format";
 import { serviceById, services, staffById, unitById, units, type ApptSource, type InsuranceType, type Patient, type Service } from "@/data";
 import { Avatar, Button, FieldRow, SearchField, Segmented, Sheet, Tag, cn, spring, useToast } from "@/ui";
 import type { NewPrefill } from "../context";
 import { alertsOf } from "../helpers";
 import {
-  ageOf, eligibleStaff, markDeskBooked, markNoBirth, openStarts, pickStaff, pickUnit, priceLabel, pushRecentPatient, staffConflict, unitBusy,
+  ageOf, eligibleStaff, markDeskBooked, markNoBirth, openStarts, pickStaff, pickUnit, priceLabel, pushRecentPatient, searchHit, staffConflict, unitBusy,
   upcomingDays, visitLabel, type DayOption,
 } from "./logic";
 import { AutoText, Chip, DayStrip, Inset, Reveal, RowSep, SlotGrid, Title } from "./parts";
@@ -274,7 +274,7 @@ function PatientSection({ patient, registered, onPick, onClear }: {
     const kq = toKatakana(query).replace(/\s/g, "");
     const nq = query.replace(/\s/g, "");
     const rank = (p: Patient) => (p.name.replace(/\s/g, "").startsWith(nq) || p.kana.replace(/\s/g, "").startsWith(kq) ? 0 : 1);
-    return store.patients.filter(p => matchesPatient(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja")).slice(0, 6);
+    return store.patients.filter(p => searchHit(p, query)).sort((a, b) => rank(a) - rank(b) || a.kana.localeCompare(b.kana, "ja")).slice(0, 6);
   }, [q, store.patients, store.appointments]);
 
   return (
@@ -369,8 +369,9 @@ function PatientChip({ p, registered, onClear }: { p: Patient; registered: boole
           <span className="truncate text-[17px] font-semibold leading-[22px] palt">{p.name}</span>
           {(registered || p.visits === 0) && <Tag tone="accent">初診</Tag>}
         </div>
-        <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2 tnum">
-          {p.kana}・{age === null ? "年齢未登録" : `${age}歳`}・{p.sex}・診察券 {p.number}
+        <div className="mt-0.5 truncate text-[13px] leading-[18px] text-label2">{p.kana}</div>
+        <div className="truncate text-[13px] leading-[18px] text-label2 tnum">
+          {age === null ? "年齢未登録" : `${age}歳`}・{p.sex}・診察券 {p.number}
         </div>
         {alerts.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
@@ -378,8 +379,8 @@ function PatientChip({ p, registered, onClear }: { p: Patient; registered: boole
           </div>
         )}
         {next && (
-          <p className="mt-2 text-[13px] leading-[18px] text-label2 tnum">
-            次回の予約あり：{mdw(next.d)} {hm(next.start)} {serviceById(next.serviceId).short}
+          <p className="mt-2 text-[13px] leading-[18px] text-label2 tnum [word-break:auto-phrase]">
+            予約済み：<span className="text-label">{key(next.d) === TODAY_KEY ? "今日" : mdw(next.d)} {hm(next.start)}</span>・{serviceById(next.serviceId).short}
           </p>
         )}
       </div>
@@ -406,12 +407,14 @@ function NewPatientForm({ seed, onCancel, onDone, onPickExisting }: {
   const [tried, setTried] = useState(false);
 
   const digits = tel.replace(/\D/g, "");
+  const born = parseBirth(birth);
   const error =
     !name.trim() ? "氏名を入力してください"
     : !kana.trim() ? "ふりがなを入力してください"
     : !KANA.test(kana.trim()) ? "ふりがなは、ひらがなかカタカナで入力してください"
     : !digits ? "電話番号を入力してください"
     : /[^\d\-\s()]/.test(tel) || digits.length < 10 || digits.length > 11 ? "電話番号は数字10〜11桁で入力してください"
+    : birth.trim() && !born ? "生年月日は「1985/4/12」か「S60.4.12」の形で入力してください"
     : !sex ? "性別を選んでください"
     : null;
   const dup = digits.length >= 10 ? store.patients.find(p => p.phone.replace(/\D/g, "") === digits) : undefined;
@@ -419,14 +422,14 @@ function NewPatientForm({ seed, onCancel, onDone, onPickExisting }: {
   const submit = () => {
     setTried(true);
     if (error) return;
-    const b = birth ? fromKey(birth) : TODAY;
-    const years = birth ? Math.floor((TODAY.getTime() - b.getTime()) / (365.25 * 86_400_000)) : 30;
+    const b = born ?? TODAY;
+    const years = born ? age(born, TODAY) : 30;
     const insurance: InsuranceType = years < 15 ? "子ども医療証" : years >= 75 ? "後期高齢者" : "社保本人";
     const p = store.addPatient({
       name: tidy(name), kana: tidy(toKatakana(kana)), sex: sex!, birth: b, phone: formatTel(digits), insurance,
       firstVisit: TODAY, visits: 0, recallMonths: 3, cancellations: 0, noShows: 0, line: false, allergies: [], conditions: [], teeth: {},
     });
-    if (!birth) markNoBirth(p.id);
+    if (!born) markNoBirth(p.id);
     toast("患者さんを登録しました", { detail: `${p.name}さん・診察券 ${p.number}` });
     onDone(p);
   };
@@ -440,13 +443,13 @@ function NewPatientForm({ seed, onCancel, onDone, onPickExisting }: {
         <label className="group relative flex min-h-[48px] items-center gap-3 px-4">
           <span className="w-[6.5em] shrink-0 text-[16px] text-label md:text-[15px]">生年月日</span>
           <input
-            type="date"
             value={birth}
-            max={TODAY_KEY}
+            inputMode="numeric"
             onChange={e => setBirth(e.target.value)}
-            className={cn("min-w-0 flex-1 bg-transparent py-3 text-[16px] outline-none md:text-[15px]", !birth && "text-label3")}
+            placeholder="1985/4/12・S60.4.12"
+            className="min-w-0 flex-1 bg-transparent py-3 text-[16px] tnum outline-none placeholder:text-label3 md:text-[15px]"
           />
-          <span className="shrink-0 text-[13px] text-label3">任意</span>
+          <span className={cn("shrink-0 text-[13px] tnum", born ? "font-medium text-label2" : "text-label3")}>{born ? `${age(born, TODAY)}歳` : "任意"}</span>
           <span aria-hidden className="pointer-events-none absolute bottom-0 left-4 right-0 h-px origin-bottom scale-y-50 bg-sep/30" />
         </label>
         <div className="flex min-h-[52px] items-center gap-3 px-4 py-2">
@@ -480,6 +483,26 @@ function NewPatientForm({ seed, onCancel, onDone, onPickExisting }: {
       </div>
     </div>
   );
+}
+
+/** 和暦の元年（昭和・平成・令和） */
+const ERAS: Record<string, number> = { S: 1925, 昭和: 1925, H: 1988, 平成: 1988, R: 2018, 令和: 2018 };
+
+/** 生年月日の入力を読む。「1985/4/12」「1985-04-12」「19850412」「S60.4.12」「昭和60年4月12日」 */
+function parseBirth(input: string): Date | null {
+  const s = input.trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).toUpperCase();
+  if (!s) return null;
+  let y: number, m: number, d: number;
+  const era = s.match(/^(S|H|R|昭和|平成|令和)\s*(\d{1,2}|元)[.\/\-年\s]\s*(\d{1,2})[.\/\-月\s]\s*(\d{1,2})日?$/);
+  const west = s.match(/^(\d{4})[.\/\-年\s]\s*(\d{1,2})[.\/\-月\s]\s*(\d{1,2})日?$/);
+  const packed = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (era) [y, m, d] = [ERAS[era[1]] + (era[2] === "元" ? 1 : +era[2]), +era[3], +era[4]];
+  else if (west) [y, m, d] = [+west[1], +west[2], +west[3]];
+  else if (packed) [y, m, d] = [+packed[1], +packed[2], +packed[3]];
+  else return null;
+  const dt = new Date(y, m - 1, d);
+  if (dt.getMonth() !== m - 1 || dt.getDate() !== d || dt > TODAY || y < 1900) return null;
+  return dt;
 }
 
 const tidy = (s: string) => s.replace(/　/g, " ").replace(/\s+/g, " ").trim();

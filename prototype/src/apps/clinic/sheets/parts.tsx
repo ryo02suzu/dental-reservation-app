@@ -1,6 +1,6 @@
 // シートの中で使う小さな部品。シートの面は白（elevated）なので、まとまりは
 // 白いカードではなく、うすい塗り（fill）のインセットで見せる（iOSのマップ・macOSの設定と同じ考え方）。
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { useIsPhone } from "@/lib/media";
@@ -87,6 +87,9 @@ export function Chip({ selected, onClick, disabled, children, className, tone = 
 
 /** 高さを伸び縮みさせて出し入れする */
 export function Reveal({ show, children, className }: { show: boolean; children: ReactNode; className?: string }) {
+  // 伸び縮みの間だけ切り取る。開ききったら、横にはみ出す要素（日付の帯など）を切らないように
+  const [settled, setSettled] = useState(false);
+  useEffect(() => { if (!show) setSettled(false); }, [show]);
   return (
     <AnimatePresence initial={false}>
       {show && (
@@ -96,7 +99,9 @@ export function Reveal({ show, children, className }: { show: boolean; children:
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ height: spring, opacity: { duration: 0.18 } }}
-          className={cn("overflow-hidden", className)}
+          onAnimationStart={() => setSettled(false)}
+          onAnimationComplete={() => { if (show) setSettled(true); }}
+          className={cn(settled ? "overflow-visible" : "overflow-hidden", className)}
         >
           {children}
         </motion.div>
@@ -136,7 +141,7 @@ export function AutoText({ value, onChange, placeholder, onSubmit, className, mi
 }
 
 /** 日付の横スクロール（休診日は理由つきで押せない） */
-export function DayStrip({ days, value, onChange, counts, onMore, bleed = "px-4 -mx-4 md:px-5 md:-mx-5" }: {
+export function DayStrip({ days, value, onChange, counts, onMore, bleed = "px-4 -mx-4 scroll-px-4 md:px-5 md:-mx-5 md:scroll-px-5" }: {
   days: DayOption[];
   value: string;
   onChange: (key: string) => void;

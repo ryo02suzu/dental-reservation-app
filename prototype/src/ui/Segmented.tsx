@@ -45,7 +45,7 @@ export function Segmented<T extends string>({
               />
             )}
             {o.label}
-            {o.count !== undefined && <span className="tnum text-label3">{o.count}</span>}
+            {o.count !== undefined && <span className="tnum opacity-55">{o.count}</span>}
           </button>
         );
       })}

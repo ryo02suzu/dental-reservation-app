@@ -228,8 +228,17 @@ export function assignUnit(dk: string, start: number, end: number, sv: Service, 
   return { unitId: unit.id, staffId };
 }
 
-/** 予約番号（日付＋予約から決まる4桁。同じ予約はいつも同じ番号） */
+/**
+ * 予約番号（予約日＋予約から決まる4桁。同じ予約はいつも同じ番号）。
+ * 日時を変更しても番号は変わらないよう、最初に見たときの番号を覚えておく。
+ */
+const receipts = new Map<string, string>();
 export function receiptOf(a: Pick<Appointment, "id" | "date" | "start">): string {
+  let r = receipts.get(a.id);
+  if (!r) receipts.set(a.id, (r = makeReceipt(a)));
+  return r;
+}
+function makeReceipt(a: Pick<Appointment, "id" | "date" | "start">): string {
   const d = fromKey(a.date);
   const mmdd = `${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   const n = Number(a.id.replace(/\D/g, "")) || a.id.length;

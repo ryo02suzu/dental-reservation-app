@@ -102,7 +102,10 @@ function DayMap({ t, hourStep, className }: { t: Today; hourStep: number; classN
                   .map(r => {
                     const a = r.a;
                     const len = Math.max(1, a.end - a.start);
-                    const passed = Math.min(1, Math.max(0, (t.nowMin - a.start) / len));
+                    // 予定より早く・遅く始めた診療は、実際に始めた時刻から予定の長さで描く
+                    const from = a.status === "in_progress" && a.startedAt !== undefined ? a.startedAt : a.start;
+                    const to = from + len;
+                    const passed = Math.min(1, Math.max(0, (t.nowMin - from) / len));
                     const fill =
                       a.status === "completed" ? { w: 1, cls: "bg-accent/45" }
                       : a.status === "no_show" ? { w: 1, cls: "bg-red/45" }
@@ -113,7 +116,7 @@ function DayMap({ t, hourStep, className }: { t: Today; hourStep: number; classN
                       <span
                         key={a.id}
                         className="absolute top-0 h-full overflow-hidden rounded-[1.5px] bg-fill/18"
-                        style={{ left: `${pct(a.start)}%`, width: `calc(${pct(a.end) - pct(a.start)}% - 1.5px)` }}
+                        style={{ left: `${pct(from)}%`, width: `calc(${pct(to) - pct(from)}% - 1.5px)` }}
                       >
                         {fill.w > 0 && <span className={cn("absolute inset-y-0 left-0 motion-safe:transition-[width] motion-safe:duration-700", fill.cls)} style={{ width: `${fill.w * 100}%` }} />}
                       </span>

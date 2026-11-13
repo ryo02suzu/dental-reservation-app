@@ -46,21 +46,23 @@ const CELL = 52;
 const GAP = 8;
 const PER_PAGE = 9;
 
-export function DatePicker({ days, selected, onSelect, bleed = true, className }: {
+export function DatePicker({ days, selected, onSelect, bleed = true, onSurface, className }: {
   days: DayInfo[];
   selected?: string;
   onSelect: (k: string) => void;
   /** 横の並びを画面の端まで出す（スマホの本文の中に置くとき） */
   bleed?: boolean;
+  /** 白い面（カード）の中に置く。日付の面をグレーの塗りにする */
+  onSurface?: boolean;
   className?: string;
 }) {
   const [month, setMonth] = useState(false);
   return (
     <div className={className}>
       {month ? (
-        <MonthCalendar days={days} selected={selected} onSelect={onSelect} toggle={<Toggle on onClick={() => setMonth(false)} />} />
+        <MonthCalendar days={days} selected={selected} onSelect={onSelect} onSurface={onSurface} toggle={<Toggle on onClick={() => setMonth(false)} />} />
       ) : (
-        <DayStrip days={days} selected={selected} onSelect={onSelect} bleed={bleed} toggle={<Toggle on={false} onClick={() => setMonth(true)} />} />
+        <DayStrip days={days} selected={selected} onSelect={onSelect} bleed={bleed} onSurface={onSurface} toggle={<Toggle on={false} onClick={() => setMonth(true)} />} />
       )}
       <AvailLegend className="mt-3 px-0.5" />
     </div>
@@ -89,8 +91,8 @@ function monthText(a: Date, b: Date) {
   return `${a.getMonth() + 1}月–${b.getMonth() + 1}月`;
 }
 
-function DayStrip({ days, selected, onSelect, bleed, toggle }: {
-  days: DayInfo[]; selected?: string; onSelect: (k: string) => void; bleed: boolean; toggle: ReactNode;
+function DayStrip({ days, selected, onSelect, bleed, onSurface, toggle }: {
+  days: DayInfo[]; selected?: string; onSelect: (k: string) => void; bleed: boolean; onSurface?: boolean; toggle: ReactNode;
 }) {
   const phone = useIsPhone();
   const id = useId();
@@ -172,7 +174,7 @@ function DayStrip({ days, selected, onSelect, bleed, toggle }: {
               className={cn(
                 "relative flex h-[78px] shrink-0 snap-start flex-col items-center justify-center rounded-[14px]",
                 phone ? "w-[52px]" : "w-[calc((100%-64px)/9)]",
-                closed ? "hatch shadow-[inset_0_0_0_0.5px_rgb(var(--separator)/0.25)]" : "bg-surface",
+                closed ? "hatch shadow-[inset_0_0_0_0.5px_rgb(var(--separator)/0.25)]" : onSurface ? "bg-fill/8" : "bg-surface",
                 d.level === "none" && "opacity-60",
               )}
             >
@@ -203,8 +205,8 @@ function DayStrip({ days, selected, onSelect, bleed, toggle }: {
   );
 }
 
-function MonthCalendar({ days, selected, onSelect, toggle }: {
-  days: DayInfo[]; selected?: string; onSelect: (k: string) => void; toggle: ReactNode;
+function MonthCalendar({ days, selected, onSelect, onSurface, toggle }: {
+  days: DayInfo[]; selected?: string; onSelect: (k: string) => void; onSurface?: boolean; toggle: ReactNode;
 }) {
   const id = useId();
   const byKey = useMemo(() => new Map(days.map(d => [d.key, d])), [days]);
@@ -232,7 +234,7 @@ function MonthCalendar({ days, selected, onSelect, toggle }: {
   };
 
   return (
-    <div className="rounded-card bg-surface px-2 pb-2 pt-2.5 md:px-3">
+    <div className={cn("rounded-card", onSurface ? "-mx-2 md:-mx-3" : "bg-surface px-2 pb-2 pt-2.5 md:px-3")}>
       <div className="mb-1 flex h-8 items-center justify-between gap-2 pl-2">
         <div className="flex items-center gap-1">
           <IconButton icon={ChevronLeft} label="前の月" size="sm" variant="plain" disabled={mi === 0} onClick={() => go(-1)} className="disabled:opacity-25" />
@@ -306,7 +308,7 @@ function MonthCalendar({ days, selected, onSelect, toggle }: {
 }
 
 // ─── 時間の選択 ─────────────────────────────────────────────────────────────
-export function SlotGrid({ slots, selected, onSelect }: { slots: number[]; selected?: number; onSelect: (t: number) => void }) {
+export function SlotGrid({ slots, selected, onSelect, onSurface }: { slots: number[]; selected?: number; onSelect: (t: number) => void; onSurface?: boolean }) {
   const groups = [
     { label: "午前", list: slots.filter(t => t < 780) },
     { label: "午後", list: slots.filter(t => t >= 780) },
@@ -328,7 +330,7 @@ export function SlotGrid({ slots, selected, onSelect }: { slots: number[]; selec
                   aria-pressed={sel}
                   className={cn(
                     "h-11 rounded-[12px] text-[17px] font-medium tnum transition-colors duration-150",
-                    sel ? "bg-ink font-semibold text-onink" : "bg-surface text-label hover:shadow-[inset_0_0_0_1.5px_rgb(var(--accent)/0.4)]",
+                    sel ? "bg-ink font-semibold text-onink" : cn(onSurface ? "bg-fill/8" : "bg-surface", "text-label hover:shadow-[inset_0_0_0_1.5px_rgb(var(--accent)/0.4)]"),
                   )}
                 >
                   {hm(t)}
